@@ -33,7 +33,7 @@ What made the whole situation worse is that the data is tightly packed into only
 
 ### 28-05-2020
 
-Wrapping my head around Huffman tables (Section 6.0 of the spec). I don't have experience with Huffman coding or Deflate, so I kind of expected this would be the difficult part. I got a pretty good understanding of Huffman coding after reading the [section 3.2. of Deflate - RFC 1951](https://tools.ietf.org/html/rfc1951) (the link is provided in the Basis spec).
+Wrapping my head around Huffman tables (Section 6.0 of the spec). I don't have experience with Huffman coding or Deflate, so I kind of expected this would be the difficult part. I got a pretty good understanding of Huffman coding after reading the [Huffman coding section of Modern LZ Compression](https://glinscott.github.io/lz/index.html#toc3) and the [section 3.2. of Deflate - RFC 1951](https://tools.ietf.org/html/rfc1951) (linked from the Basis spec).
 
 Sadly my understanding did not translate well into practice. I got already stuck on reading the first array of code lengths. The bit stream contains a variable number of code lengths, plus they are sent in a different order than the order used for creating the Huffman table. This confused me a lot and I had to take a look at the [transcoder implementation](https://github.com/BinomialLLC/basis_universal/blob/6ef114ac1e0665b233c04fcb2e1249400ec65044/contrib/previewers/lib/basisu_transcoder.h#L919) to figure out what all of this means. Including the code to read this array in the spec would help a lot.
 
