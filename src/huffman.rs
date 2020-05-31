@@ -117,6 +117,21 @@ impl HuffmanDecodingTable {
         })
     }
 
+    pub fn decode_symbol(&self, bits: u16) -> Option<(u16, usize)> {
+        let sym_count = self.code_sizes.len();
+        for i in 0..sym_count {
+            let code_size = self.code_sizes[i] as usize;
+            if code_size > 0 {
+                let code = bits & ((1 << code_size) - 1);
+                if code == self.tree[i] {
+                    return Some((i as u16, code_size));
+                }
+            }
+        }
+        None
+    }
+}
+
 impl fmt::Debug for HuffmanDecodingTable {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut debug = f.debug_list();
