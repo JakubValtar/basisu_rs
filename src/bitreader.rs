@@ -13,6 +13,12 @@ impl<'a> BitReaderLSB<'a> {
     }
 
     pub fn read(&mut self, count: usize) -> u32 {
+        let res = self.peek(count);
+        self.pos += count;
+        res
+    }
+
+    pub fn peek(&self, count: usize) -> u32 {
         assert!(count <= 32);
         let mut byte = self.pos / 8;
         let mut result: u32 = 0;
@@ -28,7 +34,6 @@ impl<'a> BitReaderLSB<'a> {
 
         loop {
             if read >= count {
-                self.pos += count;
                 if count < 32 {
                     result &= (1 << count) - 1;
                 }
