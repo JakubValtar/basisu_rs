@@ -15,11 +15,25 @@ Sample textures were copied from the official [basis_universal repo](https://git
 - [x] CRC-16
 - [x] Reading SliceDesc
 - [x] LSB-first bit reader
-- [ ] Decoding Huffman tables
+- [x] Decoding Huffman tables
+- [ ] Decoding endpoint codebooks
+- [ ] Decoding selector codebooks
 
 ## Log
 
 Here I'm writing a log of what I did, problems I encountered, and what I learned. Have anything to say or discuss? I'd be happy to hear from you, please send me a DM or @ me on Twitter [@JakubValtar](https://twitter.com/jakubvaltar).
+
+### 31-05-2020
+
+I added a test for the bit reader and fixed a bug which I found.
+
+I implemented a simple Huffman decoding function which decodes a bitstream into symbols. It does a linear search through the codes in the decoding table until if finds a match. Decoding could be optimized by storing the symbol in the table entry and sorting the entries by frequency (code size). Ideally there should be a lookup table, but I'm not adding it right now, because I want to have a working decoder first and make optimizations later.
+
+The decoding didn't work at first, because the codes in the Huffman tables (as generated with the code from the Deflate RFC 1951) expect a bit encounter order `MSB -> LSB`, but the bit reader returns the bits in order `LSB -> MSB`. Reversing the bit order of the codes in the decoding table solved this problem.
+
+Now that the Huffman decoding works, I'm able to decode all the Huffman tables in the file.
+
+Another issue was that if the highest 16-bit code was used, the `next_code` would overflow and crash the program. Making `next_code` 32-bit fixed this and also allowed me to add a check for codes going higher than `u16::MAX`. I could have kept it in 16 bits and used `wrapping_add` instead, but then I wouldn't be able to check if the overflowed codes were used or not.
 
 ### 30-05-2020
 
@@ -39,7 +53,7 @@ Sadly my understanding did not translate well into practice. I got already stuck
 
 I finally managed to read the first code length array, but the lengths did not represent a valid Huffman table. This created more confusion. Am I reading at the right offset? Are these really code lenghts, or do I need to decode these somehow to get valid code lengths?
 
-### 27-05-2020 
+### 27-05-2020
 
 Reading the file header and slice descriptions was pretty straighforward. The only surprise was the use of 24-bit integers, Rust does not have 24-bit primitive types, luckily `ByteOrder` crate I used can read them into `u32`. I could have used `packed_struct` or something similar instead of reading all the fields manually, but for now I don't think it's worth the complexity.
 
