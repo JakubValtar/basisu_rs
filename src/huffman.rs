@@ -167,6 +167,8 @@ impl HuffmanDecodingTable {
                 let code = next_code[size].reverse_bits() >> (code_width - size);
                 entries.push(HuffmanTableEntry { code, code_size: size as u8 });
                 next_code[size] += 1;
+            } else {
+                entries.push(HuffmanTableEntry { code: 0, code_size: 0 });
             }
         }
 
