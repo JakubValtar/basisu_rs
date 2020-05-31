@@ -137,13 +137,13 @@ impl HuffmanDecodingTable {
 
         let total_syms = code_sizes.len();
 
-        let mut syms_using_codesize = [0u16; MaxSupportedCodeSize+1];
+        let mut syms_using_codesize = [0u32; MaxSupportedCodeSize+1];
         for &count in code_sizes {
             syms_using_codesize[count as usize] += 1;
         }
 
         let mut total = 0;
-        let mut next_code = [0u16; MaxSupportedCodeSize+1];
+        let mut next_code = [0u32; MaxSupportedCodeSize+1];
         syms_using_codesize[0] = 0;
         for bits in 1..MaxSupportedCodeSize + 1 {
             total = (total + syms_using_codesize[bits-1]) << 1;
@@ -157,12 +157,16 @@ impl HuffmanDecodingTable {
         for n in 0..total_syms {
             let size = code_sizes[n] as usize;
             if size != 0 {
-                let code = next_code[size].reverse_bits() >> (code_width - size);
+                let code = (next_code[size].reverse_bits() >> (code_width - size)) as u16;
                 entries.push(HuffmanTableEntry { code, code_size: size as u8 });
                 next_code[size] += 1;
             } else {
                 entries.push(HuffmanTableEntry { code: 0, code_size: 0 });
             }
+        }
+
+        if next_code.iter().any(|&c| c > u16::MAX as u32 + 1) {
+            return Err("Code lengths are invalid, codes don't fit into 16 bits".into());
         }
 
         Ok(Self {
