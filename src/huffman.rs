@@ -1,5 +1,7 @@
 #![allow(non_upper_case_globals)]
 
+use std::fmt;
+
 use crate::bitreader::BitReaderLSB;
 
 use crate::Result;
@@ -71,7 +73,7 @@ pub fn read_codelength_table(buf: &[u8]) -> Result<HuffmanDecodingTable> {
     Err("not implemented".into())
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct HuffmanDecodingTable {
     code_sizes: Vec<u8>,
     tree: Vec<u16>,
@@ -112,5 +114,23 @@ impl HuffmanDecodingTable {
             code_sizes: code_sizes.to_vec(),
             tree,
         })
+    }
+
+impl fmt::Debug for HuffmanDecodingTable {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut debug = f.debug_list();
+        let max_size = self.code_sizes.iter().max().copied().unwrap_or(16) as usize + 1;
+        for (sym, (&size, &code)) in self.code_sizes.iter().zip(self.tree.iter()).enumerate() {
+            if size > 0 {
+                debug.entry(&format_args!(
+                    "{:4}:{:pad_width$}{:0code_width$b}",
+                    sym, " ", code,
+                    pad_width = max_size - size as usize,
+                    code_width = size as usize
+                ));
+            }
+        }
+        debug.finish()?;
+        Ok(())
     }
 }
