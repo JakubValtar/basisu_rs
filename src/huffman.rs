@@ -98,10 +98,12 @@ impl HuffmanDecodingTable {
 
         let mut tree = vec![0u16; total_syms];
 
+        let code_width = std::mem::size_of_val(&next_code[0]) * 8;
+
         for n in 0..total_syms {
             let len = code_sizes[n] as usize;
             if len != 0 {
-                tree[n] = next_code[len];
+                tree[n] = next_code[len].reverse_bits() >> (code_width - len);
                 next_code[len] += 1;
             }
         }
