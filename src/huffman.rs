@@ -49,11 +49,12 @@ pub fn read_codelength_table(buf: &[u8]) -> Result<HuffmanDecodingTable> {
     let mut reader = BitReaderLSB::new(buf);
 
     let total_used_syms = reader.read(MaxSymsLog2 as usize);  // [1, MaxSyms]
-    let num_codelength_codes = reader.read(5) as usize; // [1, TotalCodelengthCodes]
 
-    println!("Total used syms: {}, num codelength codes: {}", total_used_syms, num_codelength_codes);
+    println!("Total used syms: {}", total_used_syms);
 
     let code_length_table = {
+        let num_codelength_codes = reader.read(5) as usize; // [1, TotalCodelengthCodes]
+
         let indices = [
             SmallZeroRunCode, BigZeroRunCode,
             SmallRepeatCode, BigRepeatCode,
