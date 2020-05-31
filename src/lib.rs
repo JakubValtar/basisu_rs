@@ -76,8 +76,6 @@ pub fn read_file<P: AsRef<Path>>(path: P) -> Result<()> {
         res
     };
 
-    println!("{:#?}", slice_descs);
-
     Ok(())
 }
 
