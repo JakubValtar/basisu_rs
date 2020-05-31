@@ -3,6 +3,7 @@
 use std::fmt;
 
 use crate::bitreader::BitReaderLSB;
+use crate::mask;
 
 use crate::Result;
 
@@ -178,7 +179,7 @@ impl HuffmanDecodingTable {
     pub fn decode_symbol(&self, bits: u16) -> Option<(u16, usize)> {
         for (sym, entry) in self.entries.iter().enumerate() {
             if entry.code_size > 0 {
-                let code = bits & ((1 << entry.code_size as u32) - 1);
+                let code = bits & mask!(entry.code_size as u16);
                 if code == entry.code {
                     return Some((sym as u16, entry.code_size as usize));
                 }

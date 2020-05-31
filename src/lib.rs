@@ -91,6 +91,14 @@ fn crc16(r: &[u8], mut crc: u16) -> u16 {
   !crc
 }
 
+#[doc(hidden)]
+#[macro_export]
+macro_rules! mask {
+    ($size:expr) => {
+        !(!($size ^ $size)).checked_shl($size as u32).unwrap_or(0)
+    }
+}
+
 
 // basis_file_header::m_tex_type
 enum BasisTextureType {
