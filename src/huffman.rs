@@ -10,7 +10,7 @@ use crate::Result;
 const MaxSupportedCodeSize: usize = 16;
 
 // The maximum number of symbols  is 2^14
-const MaxSymsLog2: u8 = 14;
+const MaxSymsLog2: usize = 14;
 const MaxSyms: usize = 1 << MaxSymsLog2;
 
 // Small zero runs may range from 3-10 entries
@@ -48,7 +48,7 @@ pub fn read_codelength_table(buf: &[u8]) -> Result<HuffmanDecodingTable> {
 
     let mut reader = BitReaderLSB::new(buf);
 
-    let total_used_syms = reader.read(MaxSymsLog2 as usize);  // [1, MaxSyms]
+    let total_used_syms = reader.read(MaxSymsLog2) as usize;  // [1, MaxSyms]
 
     println!("Total used syms: {}", total_used_syms);
 
