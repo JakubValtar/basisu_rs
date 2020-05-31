@@ -69,9 +69,62 @@ pub fn read_codelength_table(buf: &[u8]) -> Result<HuffmanDecodingTable> {
         HuffmanDecodingTable::from_sizes(&codelength_code_sizes)?
     };
 
-    println!("Symbol code bits: {:?}", code_length_table);
+    let mut symbol_code_sizes: Vec<u8> = Vec::with_capacity(total_used_syms);
+    while symbol_code_sizes.len() < total_used_syms {
+        let bits = reader.peek(16) as u16;
+        let (symbol_code_size, bits_used) = code_length_table.decode_symbol(bits)
+            .ok_or_else(|| format!(
+                "No matching code found in the decoding table, bits: {:016b}, table: {:?}, ",
+                bits, code_length_table
+            ))?;
+        reader.read(bits_used);
+        match symbol_code_size as usize {
+            0..=16 => {
+                symbol_code_sizes.push(symbol_code_size as u8);
+            }
+            SmallZeroRunCode => {
+                let count = SmallZeroRunSizeMin + reader.read(SmallZeroRunExtraBits) as usize;
+                for _ in 0..count {
+                    symbol_code_sizes.push(0);
+                }
+            }
+            BigZeroRunCode => {
+                let count = BigZeroRunSizeMin + reader.read(BigZeroRunExtraBits) as usize;
+                for _ in 0..count {
+                    symbol_code_sizes.push(0);
+                }
+            }
+            SmallRepeatCode => {
+                let prev_sym_code_size = symbol_code_sizes.last().copied()
+                    .ok_or_else(|| "Encountered SmallRepeatCode as the first code")?;
+                if prev_sym_code_size == 0 {
+                    return Err("Encountered SmallRepeatCode, but the previous symbol's code length was 0".into());
+                }
+                let count = SmallRepeatSizeMin + reader.read(SmallRepeatExtraBits) as usize;
+                for _ in 0..count {
+                    symbol_code_sizes.push(prev_sym_code_size);
+                }
+            }
+            BigRepeatCode => {
+                let prev_sym_code_size = symbol_code_sizes.last().copied()
+                    .ok_or_else(|| "Encountered BigRepeatCode as the first code")?;
+                if prev_sym_code_size == 0 {
+                    return Err("Encountered BigRepeatCode, but the previous symbol's code length was 0".into());
+                }
+                let count = BigRepeatSizeMin + reader.read(BigRepeatExtraBits) as usize;
+                for _ in 0..count {
+                    symbol_code_sizes.push(prev_sym_code_size);
+                }
+            }
+            _ => unreachable!()
+        }
+    }
 
-    Err("not implemented".into())
+    let symbol_table = HuffmanDecodingTable::from_sizes(&symbol_code_sizes);
+
+    println!("symbol_table: {:#?}", symbol_table);
+
+    return symbol_table;
 }
 
 #[derive(Clone)]
