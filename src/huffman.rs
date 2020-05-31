@@ -42,11 +42,9 @@ const BigZeroRunCode: usize = 18;
 const SmallRepeatCode: usize = 19;
 const BigRepeatCode: usize = 20;
 
-pub fn read_huffman_table(buf: &[u8]) -> Result<HuffmanDecodingTable> {
+pub fn read_huffman_table(reader: &mut BitReaderLSB) -> Result<HuffmanDecodingTable> {
 
     // TODO: sanity & overflow checks
-
-    let mut reader = BitReaderLSB::new(buf);
 
     let total_used_syms = reader.read(MaxSymsLog2) as usize;  // [1, MaxSyms]
 

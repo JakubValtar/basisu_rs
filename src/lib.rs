@@ -6,6 +6,8 @@ use std::path::Path;
 mod huffman;
 mod bitreader;
 
+use bitreader::BitReaderLSB;
+
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 fn check_sig(buf: &[u8]) -> bool{
@@ -50,7 +52,8 @@ pub fn read_file<P: AsRef<Path>>(path: P) -> Result<()> {
         let codelength_table = {
             let start = header.tables_file_ofs as usize;
             let len = header.tables_file_size as usize;
-            huffman::read_huffman_table(&buf[start..start + len])
+            let mut reader = BitReaderLSB::new(&buf[start..start + len]);
+            huffman::read_huffman_table(&mut reader)?
         };
     }
 
