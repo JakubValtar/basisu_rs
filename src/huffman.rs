@@ -74,7 +74,7 @@ pub fn read_huffman_table(reader: &mut BitReaderLSB) -> Result<HuffmanDecodingTa
                 "No matching code found in the decoding table, bits: {:016b}, table: {:?}, ",
                 bits, codelength_table
             ))?;
-        reader.read(bits_used);
+        reader.remove(bits_used);
         match symbol_code_size as usize {
             0..=16 => {
                 symbol_code_sizes.push(symbol_code_size as u8);

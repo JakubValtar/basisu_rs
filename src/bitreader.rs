@@ -15,8 +15,12 @@ impl<'a> BitReaderLSB<'a> {
 
     pub fn read(&mut self, count: usize) -> u32 {
         let res = self.peek(count);
-        self.pos += count;
+        self.remove(count);
         res
+    }
+
+    pub fn remove(&mut self, count: usize) {
+        self.pos += count;
     }
 
     pub fn peek(&self, count: usize) -> u32 {
