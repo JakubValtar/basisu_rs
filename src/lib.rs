@@ -49,12 +49,61 @@ pub fn read_file<P: AsRef<Path>>(path: P) -> Result<()> {
     }
 
     if header.tex_format == BasisTexFormat::ETC1S as u8 {
-        let codelength_table = {
+
+        {   // Endpoint codebooks
+            let start = header.endpoint_cb_file_ofs as usize;
+            let len = header.endpoint_cb_file_size as usize;
+
+            let mut reader = BitReaderLSB::new(&buf[start..start + len]);
+
+            let color5_delta_model0 = huffman::read_huffman_table(&mut reader)?;
+            let color5_delta_model1 = huffman::read_huffman_table(&mut reader)?;
+            let color5_delta_model2 = huffman::read_huffman_table(&mut reader)?;
+            let inten_delta_model = huffman::read_huffman_table(&mut reader)?;
+            let grayscale = reader.read(1) == 1;
+
+            // TODO: endpoint codebooks
+        }
+
+        {   // Selector codebooks
+            let start = header.selector_cb_file_ofs as usize;
+            let len = header.selector_cb_file_size as usize;
+
+            let mut reader = BitReaderLSB::new(&buf[start..start + len]);
+
+            let global = reader.read(1) == 1;
+            let hybrid = reader.read(1) == 1;
+            let raw = reader.read(1) == 1;
+
+            if global {
+                return Err("Global selector codebooks are not supported".into());
+            }
+
+            if hybrid {
+                return Err("Hybrid selector codebooks are not supported".into());
+            }
+
+            if !raw {
+                let delta_selector_pal_model = huffman::read_huffman_table(&mut reader)?;
+            }
+
+            // TODO: selector codebooks
+        }
+
+        {   // Slice decoding tables
             let start = header.tables_file_ofs as usize;
             let len = header.tables_file_size as usize;
+
             let mut reader = BitReaderLSB::new(&buf[start..start + len]);
-            huffman::read_huffman_table(&mut reader)?
-        };
+
+            let endpoint_pred_model = huffman::read_huffman_table(&mut reader)?;
+            let delta_endpoint_model = huffman::read_huffman_table(&mut reader)?;
+            let selector_model = huffman::read_huffman_table(&mut reader)?;
+            let selector_history_buf_rle_model = huffman::read_huffman_table(&mut reader)?;
+            let selector_history_buffer_size = reader.read(13) as usize;
+
+            // TODO: slice decoding tables
+        }
     }
 
     let slice_descs = {
