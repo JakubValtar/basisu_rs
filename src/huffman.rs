@@ -49,8 +49,6 @@ pub fn read_huffman_table(reader: &mut BitReaderLSB) -> Result<HuffmanDecodingTa
 
     let total_used_syms = reader.read(MaxSymsLog2) as usize;  // [1, MaxSyms]
 
-    println!("Total used syms: {}", total_used_syms);
-
     let codelength_table = {
         let num_codelength_codes = reader.read(5) as usize; // [1, TotalCodelengthCodes]
 
@@ -119,11 +117,7 @@ pub fn read_huffman_table(reader: &mut BitReaderLSB) -> Result<HuffmanDecodingTa
         }
     }
 
-    let symbol_table = HuffmanDecodingTable::from_sizes(&symbol_code_sizes);
-
-    println!("symbol_table: {:#?}", symbol_table);
-
-    return symbol_table;
+    return HuffmanDecodingTable::from_sizes(&symbol_code_sizes);
 }
 
 #[derive(Clone, Copy)]
