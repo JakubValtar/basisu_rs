@@ -127,10 +127,15 @@ pub fn read_huffman_table(buf: &[u8]) -> Result<HuffmanDecodingTable> {
     return symbol_table;
 }
 
+#[derive(Clone, Copy)]
+struct HuffmanTableEntry {
+    code: u16,
+    code_size: u8,
+}
+
 #[derive(Clone)]
 pub struct HuffmanDecodingTable {
-    code_sizes: Vec<u8>,
-    tree: Vec<u16>,
+    entries: Vec<HuffmanTableEntry>,
 }
 
 impl HuffmanDecodingTable {
@@ -152,32 +157,30 @@ impl HuffmanDecodingTable {
             next_code[bits] = total;
         }
 
-        let mut tree = vec![0u16; total_syms];
+        let mut entries = Vec::with_capacity(total_syms);
 
         let code_width = std::mem::size_of_val(&next_code[0]) * 8;
 
         for n in 0..total_syms {
-            let len = code_sizes[n] as usize;
-            if len != 0 {
-                tree[n] = next_code[len].reverse_bits() >> (code_width - len);
-                next_code[len] += 1;
+            let size = code_sizes[n] as usize;
+            if size != 0 {
+                let code = next_code[size].reverse_bits() >> (code_width - size);
+                entries.push(HuffmanTableEntry { code, code_size: size as u8 });
+                next_code[size] += 1;
             }
         }
 
         Ok(Self {
-            code_sizes: code_sizes.to_vec(),
-            tree,
+            entries,
         })
     }
 
     pub fn decode_symbol(&self, bits: u16) -> Option<(u16, usize)> {
-        let sym_count = self.code_sizes.len();
-        for i in 0..sym_count {
-            let code_size = self.code_sizes[i] as usize;
-            if code_size > 0 {
-                let code = bits & ((1 << code_size) - 1);
-                if code == self.tree[i] {
-                    return Some((i as u16, code_size));
+        for (sym, entry) in self.entries.iter().enumerate() {
+            if entry.code_size > 0 {
+                let code = bits & ((1 << entry.code_size as u32) - 1);
+                if code == entry.code {
+                    return Some((sym as u16, entry.code_size as usize));
                 }
             }
         }
@@ -188,14 +191,14 @@ impl HuffmanDecodingTable {
 impl fmt::Debug for HuffmanDecodingTable {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut debug = f.debug_list();
-        let max_size = self.code_sizes.iter().max().copied().unwrap_or(16) as usize + 1;
-        for (sym, (&size, &code)) in self.code_sizes.iter().zip(self.tree.iter()).enumerate() {
-            if size > 0 {
+        let max_size = self.entries.iter().map(|e| e.code_size).max().unwrap_or(16) as usize + 1;
+        for (sym, &entry) in self.entries.iter().enumerate() {
+            if entry.code_size > 0 {
                 debug.entry(&format_args!(
                     "{:4}:{:pad_width$}{:0code_width$b}",
-                    sym, " ", code,
-                    pad_width = max_size - size as usize,
-                    code_width = size as usize
+                    sym, " ", entry.code,
+                    pad_width = max_size - entry.code_size as usize,
+                    code_width = entry.code_size as usize
                 ));
             }
         }
