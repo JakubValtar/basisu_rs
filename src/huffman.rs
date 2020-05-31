@@ -57,7 +57,7 @@ pub fn read_codelength_table(buf: &[u8]) -> Result<HuffmanDecodingTable> {
             SmallRepeatCode, BigRepeatCode,
             0, 8, 7, 9, 6, 0xA, 5, 0xB, 4, 0xC, 3, 0xD, 2, 0xE, 1, 0xF, 0x10
         ];
-            
+
         let mut codelength_code_sizes = [0u8; TotalCodelengthCodes];
         for i in 0..num_codelength_codes {
             codelength_code_sizes[indices[i]] = reader.read(3) as u8;
@@ -82,12 +82,12 @@ impl HuffmanDecodingTable {
         // TODO: sanity checks
 
         let total_syms = code_sizes.len();
-        
+
         let mut syms_using_codesize = [0u16; MaxSupportedCodeSize+1];
         for &count in code_sizes {
             syms_using_codesize[count as usize] += 1;
         }
-        
+
         let mut total = 0;
         let mut next_code = [0u16; MaxSupportedCodeSize+1];
         syms_using_codesize[0] = 0;
@@ -95,7 +95,7 @@ impl HuffmanDecodingTable {
             total = (total + syms_using_codesize[bits-1]) << 1;
             next_code[bits] = total;
         }
-        
+
         let mut tree = vec![0u16; total_syms];
 
         for n in 0..total_syms {

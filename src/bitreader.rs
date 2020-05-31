@@ -17,7 +17,7 @@ impl<'a> BitReaderLSB<'a> {
         let mut byte = self.pos / 8;
         let mut result: u32 = 0;
         let mut read = 0;
-        
+
         {
             let bit = self.pos % 8;
             let byte_val = if byte < self.bytes.len() { self.bytes[byte] } else { 0 };
