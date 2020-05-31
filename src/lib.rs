@@ -50,7 +50,7 @@ pub fn read_file<P: AsRef<Path>>(path: P) -> Result<()> {
         let codelength_table = {
             let start = header.tables_file_ofs as usize;
             let len = header.tables_file_size as usize;
-            huffman::read_codelength_table(&buf[start..start + len])
+            huffman::read_huffman_table(&buf[start..start + len])
         };
     }
 

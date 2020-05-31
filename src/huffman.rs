@@ -42,7 +42,7 @@ const BigZeroRunCode: usize = 18;
 const SmallRepeatCode: usize = 19;
 const BigRepeatCode: usize = 20;
 
-pub fn read_codelength_table(buf: &[u8]) -> Result<HuffmanDecodingTable> {
+pub fn read_huffman_table(buf: &[u8]) -> Result<HuffmanDecodingTable> {
 
     // TODO: sanity & overflow checks
 
