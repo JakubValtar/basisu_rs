@@ -29,7 +29,7 @@ impl<'a> BitReaderLSB<'a> {
         loop {
             if read >= count {
                 self.pos += count;
-                if count % 8 != 0 {
+                if count < 32 {
                     result &= (1 << count) - 1;
                 }
                 return result;
