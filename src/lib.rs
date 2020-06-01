@@ -60,30 +60,14 @@ pub fn read_file<P: AsRef<Path>>(path: P) -> Result<()> {
             read_endpoints(num_endpoints, &buf[start..start + len])?
         };
 
-        {   // Selector codebooks
+        let selectors = {   // Selector codebooks
+            let num_selectors = header.total_selectors as usize;
+
             let start = header.selector_cb_file_ofs as usize;
             let len = header.selector_cb_file_size as usize;
 
-            let mut reader = BitReaderLSB::new(&buf[start..start + len]);
-
-            let global = reader.read(1) == 1;
-            let hybrid = reader.read(1) == 1;
-            let raw = reader.read(1) == 1;
-
-            if global {
-                return Err("Global selector codebooks are not supported".into());
-            }
-
-            if hybrid {
-                return Err("Hybrid selector codebooks are not supported".into());
-            }
-
-            if !raw {
-                let delta_selector_pal_model = huffman::read_huffman_table(&mut reader)?;
-            }
-
-            // TODO: selector codebooks
-        }
+            read_selectors(num_selectors, &buf[start..start + len])?
+        };
 
         {   // Slice decoding tables
             let start = header.tables_file_ofs as usize;
@@ -191,6 +175,62 @@ fn read_endpoints(num_endpoints: usize, bytes: &[u8]) -> Result<Vec<Endpoint>> {
     Ok(endpoints)
 }
 
+fn read_selectors(num_selectors: usize, bytes: &[u8]) -> Result<Vec<Selector>> {
+    let reader = &mut BitReaderLSB::new(bytes);
+
+    let global = reader.read(1) == 1;
+    let hybrid = reader.read(1) == 1;
+    let raw = reader.read(1) == 1;
+
+    if global {
+        return Err("Global selector codebooks are not supported".into());
+    }
+
+    if hybrid {
+        return Err("Hybrid selector codebooks are not supported".into());
+    }
+
+    let mut selectors = vec![Selector::default(); num_selectors];
+
+    if !raw {
+        let delta_selector_pal_model = huffman::read_huffman_table(reader)?;
+
+        let mut prev_bytes = [0u8; 4];
+
+        for i in 0..num_selectors {
+            if i == 0 {
+                // First selector is sent raw
+                for j in 0..4 {
+                    let cur_byte = reader.read(8);
+                    prev_bytes[j] = cur_byte as u8;
+
+                    for k in 0..4 {
+                        selectors[i].set_selector(k, j as u32, (cur_byte >> (k*2)) & 3);
+                    }
+                }
+                selectors[i].init_flags();
+                continue;
+            }
+
+            // Subsequent selectors are sent with a simple form of byte-wise DPCM coding.
+            for j in 0..4 {
+                let delta_byte = delta_selector_pal_model.decode_symbol(reader)? as u32;
+
+                let cur_byte = delta_byte ^ prev_bytes[j] as u32;
+                prev_bytes[j] = cur_byte as u8;
+
+                for k in 0..4 {
+                    selectors[i].set_selector(k, j as u32, ((cur_byte >> (k*2)) & 3) as u32);
+                }
+            }
+        }
+    } else {
+        // TODO: raw selector codebooks
+    }
+
+    Ok(selectors)
+}
+
 fn crc16(r: &[u8], mut crc: u16) -> u16 {
   crc = !crc;
   for &b in r {
@@ -237,6 +277,82 @@ struct Endpoint {
     inten5: u8,
     color5: Color32,
 }
+
+#[derive(Clone, Copy, Debug,  Default)]
+struct Selector {
+    // Plain selectors (2-bits per value)
+    selectors: [u8; 4],
+
+    // ETC1 selectors
+    bytes: [u8; 4],
+
+    lo_selector: u8,
+    hi_selector: u8,
+    num_unique_selectors: u8,
+}
+
+impl Selector {
+    fn init_flags(&mut self) {
+        let mut hist = [0u32; 4];
+        for y in 0..4 {
+            for x in 0..4 {
+                let s = self.get_selector(x, y);
+                hist[s as usize] += 1;
+            }
+        }
+
+        self.lo_selector = 3;
+        self.hi_selector = 0;
+        self.num_unique_selectors = 0;
+
+        for i in 0..4 {
+            if hist[i as usize] > 0 {
+                self.num_unique_selectors += 1;
+                if i < self.lo_selector {
+                    self.lo_selector = i;
+                }
+                if i > self.hi_selector {
+                    self.hi_selector = i;
+                }
+            }
+        }
+    }
+
+    // Returned selector value ranges from 0-3 and is a direct index into g_etc1_inten_tables.
+    fn get_selector(&self, x: u32, y: u32) -> u32 {
+        assert!((x < 4) && (y < 4));
+        return ((self.selectors[y as usize] >> (x * 2)) & 3) as u32;
+    }
+
+    fn set_selector(&mut self, x: u32, y: u32, val: u32) {
+        const SELECTOR_INDEX_TO_ETC1: [u8; 4] = [ 3, 2, 0, 1 ];
+
+        assert!((x | y | val) < 4);
+
+        self.selectors[y as usize] &= !(3 << (x * 2));
+        self.selectors[y as usize] |= (val << (x * 2)) as u8;
+
+        let etc1_bit_index: u32 = x * 4 + y;
+
+        let byte_bit_ofs: u32 = etc1_bit_index & 7;
+        let mask: u32 = 1 << byte_bit_ofs;
+
+        let etc1_val: u32 = SELECTOR_INDEX_TO_ETC1[val as usize] as u32;
+
+        let lsb: u32 = etc1_val & 1;
+        let msb: u32 = etc1_val >> 1;
+
+        let id = if etc1_bit_index & 8 == 0 { 1 } else { 0 };
+
+        self.bytes[id] &= (!mask) as u8;
+        self.bytes[id] |= (msb << byte_bit_ofs) as u8;
+
+        self.bytes[id + 2] &= (!mask) as u8;
+        self.bytes[id + 2] |= (lsb << byte_bit_ofs) as u8;
+
+    }
+}
+
 
 // basis_file_header::m_tex_type
 enum BasisTextureType {
