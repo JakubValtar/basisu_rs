@@ -223,6 +223,7 @@ fn read_selectors(num_selectors: usize, bytes: &[u8]) -> Result<Vec<Selector>> {
                     selectors[i].set_selector(k, j as u32, ((cur_byte >> (k*2)) & 3) as u32);
                 }
             }
+            selectors[i].init_flags();
         }
     } else {
         // TODO: raw selector codebooks
