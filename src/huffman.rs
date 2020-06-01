@@ -68,13 +68,11 @@ pub fn read_huffman_table(reader: &mut BitReaderLSB) -> Result<HuffmanDecodingTa
 
     let mut symbol_code_sizes: Vec<u8> = Vec::with_capacity(total_used_syms);
     while symbol_code_sizes.len() < total_used_syms {
-        let bits = reader.peek(16) as u16;
-        let (symbol_code_size, bits_used) = codelength_table.decode_symbol(bits)
+        let symbol_code_size = codelength_table.decode_symbol(reader)
             .ok_or_else(|| format!(
                 "No matching code found in the decoding table, bits: {:016b}, table: {:?}, ",
-                bits, codelength_table
+                reader.peek(16), codelength_table
             ))?;
-        reader.remove(bits_used);
         match symbol_code_size as usize {
             0..=16 => {
                 symbol_code_sizes.push(symbol_code_size as u8);
@@ -174,12 +172,14 @@ impl HuffmanDecodingTable {
         })
     }
 
-    pub fn decode_symbol(&self, bits: u16) -> Option<(u16, usize)> {
+    pub fn decode_symbol(&self, reader: &mut BitReaderLSB) -> Option<u16> {
+        let bits = reader.peek(16) as u16;
         for (sym, entry) in self.entries.iter().enumerate() {
             if entry.code_size > 0 {
                 let code = bits & mask!(entry.code_size as u16);
                 if code == entry.code {
-                    return Some((sym as u16, entry.code_size as usize));
+                    reader.remove(entry.code_size as usize);
+                    return Some(sym as u16);
                 }
             }
         }
