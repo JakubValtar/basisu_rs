@@ -1,6 +1,7 @@
 #![warn(clippy::all)]
 
 use byteorder::{ByteOrder, LE};
+use std::ops::{Index, IndexMut};
 use std::path::Path;
 
 mod huffman;
@@ -50,20 +51,14 @@ pub fn read_file<P: AsRef<Path>>(path: P) -> Result<()> {
 
     if header.tex_format == BasisTexFormat::ETC1S as u8 {
 
-        {   // Endpoint codebooks
+        let endpoints = {
+            let num_endpoints = header.total_endpoints as usize;
+
             let start = header.endpoint_cb_file_ofs as usize;
             let len = header.endpoint_cb_file_size as usize;
 
-            let mut reader = BitReaderLSB::new(&buf[start..start + len]);
-
-            let color5_delta_model0 = huffman::read_huffman_table(&mut reader)?;
-            let color5_delta_model1 = huffman::read_huffman_table(&mut reader)?;
-            let color5_delta_model2 = huffman::read_huffman_table(&mut reader)?;
-            let inten_delta_model = huffman::read_huffman_table(&mut reader)?;
-            let grayscale = reader.read(1) == 1;
-
-            // TODO: endpoint codebooks
-        }
+            read_endpoints(num_endpoints, &buf[start..start + len])?
+        };
 
         {   // Selector codebooks
             let start = header.selector_cb_file_ofs as usize;
@@ -128,6 +123,74 @@ pub fn read_file<P: AsRef<Path>>(path: P) -> Result<()> {
     Ok(())
 }
 
+fn read_endpoints(num_endpoints: usize, bytes: &[u8]) -> Result<Vec<Endpoint>> {
+    let reader = &mut BitReaderLSB::new(bytes);
+
+    let color5_delta_model0 = huffman::read_huffman_table(reader)?;
+    let color5_delta_model1 = huffman::read_huffman_table(reader)?;
+    let color5_delta_model2 = huffman::read_huffman_table(reader)?;
+    let inten_delta_model = huffman::read_huffman_table(reader)?;
+    let grayscale = reader.read(1) == 1;
+
+    // const int COLOR5_PAL0_PREV_HI = 9, COLOR5_PAL0_DELTA_LO = -9, COLOR5_PAL0_DELTA_HI = 31;
+    // const int COLOR5_PAL1_PREV_HI = 21, COLOR5_PAL1_DELTA_LO = -21, COLOR5_PAL1_DELTA_HI = 21;
+    // const int COLOR5_PAL2_PREV_HI = 31, COLOR5_PAL2_DELTA_LO = -31, COLOR5_PAL2_DELTA_HI = 9;
+
+    const COLOR5_PAL0_PREV_HI: i32 = 9;
+    const COLOR5_PAL0_DELTA_LO: i32 = -9;
+    const COLOR5_PAL0_DELTA_HI: i32 = 31;
+    const COLOR5_PAL1_PREV_HI: i32 = 21;
+    const COLOR5_PAL1_DELTA_LO: i32 = -21;
+    const COLOR5_PAL1_DELTA_HI: i32 = 21;
+    const COLOR5_PAL2_PREV_HI: i32 = 31;
+    const COLOR5_PAL2_DELTA_LO: i32 = -31;
+    const COLOR5_PAL2_DELTA_HI: i32 = 9;
+
+    // Assume previous endpoint color is (16, 16, 16), and the previous intensity is 0.
+    let mut prev_color5 = Color32::new(16, 16, 16, 0);
+    let mut prev_inten: u32 = 0;
+
+    let mut endpoints: Vec<Endpoint> = vec![Endpoint::default(); num_endpoints as usize];
+
+    // For each endpoint codebook entry
+    for i in 0..num_endpoints {
+
+        let endpoint = &mut endpoints[i];
+
+        // Decode the intensity delta Huffman code
+        let inten_delta = inten_delta_model.decode_symbol(reader)?;
+        endpoint.inten5 = ((inten_delta as u32 + prev_inten) & 7) as u8;
+        prev_inten = endpoint.inten5 as u32;
+
+        // Now decode the endpoint entry's color or intensity value
+        let channel_count = if grayscale { 1 } else { 3 };
+        for c in 0..channel_count {
+
+            // The Huffman table used to decode the delta depends on the previous color's value
+            let delta = match prev_color5[c as usize] as i32 {
+                i if i <= COLOR5_PAL0_PREV_HI => color5_delta_model0.decode_symbol(reader),
+                i if i <= COLOR5_PAL1_PREV_HI => color5_delta_model1.decode_symbol(reader),
+                _ => color5_delta_model2.decode_symbol(reader),
+            }?;
+
+            // Apply the delta
+            let v = (prev_color5[c] as u32 + delta as u32) & 31;
+
+            endpoint.color5[c] = v as u8;
+
+            prev_color5[c] = v as u8;
+        }
+
+        // If the endpoints are grayscale, set G and B to match R.
+        if grayscale {
+            endpoint.color5[1] = endpoint.color5[0];
+            endpoint.color5[2] = endpoint.color5[0];
+        }
+    }
+
+    Ok(endpoints)
+}
+
 fn crc16(r: &[u8], mut crc: u16) -> u16 {
   crc = !crc;
   for &b in r {
@@ -146,6 +209,34 @@ macro_rules! mask {
     }
 }
 
+
+#[derive(Clone, Copy, Debug, Default)]
+struct Color32([u8; 4]);
+
+impl Color32 {
+    pub fn new(r: u8, b: u8, g: u8, a: u8) -> Self {
+        Self([r, g, b, a])
+    }
+}
+
+impl Index<usize> for Color32 {
+    type Output = u8;
+    fn index<'a>(&'a self, i: usize) -> &'a Self::Output {
+        &self.0[i]
+    }
+}
+
+impl IndexMut<usize> for Color32 {
+    fn index_mut<'a>(&'a mut self, i: usize) -> &'a mut Self::Output {
+        &mut self.0[i]
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct Endpoint {
+    inten5: u8,
+    color5: Color32,
+}
 
 // basis_file_header::m_tex_type
 enum BasisTextureType {
