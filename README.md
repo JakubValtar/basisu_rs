@@ -16,12 +16,19 @@ Sample textures were copied from the official [basis_universal repo](https://git
 - [x] Reading SliceDesc
 - [x] LSB-first bit reader
 - [x] Decoding Huffman tables
-- [ ] Decoding endpoint codebooks
-- [ ] Decoding selector codebooks
+- [x] Decoding endpoint codebooks
+- [x] Decoding selector codebooks
+- [ ] Decoding ETC1S slices
 
 ## Log
 
 Here I'm writing a log of what I did, problems I encountered, and what I learned. Have anything to say or discuss? I'd be happy to hear from you, please send me a DM or @ me on Twitter [@JakubValtar](https://twitter.com/jakubvaltar).
+
+### 01-06-2020
+
+I added functions to read endpoints and selectors. This was basically a rewrite of the code from the spec, I need to go through it tomorrow again to get a better grasp of what is happening and how the selectors are stored.
+
+I'm not sure how to test this code, I think I will have to wait till I have the slice decoding working, then I can verify CRC-16 of the decoded texture data for each ETC1S slice.
 
 ### 31-05-2020
 
