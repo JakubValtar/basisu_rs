@@ -226,7 +226,15 @@ fn read_selectors(num_selectors: usize, bytes: &[u8]) -> Result<Vec<Selector>> {
             selectors[i].init_flags();
         }
     } else {
-        // TODO: raw selector codebooks
+        for i in 0..num_selectors {
+            for j in 0..4 {
+                let cur_byte = reader.read(8);
+                for k in 0..4 {
+                    selectors[i].set_selector(k, j as u32, (cur_byte >> (k*2)) & 3);
+                }
+            }
+            selectors[i].init_flags();
+        }
     }
 
     Ok(selectors)
