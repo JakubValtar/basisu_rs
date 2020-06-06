@@ -363,6 +363,55 @@ impl Selector {
 }
 
 
+struct ApproxMoveToFront {
+    values: Vec<u32>,
+    rover: usize,
+}
+
+impl ApproxMoveToFront {
+    fn new(n: usize) -> Self {
+        Self {
+            values: vec![0; n],
+            rover: n / 2,
+        }
+    }
+
+    fn size(&self) -> usize {
+        self.values.len()
+    }
+
+    fn add(&mut self, new_value: u32) {
+        self.values[self.rover] = new_value;
+        self.rover += 1;
+        if self.rover == self.values.len() {
+            self.rover = self.values.len() / 2;
+        }
+    }
+
+    fn use_index(&mut self, index: usize) {
+        if index > 0 {
+            let x = self.values[index / 2];
+            let y = self.values[index];
+            self.values[index / 2] = y;
+            self.values[index] = x;
+        }
+    }
+}
+
+impl Index<usize> for ApproxMoveToFront {
+    type Output = u32;
+    fn index<'a>(&'a self, i: usize) -> &'a Self::Output {
+        &self.values[i]
+    }
+}
+
+impl IndexMut<usize> for ApproxMoveToFront {
+    fn index_mut<'a>(&'a mut self, i: usize) -> &'a mut Self::Output {
+        &mut self.values[i]
+    }
+}
+
+
 // basis_file_header::m_tex_type
 enum BasisTextureType {
     Type2D = 0,
