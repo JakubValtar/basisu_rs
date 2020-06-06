@@ -240,6 +240,31 @@ fn read_selectors(num_selectors: usize, bytes: &[u8]) -> Result<Vec<Selector>> {
     Ok(selectors)
 }
 
+fn decode_vlc(reader: &mut BitReaderLSB, chunk_bits: u32) -> u32 {
+    assert!(chunk_bits > 0);
+    let chunk_size = 1 << chunk_bits;
+    let chunk_mask = mask!(chunk_bits);
+
+    let mut v = 0;
+    let mut ofs = 0;
+
+    loop {
+        let s = reader.read(chunk_bits as usize + 1);
+        v |= (s & chunk_mask) << ofs;
+        ofs += chunk_bits;
+
+        if (s & chunk_size) == 0 {
+            break;
+        }
+
+        if ofs >= 32 {
+            panic!();
+        }
+    }
+
+    return v;
+}
+
 fn crc16(r: &[u8], mut crc: u16) -> u16 {
   crc = !crc;
   for &b in r {
