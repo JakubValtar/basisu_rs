@@ -49,6 +49,25 @@ pub fn read_file<P: AsRef<Path>>(path: P) -> Result<()> {
         return Err("Data CRC16 failed".into());
     }
 
+    let slice_descs = {
+        let start = header.slice_desc_file_ofs as usize;
+        let count = header.total_slices as usize;
+        let mut res = Vec::with_capacity(count);
+        for i in 0..count {
+            let slice_start = start + i * BasisSliceDesc::FILE_SIZE;
+            if !BasisSliceDesc::check_size(&buf[slice_start..]) {
+                let message = format!(
+                    "Expected {} byte slice desc at pos {}, only {} bytes remain",
+                    BasisSliceDesc::FILE_SIZE, slice_start, buf.len()-slice_start
+                );
+                return Err(message.into());
+            }
+            let slice_desc = BasisSliceDesc::from_bytes(&buf[slice_start..]);
+            res.push(slice_desc);
+        }
+        res
+    };
+
     if header.tex_format == BasisTexFormat::ETC1S as u8 {
 
         let endpoints = {
@@ -84,25 +103,6 @@ pub fn read_file<P: AsRef<Path>>(path: P) -> Result<()> {
             // TODO: slice decoding tables
         }
     }
-
-    let slice_descs = {
-        let start = header.slice_desc_file_ofs as usize;
-        let count = header.total_slices as usize;
-        let mut res = Vec::with_capacity(count);
-        for i in 0..count {
-            let slice_start = start + i * BasisSliceDesc::FILE_SIZE;
-            if !BasisSliceDesc::check_size(&buf[slice_start..]) {
-                let message = format!(
-                    "Expected {} byte slice desc at pos {}, only {} bytes remain",
-                    BasisSliceDesc::FILE_SIZE, slice_start, buf.len()-slice_start
-                );
-                return Err(message.into());
-            }
-            let slice_desc = BasisSliceDesc::from_bytes(&buf[slice_start..]);
-            res.push(slice_desc);
-        }
-        res
-    };
 
     Ok(())
 }
