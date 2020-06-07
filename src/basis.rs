@@ -33,6 +33,11 @@ pub enum HeaderFlags {
 
 pub const SIG: u16 = 0x4273;
 
+pub fn check_file_sig(bytes: &[u8]) -> bool {
+    let sig = LE::read_u16(&bytes);
+    sig == SIG
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Header {
     pub sig: u16,                  // 2 byte file signature

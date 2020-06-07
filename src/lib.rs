@@ -10,7 +10,6 @@ mod etc1s;
 mod basis;
 
 use basis::{
-    SIG,
     Header,
     HeaderFlags,
     SliceDesc,
@@ -20,15 +19,10 @@ use basis::{
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
-fn check_sig(buf: &[u8]) -> bool{
-    let sig = LE::read_u16(&buf);
-    sig == SIG
-}
-
 pub fn read_file<P: AsRef<Path>>(path: P) -> Result<Vec<Image<u8>>> {
     let buf = std::fs::read(path)?;
 
-    if !check_sig(&buf) {
+    if !basis::check_file_sig(&buf) {
         return Err("Sig mismatch, not a Basis Universal file".into());
     }
 
