@@ -8,8 +8,6 @@ mod huffman;
 mod bitreader;
 mod etc1s;
 
-use bitreader::BitReaderLSB;
-
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 fn check_sig(buf: &[u8]) -> bool{
@@ -103,31 +101,6 @@ pub fn read_file<P: AsRef<Path>>(path: P) -> Result<Vec<Image<u8>>> {
     } else {
         unimplemented!();
     }
-}
-
-fn decode_vlc(reader: &mut BitReaderLSB, chunk_bits: u32) -> u32 {
-    assert!(chunk_bits > 0);
-    let chunk_size = 1 << chunk_bits;
-    let chunk_mask = mask!(chunk_bits);
-
-    let mut v = 0;
-    let mut ofs = 0;
-
-    loop {
-        let s = reader.read(chunk_bits as usize + 1);
-        v |= (s & chunk_mask) << ofs;
-        ofs += chunk_bits;
-
-        if (s & chunk_size) == 0 {
-            break;
-        }
-
-        if ofs >= 32 {
-            panic!();
-        }
-    }
-
-    return v;
 }
 
 fn crc16(r: &[u8], mut crc: u16) -> u16 {
