@@ -274,7 +274,7 @@ impl Etc1sDecoder {
                         assert!(history_buf_index < selector_history_buf.size());
 
                         // Access the history buffer
-                        let index = selector_history_buf[history_buf_index] as u16;
+                        let index = selector_history_buf[history_buf_index];
 
                         // Update the history buffer
                         if history_buf_index != 0 {
@@ -286,7 +286,7 @@ impl Etc1sDecoder {
                         // It's an index into the selector codebook
                         // Add it to the selector history buffer
                         if self.selector_history_buffer_size > 0 {
-                            selector_history_buf.add(selector_sym as u32);
+                            selector_history_buf.add(selector_sym);
                         }
                         selector_sym
                     }
@@ -519,7 +519,7 @@ fn decode_selectors(num_selectors: usize, bytes: &[u8]) -> Result<Vec<Selector>>
 
 
 struct ApproxMoveToFront {
-    values: Vec<u32>,
+    values: Vec<u16>,
     rover: usize,
 }
 
@@ -535,7 +535,7 @@ impl ApproxMoveToFront {
         self.values.len()
     }
 
-    fn add(&mut self, new_value: u32) {
+    fn add(&mut self, new_value: u16) {
         self.values[self.rover] = new_value;
         self.rover += 1;
         if self.rover == self.values.len() {
@@ -554,7 +554,7 @@ impl ApproxMoveToFront {
 }
 
 impl Index<usize> for ApproxMoveToFront {
-    type Output = u32;
+    type Output = u16;
     fn index<'a>(&'a self, i: usize) -> &'a Self::Output {
         &self.values[i]
     }
