@@ -6,6 +6,7 @@ use std::path::Path;
 
 mod huffman;
 mod bitreader;
+mod etc1s;
 
 use bitreader::BitReaderLSB;
 
@@ -16,7 +17,7 @@ fn check_sig(buf: &[u8]) -> bool{
     sig == BASIS_SIG
 }
 
-pub fn read_file<P: AsRef<Path>>(path: P) -> Result<()> {
+pub fn read_file<P: AsRef<Path>>(path: P) -> Result<Vec<Image<u8>>> {
     let buf = std::fs::read(path)?;
 
     if !check_sig(&buf) {
@@ -70,41 +71,38 @@ pub fn read_file<P: AsRef<Path>>(path: P) -> Result<()> {
 
     if header.tex_format == BasisTexFormat::ETC1S as u8 {
 
-        let endpoints = {
-            let num_endpoints = header.total_endpoints as usize;
+        let decoder = etc1s::Etc1sDecoder::from_file_bytes(&header, &buf)?;
 
-            let start = header.endpoint_cb_file_ofs as usize;
-            let len = header.endpoint_cb_file_size as usize;
+        let has_alpha = (header.flags & BasisHeaderFlags::HasAlphaSlices as u16) != 0;
+        let slices_per_image = if has_alpha { 2 } else { 1 };
 
-            read_endpoints(num_endpoints, &buf[start..start + len])?
-        };
+        assert_eq!(header.total_slices as usize % slices_per_image, 0);
 
-        let selectors = {   // Selector codebooks
-            let num_selectors = header.total_selectors as usize;
+        let slice_count = header.total_slices as usize / slices_per_image;
 
-            let start = header.selector_cb_file_ofs as usize;
-            let len = header.selector_cb_file_size as usize;
+        let mut images = Vec::with_capacity(slice_count);
 
-            read_selectors(num_selectors, &buf[start..start + len])?
-        };
-
-        {   // Slice decoding tables
-            let start = header.tables_file_ofs as usize;
-            let len = header.tables_file_size as usize;
-
-            let mut reader = BitReaderLSB::new(&buf[start..start + len]);
-
-            let endpoint_pred_model = huffman::read_huffman_table(&mut reader)?;
-            let delta_endpoint_model = huffman::read_huffman_table(&mut reader)?;
-            let selector_model = huffman::read_huffman_table(&mut reader)?;
-            let selector_history_buf_rle_model = huffman::read_huffman_table(&mut reader)?;
-            let selector_history_buffer_size = reader.read(13) as usize;
-
-            // TODO: slice decoding tables
+        if has_alpha {
+            for slice_desc in slice_descs.chunks_exact(2) {
+                assert_ne!(slice_desc[1].flags | BasisSliceDescFlags::HasAlpha as u8, 0);
+                let mut rgb = decoder.decode_slice(&slice_desc[0], &buf)?;
+                let alpha = decoder.decode_slice(&slice_desc[1], &buf)?;
+                for (rgb, alpha) in rgb.data.iter_mut().zip(alpha.data.iter()) {
+                    rgb.0[3] = alpha.0[1];
+                }
+                images.push(rgb.into_rgba_bytes());
+            }
+        } else {
+            for rgb_desc in &slice_descs {
+                let rgb = decoder.decode_slice(rgb_desc, &buf)?;
+                images.push(rgb.into_rgba_bytes());
+            }
         }
-    }
 
-    Ok(())
+        return Ok(images);
+    } else {
+        unimplemented!();
+    }
 }
 
 fn read_endpoints(num_endpoints: usize, bytes: &[u8]) -> Result<Vec<Endpoint>> {
@@ -281,12 +279,37 @@ macro_rules! mask {
 }
 
 
+pub struct Image<T> {
+    pub w: u32,
+    pub h: u32,
+    pub data: Vec<T>,
+}
+
+impl Image<Color32> {
+    pub fn into_rgba_bytes(self) -> Image<u8> {
+        Image {
+            w: self.w,
+            h: self.h,
+            data: Color32::as_rgba_bytes(self.data),
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default)]
 struct Color32([u8; 4]);
 
 impl Color32 {
     pub fn new(r: u8, b: u8, g: u8, a: u8) -> Self {
         Self([r, g, b, a])
+    }
+
+    pub fn as_rgba_bytes(data: Vec<Self>) -> Vec<u8> {
+        let len = data.len();
+        unsafe {
+            let mut bytes: Vec<u8> = std::mem::transmute(data);
+            bytes.set_len(4 * len);
+            bytes
+        }
     }
 }
 
