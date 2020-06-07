@@ -4,13 +4,15 @@ use std::ops::{
     IndexMut,
 };
 use crate::{
-    BasisFileHeader,
-    BasisSliceDesc,
-    BasisTextureType,
     Color32,
     Image,
     mask,
     Result,
+    basis::{
+        BasisFileHeader,
+        BasisSliceDesc,
+        BasisTextureType,
+    },
     bitreader::BitReaderLSB,
     huffman::{
         self,
