@@ -72,6 +72,22 @@ impl Etc1sDecoder {
         })
     }
 
+    pub(crate) fn decode_rgb_slice(&self, slice_desc: &SliceDesc, bytes: &[u8]) -> Result<Image<Color32>> {
+        self.decode_slice(slice_desc, bytes)
+    }
+
+    pub(crate) fn decode_rgba_slice(&self, rgb_desc: &SliceDesc, alpha_desc: &SliceDesc, bytes: &[u8]) -> Result<Image<Color32>> {
+        if !alpha_desc.has_alpha() {
+            return Err("Expected slice with alpha".into());
+        }
+        let mut rgb = self.decode_slice(rgb_desc, bytes)?;
+        let alpha = self.decode_slice(alpha_desc, bytes)?;
+        for (rgb, alpha) in rgb.data.iter_mut().zip(alpha.data.iter()) {
+            rgb.0[3] = alpha.0[1];
+        }
+        Ok(rgb)
+    }
+
     pub(crate) fn decode_slice(&self, slice_desc: &SliceDesc, bytes: &[u8]) -> Result<Image<Color32>> {
         const ENDPOINT_PRED_TOTAL_SYMBOLS: u16 = (4 * 4 * 4 * 4) + 1;
         const ENDPOINT_PRED_REPEAT_LAST_SYMBOL: u16 = ENDPOINT_PRED_TOTAL_SYMBOLS - 1;

@@ -1,7 +1,80 @@
+use crate::{ Error, Result };
+
 use byteorder::{
     ByteOrder,
     LE,
 };
+use std::convert::TryFrom;
+
+pub const SIG: u16 = 0x4273;
+
+pub fn check_file_sig(bytes: &[u8]) -> bool {
+    let sig = LE::read_u16(&bytes);
+    sig == SIG
+}
+
+pub fn read_header(bytes: &[u8]) -> Result<Header> {
+    if !check_file_sig(&bytes) {
+        return Err("Sig mismatch, not a Basis Universal file".into());
+    }
+
+    if !Header::check_size(&bytes) {
+        return Err(format!(
+            "Expected at least {} byte header, got {} bytes",
+            Header::FILE_SIZE, bytes.len()).into()
+        );
+    }
+
+    let header = Header::from_file_bytes(&bytes);
+
+    if header.header_size as usize != Header::FILE_SIZE {
+        return Err(format!(
+            "File specified unexpected header size, expected {}, got {}",
+            Header::FILE_SIZE, header.header_size).into()
+        );
+    }
+
+    let header_crc16 = crc16(&bytes[8..Header::FILE_SIZE], 0);
+    if header_crc16 != header.header_crc16 {
+        return Err("Header CRC16 failed".into());
+    }
+
+    Ok(header)
+}
+
+pub fn check_file_checksum(bytes: &[u8], header: &Header) -> bool {
+    let data_crc16 = crc16(&bytes[Header::FILE_SIZE..], 0);
+    data_crc16 == header.data_crc16
+}
+
+pub fn read_slice_descs(bytes: &[u8], header: &Header) -> Result<Vec<SliceDesc>> {
+    let start = header.slice_desc_file_ofs as usize;
+    let count = header.total_slices as usize;
+    let mut res = Vec::with_capacity(count);
+    for i in 0..count {
+        let slice_start = start + i * SliceDesc::FILE_SIZE;
+        if !SliceDesc::check_size(&bytes[slice_start..]) {
+            let message = format!(
+                "Expected {} byte slice desc at pos {}, only {} bytes remain",
+                SliceDesc::FILE_SIZE, slice_start, bytes.len()-slice_start
+            );
+            return Err(message.into());
+        }
+        let slice_desc = SliceDesc::from_file_bytes(&bytes[slice_start..]);
+        res.push(slice_desc);
+    }
+    Ok(res)
+}
+
+fn crc16(r: &[u8], mut crc: u16) -> u16 {
+    crc = !crc;
+    for &b in r {
+        let q: u16 = (b as u16) ^ (crc >> 8);
+        let k: u16 = (q >> 4) ^ q;
+        crc = (((crc << 8) ^ k) ^ (k << 5)) ^ (k << 12);
+    }
+    !crc
+}
 
 // basis_file_header::m_tex_type
 pub enum TextureType {
@@ -19,9 +92,21 @@ pub enum SliceDescFlags {
 }
 
 // basis_file_header::m_tex_format
+#[derive(Clone, Copy, PartialEq)]
 pub enum TexFormat {
     ETC1S = 0,
     UASTC4x4 = 1
+}
+
+impl TryFrom<u8> for TexFormat {
+    type Error = Error;
+    fn try_from(v: u8) -> Result<Self> {
+        match v {
+            0 => Ok(TexFormat::ETC1S),
+            1 => Ok(TexFormat::UASTC4x4),
+            _ => Err("Unknown texture format".into()),
+        }
+    }
 }
 
 // basis_file_header::m_flags
@@ -29,13 +114,6 @@ pub enum HeaderFlags {
     ETC1S = 1,
     YFlipped = 2,
     HasAlphaSlices = 4,
-}
-
-pub const SIG: u16 = 0x4273;
-
-pub fn check_file_sig(bytes: &[u8]) -> bool {
-    let sig = LE::read_u16(&bytes);
-    sig == SIG
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -83,7 +161,15 @@ impl Header {
         buf.len() >= Self::FILE_SIZE
     }
 
-    pub fn from_bytes(buf: &[u8]) -> Self {
+    pub fn has_alpha(&self) -> bool {
+        (self.flags & HeaderFlags::HasAlphaSlices as u16) != 0
+    }
+
+    pub fn texture_format(&self) -> Result<TexFormat> {
+        TexFormat::try_from(self.tex_format)
+    }
+
+    pub fn from_file_bytes(buf: &[u8]) -> Self {
         assert!(Self::check_size(&buf));
         Self {
             sig: LE::read_u16(&buf[0..]),
@@ -149,7 +235,11 @@ impl SliceDesc {
         buf.len() >= Self::FILE_SIZE
     }
 
-    pub fn from_bytes(buf: &[u8]) -> Self {
+    pub fn has_alpha(&self) -> bool {
+        (self.flags & SliceDescFlags::HasAlpha as u8) != 0
+    }
+
+    pub fn from_file_bytes(buf: &[u8]) -> Self {
         assert!(Self::check_size(&buf));
         Self {
             image_index: LE::read_u24(&buf[0..]),
@@ -173,7 +263,7 @@ mod tests {
     #[test]
     fn test_read_header() {
         let bytes: Vec<u8> = (0..Header::FILE_SIZE as u8).collect();
-        let actual = Header::from_bytes(&bytes);
+        let actual = Header::from_file_bytes(&bytes);
         let expected = Header {
             sig: LE::read_u16(&[0, 1]),
             ver: LE::read_u16(&[2, 3]),
