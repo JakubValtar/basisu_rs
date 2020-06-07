@@ -18,11 +18,23 @@ Sample textures were copied from the official [basis_universal repo](https://git
 - [x] Decoding Huffman tables
 - [x] Decoding endpoint codebooks
 - [x] Decoding selector codebooks
-- [ ] Decoding ETC1S slices
+- [x] Decoding ETC1S slices
+- [ ] Textures with flipped Y
+- [ ] Textures with dimensions not divisible by 4
+- [ ] Writing out ETC1S textures
+- [ ] Decoding UASTC
 
 ## Log
 
 Here I'm writing a log of what I did, problems I encountered, and what I learned. Have anything to say or discuss? I'd be happy to hear from you, please send me a DM or @ me on Twitter [@JakubValtar](https://twitter.com/jakubvaltar).
+
+### 07-06-2020
+
+I implemented ETC1S slice decoding, it was mostly a rewrite of the code in the spec (again). I checked the [unity blog - Crunch compression of ETC textures](https://blogs.unity3d.com/2017/12/15/crunch-compression-of-etc-textures/) to learn more about ETC1 and how to decode endpoints and selectors into RGBA data. I added PNG export to check that the textures are being decoded correctly.
+
+I was getting garbage images at first, because I was reading from a wrong part of the file. During debugging, I went through the selector decoding code again and simplified it to a bare minimum to reduce complexity. It's probably somewhat slower now, but it's clear what's going on and there will be time for optimization later.
+
+Last but not least, I organized the crate a bit to make space for upcoming tasks: writing out ETC1S textures, which can be decoded by the graphics card, and decoding UASTC textures.
 
 ### 01-06-2020
 
