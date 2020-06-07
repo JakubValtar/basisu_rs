@@ -4,13 +4,9 @@ use crate::{
     BasisSliceDesc,
     BasisTextureType,
     decode_vlc,
-    Endpoint,
     Color32,
     Image,
-    read_endpoints,
-    read_selectors,
     Result,
-    Selector,
     bitreader::BitReaderLSB,
     huffman::{
         self,
@@ -356,4 +352,163 @@ impl Etc1sDecoder {
             data: pixels,
         })
     }
+}
+
+fn read_endpoints(num_endpoints: usize, bytes: &[u8]) -> Result<Vec<Endpoint>> {
+    let reader = &mut BitReaderLSB::new(bytes);
+
+    let color5_delta_model0 = huffman::read_huffman_table(reader)?;
+    let color5_delta_model1 = huffman::read_huffman_table(reader)?;
+    let color5_delta_model2 = huffman::read_huffman_table(reader)?;
+    let inten_delta_model = huffman::read_huffman_table(reader)?;
+    let grayscale = reader.read(1) == 1;
+
+    // const int COLOR5_PAL0_PREV_HI = 9, COLOR5_PAL0_DELTA_LO = -9, COLOR5_PAL0_DELTA_HI = 31;
+    // const int COLOR5_PAL1_PREV_HI = 21, COLOR5_PAL1_DELTA_LO = -21, COLOR5_PAL1_DELTA_HI = 21;
+    // const int COLOR5_PAL2_PREV_HI = 31, COLOR5_PAL2_DELTA_LO = -31, COLOR5_PAL2_DELTA_HI = 9;
+
+    const COLOR5_PAL0_PREV_HI: i32 = 9;
+    const COLOR5_PAL0_DELTA_LO: i32 = -9;
+    const COLOR5_PAL0_DELTA_HI: i32 = 31;
+    const COLOR5_PAL1_PREV_HI: i32 = 21;
+    const COLOR5_PAL1_DELTA_LO: i32 = -21;
+    const COLOR5_PAL1_DELTA_HI: i32 = 21;
+    const COLOR5_PAL2_PREV_HI: i32 = 31;
+    const COLOR5_PAL2_DELTA_LO: i32 = -31;
+    const COLOR5_PAL2_DELTA_HI: i32 = 9;
+
+    // Assume previous endpoint color is (16, 16, 16), and the previous intensity is 0.
+    let mut prev_color5 = Color32::new(16, 16, 16, 0);
+    let mut prev_inten: u32 = 0;
+
+    let mut endpoints: Vec<Endpoint> = vec![Endpoint::default(); num_endpoints as usize];
+
+    // For each endpoint codebook entry
+    for i in 0..num_endpoints {
+
+        let endpoint = &mut endpoints[i];
+
+        // Decode the intensity delta Huffman code
+        let inten_delta = inten_delta_model.decode_symbol(reader)?;
+        endpoint.inten5 = ((inten_delta as u32 + prev_inten) & 7) as u8;
+        prev_inten = endpoint.inten5 as u32;
+
+        // Now decode the endpoint entry's color or intensity value
+        let channel_count = if grayscale { 1 } else { 3 };
+        for c in 0..channel_count {
+
+            // The Huffman table used to decode the delta depends on the previous color's value
+            let delta = match prev_color5[c as usize] as i32 {
+                i if i <= COLOR5_PAL0_PREV_HI => color5_delta_model0.decode_symbol(reader),
+                i if i <= COLOR5_PAL1_PREV_HI => color5_delta_model1.decode_symbol(reader),
+                _ => color5_delta_model2.decode_symbol(reader),
+            }?;
+
+            // Apply the delta
+            let v = (prev_color5[c] as u32 + delta as u32) & 31;
+
+            endpoint.color5[c] = v as u8;
+
+            prev_color5[c] = v as u8;
+        }
+
+        // If the endpoints are grayscale, set G and B to match R.
+        if grayscale {
+            endpoint.color5[1] = endpoint.color5[0];
+            endpoint.color5[2] = endpoint.color5[0];
+        }
+    }
+
+    Ok(endpoints)
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct Endpoint {
+    inten5: u8,
+    color5: Color32,
+}
+
+#[derive(Clone, Copy, Debug,  Default)]
+struct Selector {
+    // Plain selectors (2-bits per value)
+    selectors: [u8; 16],
+}
+
+impl Selector {
+
+    // Returned selector value ranges from 0-3 and is a direct index into g_etc1_inten_tables.
+    fn get_selector(&self, x: usize, y: usize) -> usize {
+        assert!(x < 4);
+        assert!(y < 4);
+        self.selectors[x + 4 * y] as usize
+    }
+
+    fn set_selector(&mut self, x: usize, y: usize, val: u8) {
+        assert!(x < 4);
+        assert!(y < 4);
+        assert!(val < 4);
+        self.selectors[x + 4 * y] = val as u8;
+    }
+}
+
+fn read_selectors(num_selectors: usize, bytes: &[u8]) -> Result<Vec<Selector>> {
+    let reader = &mut BitReaderLSB::new(bytes);
+
+    let global = reader.read(1) == 1;
+    let hybrid = reader.read(1) == 1;
+    let raw = reader.read(1) == 1;
+
+    if global {
+        return Err("Global selector codebooks are not supported".into());
+    }
+
+    if hybrid {
+        return Err("Hybrid selector codebooks are not supported".into());
+    }
+
+    let mut selectors = vec![Selector::default(); num_selectors];
+
+    if !raw {
+        let delta_selector_pal_model = huffman::read_huffman_table(reader)?;
+
+        let mut prev_bytes = [0u8; 4];
+
+        for i in 0..num_selectors {
+            if i == 0 {
+                // First selector is sent raw
+                for y in 0..4 {
+                    let cur_byte = reader.read(8) as u8;
+                    prev_bytes[y] = cur_byte;
+
+                    for x in 0..4 {
+                        selectors[i].set_selector(x, y, (cur_byte >> (x*2)) & 3);
+                    }
+                }
+                continue;
+            }
+
+            // Subsequent selectors are sent with a simple form of byte-wise DPCM coding.
+            for y in 0..4 {
+                let delta_byte = delta_selector_pal_model.decode_symbol(reader)? as u8;
+
+                let cur_byte = delta_byte ^ prev_bytes[y];
+                prev_bytes[y] = cur_byte;
+
+                for x in 0..4 {
+                    selectors[i].set_selector(x, y, (cur_byte >> (x*2)) & 3);
+                }
+            }
+        }
+    } else {
+        for i in 0..num_selectors {
+            for y in 0..4 {
+                let cur_byte = reader.read(8) as u8;
+                for x in 0..4 {
+                    selectors[i].set_selector(x, y, (cur_byte >> (x*2)) & 3);
+                }
+            }
+        }
+    }
+
+    Ok(selectors)
 }
