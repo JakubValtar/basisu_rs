@@ -9,9 +9,9 @@ use crate::{
     mask,
     Result,
     basis::{
-        BasisFileHeader,
-        BasisSliceDesc,
-        BasisTextureType,
+        Header,
+        SliceDesc,
+        TextureType,
     },
     bitreader::BitReaderLSB,
     huffman::{
@@ -34,7 +34,7 @@ pub struct Etc1sDecoder {
 }
 
 impl Etc1sDecoder {
-    pub(crate) fn from_file_bytes(header: &BasisFileHeader, bytes: &[u8]) -> Result<Self> {
+    pub(crate) fn from_file_bytes(header: &Header, bytes: &[u8]) -> Result<Self> {
         let endpoints = {
             let num_endpoints = header.total_endpoints as usize;
             let start = header.endpoint_cb_file_ofs as usize;
@@ -68,11 +68,11 @@ impl Etc1sDecoder {
             selector_history_buffer_size,
             endpoints,
             selectors,
-            is_video: header.tex_type == BasisTextureType::VideoFrames as u8,
+            is_video: header.tex_type == TextureType::VideoFrames as u8,
         })
     }
 
-    pub(crate) fn decode_slice(&self, slice_desc: &BasisSliceDesc, bytes: &[u8]) -> Result<Image<Color32>> {
+    pub(crate) fn decode_slice(&self, slice_desc: &SliceDesc, bytes: &[u8]) -> Result<Image<Color32>> {
         const ENDPOINT_PRED_TOTAL_SYMBOLS: u16 = (4 * 4 * 4 * 4) + 1;
         const ENDPOINT_PRED_REPEAT_LAST_SYMBOL: u16 = ENDPOINT_PRED_TOTAL_SYMBOLS - 1;
         const ENDPOINT_PRED_MIN_REPEAT_COUNT: u32 = 3;

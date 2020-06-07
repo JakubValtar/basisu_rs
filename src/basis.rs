@@ -4,7 +4,7 @@ use byteorder::{
 };
 
 // basis_file_header::m_tex_type
-pub enum BasisTextureType {
+pub enum TextureType {
     Type2D = 0,
     Type2DArray = 1,
     CubemapArray = 2,
@@ -13,28 +13,28 @@ pub enum BasisTextureType {
 }
 
 // basis_slice_desc::flags
-pub enum BasisSliceDescFlags {
+pub enum SliceDescFlags {
     HasAlpha = 1,
     FrameIsIFrame = 2
 }
 
 // basis_file_header::m_tex_format
-pub enum BasisTexFormat {
+pub enum TexFormat {
     ETC1S = 0,
     UASTC4x4 = 1
 }
 
 // basis_file_header::m_flags
-pub enum BasisHeaderFlags {
+pub enum HeaderFlags {
     ETC1S = 1,
     YFlipped = 2,
     HasAlphaSlices = 4,
 }
 
-pub const BASIS_SIG: u16 = 0x4273;
+pub const SIG: u16 = 0x4273;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct BasisFileHeader {
+pub struct Header {
     pub sig: u16,                  // 2 byte file signature
     pub ver: u16,                  // File version
     pub header_size: u16,          // Header size in bytes, sizeof(basis_file_header) or 0x4D
@@ -71,7 +71,7 @@ pub struct BasisFileHeader {
     pub extended_file_size: u32,            // The file size in bytes of the "extended" header and compressed data, for future use
 }
 
-impl BasisFileHeader {
+impl Header {
     pub const FILE_SIZE: usize = 77;
 
     pub fn check_size(buf: &[u8]) -> bool {
@@ -120,7 +120,7 @@ impl BasisFileHeader {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct BasisSliceDesc {
+pub struct SliceDesc {
     pub image_index: u32, /*24*/
     pub level_index: u8,
     pub flags: u8,
@@ -137,7 +137,7 @@ pub struct BasisSliceDesc {
     pub slice_data_crc16: u16,
 }
 
-impl BasisSliceDesc {
+impl SliceDesc {
     pub const FILE_SIZE: usize = 23;
 
     pub fn check_size(buf: &[u8]) -> bool {
@@ -167,9 +167,9 @@ mod tests {
 
     #[test]
     fn test_read_header() {
-        let bytes: Vec<u8> = (0..BasisFileHeader::FILE_SIZE as u8).collect();
-        let actual = BasisFileHeader::from_bytes(&bytes);
-        let expected = BasisFileHeader {
+        let bytes: Vec<u8> = (0..Header::FILE_SIZE as u8).collect();
+        let actual = Header::from_bytes(&bytes);
+        let expected = Header {
             sig: LE::read_u16(&[0, 1]),
             ver: LE::read_u16(&[2, 3]),
             header_size: LE::read_u16(&[4, 5]),

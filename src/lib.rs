@@ -10,19 +10,19 @@ mod etc1s;
 mod basis;
 
 use basis::{
-    BASIS_SIG,
-    BasisFileHeader,
-    BasisHeaderFlags,
-    BasisSliceDesc,
-    BasisSliceDescFlags,
-    BasisTexFormat,
+    SIG,
+    Header,
+    HeaderFlags,
+    SliceDesc,
+    SliceDescFlags,
+    TexFormat,
 };
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 fn check_sig(buf: &[u8]) -> bool{
     let sig = LE::read_u16(&buf);
-    sig == BASIS_SIG
+    sig == SIG
 }
 
 pub fn read_file<P: AsRef<Path>>(path: P) -> Result<Vec<Image<u8>>> {
@@ -32,28 +32,28 @@ pub fn read_file<P: AsRef<Path>>(path: P) -> Result<Vec<Image<u8>>> {
         return Err("Sig mismatch, not a Basis Universal file".into());
     }
 
-    if !BasisFileHeader::check_size(&buf) {
+    if !Header::check_size(&buf) {
         return Err(format!(
             "Expected at least {} byte header, got {} bytes",
-            BasisFileHeader::FILE_SIZE, buf.len()).into()
+            Header::FILE_SIZE, buf.len()).into()
         );
     }
 
-    let header = BasisFileHeader::from_bytes(&buf);
+    let header = Header::from_bytes(&buf);
 
-    if header.header_size as usize != BasisFileHeader::FILE_SIZE {
+    if header.header_size as usize != Header::FILE_SIZE {
         return Err(format!(
             "File specified unexpected header size, expected {}, got {}",
-            BasisFileHeader::FILE_SIZE, header.header_size).into()
+            Header::FILE_SIZE, header.header_size).into()
         );
     }
 
-    let header_crc16 = crc16(&buf[8..BasisFileHeader::FILE_SIZE], 0);
+    let header_crc16 = crc16(&buf[8..Header::FILE_SIZE], 0);
     if header_crc16 != header.header_crc16 {
         return Err("Header CRC16 failed".into());
     }
 
-    let data_crc16 = crc16(&buf[BasisFileHeader::FILE_SIZE..], 0);
+    let data_crc16 = crc16(&buf[Header::FILE_SIZE..], 0);
     if data_crc16 != header.data_crc16 {
         return Err("Data CRC16 failed".into());
     }
@@ -63,25 +63,25 @@ pub fn read_file<P: AsRef<Path>>(path: P) -> Result<Vec<Image<u8>>> {
         let count = header.total_slices as usize;
         let mut res = Vec::with_capacity(count);
         for i in 0..count {
-            let slice_start = start + i * BasisSliceDesc::FILE_SIZE;
-            if !BasisSliceDesc::check_size(&buf[slice_start..]) {
+            let slice_start = start + i * SliceDesc::FILE_SIZE;
+            if !SliceDesc::check_size(&buf[slice_start..]) {
                 let message = format!(
                     "Expected {} byte slice desc at pos {}, only {} bytes remain",
-                    BasisSliceDesc::FILE_SIZE, slice_start, buf.len()-slice_start
+                    SliceDesc::FILE_SIZE, slice_start, buf.len()-slice_start
                 );
                 return Err(message.into());
             }
-            let slice_desc = BasisSliceDesc::from_bytes(&buf[slice_start..]);
+            let slice_desc = SliceDesc::from_bytes(&buf[slice_start..]);
             res.push(slice_desc);
         }
         res
     };
 
-    if header.tex_format == BasisTexFormat::ETC1S as u8 {
+    if header.tex_format == TexFormat::ETC1S as u8 {
 
         let decoder = etc1s::Etc1sDecoder::from_file_bytes(&header, &buf)?;
 
-        let has_alpha = (header.flags & BasisHeaderFlags::HasAlphaSlices as u16) != 0;
+        let has_alpha = (header.flags & HeaderFlags::HasAlphaSlices as u16) != 0;
         let slices_per_image = if has_alpha { 2 } else { 1 };
 
         assert_eq!(header.total_slices as usize % slices_per_image, 0);
@@ -92,7 +92,7 @@ pub fn read_file<P: AsRef<Path>>(path: P) -> Result<Vec<Image<u8>>> {
 
         if has_alpha {
             for slice_desc in slice_descs.chunks_exact(2) {
-                assert_ne!(slice_desc[1].flags | BasisSliceDescFlags::HasAlpha as u8, 0);
+                assert_ne!(slice_desc[1].flags | SliceDescFlags::HasAlpha as u8, 0);
                 let mut rgb = decoder.decode_slice(&slice_desc[0], &buf)?;
                 let alpha = decoder.decode_slice(&slice_desc[1], &buf)?;
                 for (rgb, alpha) in rgb.data.iter_mut().zip(alpha.data.iter()) {
