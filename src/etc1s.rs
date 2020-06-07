@@ -33,14 +33,14 @@ impl Etc1sDecoder {
             let num_endpoints = header.total_endpoints as usize;
             let start = header.endpoint_cb_file_ofs as usize;
             let len = header.endpoint_cb_file_size as usize;
-            read_endpoints(num_endpoints, &bytes[start..start + len])?
+            decode_endpoints(num_endpoints, &bytes[start..start + len])?
         };
 
         let selectors = {
             let num_selectors = header.total_selectors as usize;
             let start = header.selector_cb_file_ofs as usize;
             let len = header.selector_cb_file_size as usize;
-            read_selectors(num_selectors, &bytes[start..start + len])?
+            decode_selectors(num_selectors, &bytes[start..start + len])?
         };
 
         let start = header.tables_file_ofs as usize;
@@ -354,7 +354,7 @@ impl Etc1sDecoder {
     }
 }
 
-fn read_endpoints(num_endpoints: usize, bytes: &[u8]) -> Result<Vec<Endpoint>> {
+fn decode_endpoints(num_endpoints: usize, bytes: &[u8]) -> Result<Vec<Endpoint>> {
     let reader = &mut BitReaderLSB::new(bytes);
 
     let color5_delta_model0 = huffman::read_huffman_table(reader)?;
@@ -451,7 +451,7 @@ impl Selector {
     }
 }
 
-fn read_selectors(num_selectors: usize, bytes: &[u8]) -> Result<Vec<Selector>> {
+fn decode_selectors(num_selectors: usize, bytes: &[u8]) -> Result<Vec<Selector>> {
     let reader = &mut BitReaderLSB::new(bytes);
 
     let global = reader.read(1) == 1;
