@@ -2,14 +2,14 @@ use crate::mask;
 
 pub struct BitReaderLSB<'a> {
     bytes: &'a [u8],
-    pos: usize,
+    bit_pos: usize,
 }
 
 impl<'a> BitReaderLSB<'a> {
     pub fn new(bytes: &'a [u8]) -> Self {
         Self {
             bytes,
-            pos: 0,
+            bit_pos: 0,
         }
     }
 
@@ -20,17 +20,17 @@ impl<'a> BitReaderLSB<'a> {
     }
 
     pub fn remove(&mut self, count: usize) {
-        self.pos += count;
+        self.bit_pos += count;
     }
 
     pub fn peek(&self, count: usize) -> u32 {
         assert!(count <= 32);
-        let mut byte = self.pos / 8;
+        let mut byte = self.bit_pos / 8;
         let mut result: u32 = 0;
         let mut read = 0;
 
         {
-            let bit = self.pos % 8;
+            let bit = self.bit_pos % 8;
             let byte_val = if byte < self.bytes.len() { self.bytes[byte] } else { 0 };
             result |= (byte_val >> bit) as u32;
             read += 8 - bit;
