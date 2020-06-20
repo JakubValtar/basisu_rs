@@ -5,6 +5,7 @@ use std::path::Path;
 
 mod huffman;
 mod bitreader;
+mod bytereader;
 mod etc1s;
 mod basis;
 

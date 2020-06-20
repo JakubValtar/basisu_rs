@@ -1,4 +1,8 @@
-use crate::{ Error, Result };
+use crate::{
+    bytereader::ByteReaderLE,
+    Error,
+    Result,
+};
 
 use byteorder::{
     ByteOrder,
@@ -171,42 +175,45 @@ impl Header {
 
     pub fn from_file_bytes(buf: &[u8]) -> Self {
         assert!(Self::check_size(&buf));
-        Self {
-            sig: LE::read_u16(&buf[0..]),
-            ver: LE::read_u16(&buf[2..]),
-            header_size: LE::read_u16(&buf[4..]),
-            header_crc16: LE::read_u16(&buf[6..]),
+        let mut r = ByteReaderLE::new(buf);
+        let res = Self {
+            sig: r.read_u16(),
+            ver: r.read_u16(),
+            header_size: r.read_u16(),
+            header_crc16: r.read_u16(),
 
-            data_size: LE::read_u32(&buf[8..]),
-            data_crc16: LE::read_u16(&buf[12..]),
+            data_size: r.read_u32(),
+            data_crc16: r.read_u16(),
 
-            total_slices: LE::read_u24(&buf[14..]),
-            total_images: LE::read_u24(&buf[17..]),
+            total_slices: r.read_u24(),
+            total_images: r.read_u24(),
 
-            tex_format: buf[20],
-            flags: LE::read_u16(&buf[21..]),
-            tex_type: buf[23],
-            us_per_frame: LE::read_u24(&buf[24..]),
+            tex_format: r.read_u8(),
+            flags: r.read_u16(),
+            tex_type: r.read_u8(),
+            us_per_frame: r.read_u24(),
 
-            reserved: LE::read_u32(&buf[27..]),
-            userdata0: LE::read_u32(&buf[31..]),
-            userdata1: LE::read_u32(&buf[35..]),
+            reserved: r.read_u32(),
+            userdata0: r.read_u32(),
+            userdata1: r.read_u32(),
 
-            total_endpoints: LE::read_u16(&buf[39..]),
-            endpoint_cb_file_ofs: LE::read_u32(&buf[41..]),
-            endpoint_cb_file_size: LE::read_u24(&buf[45..]),
+            total_endpoints: r.read_u16(),
+            endpoint_cb_file_ofs: r.read_u32(),
+            endpoint_cb_file_size: r.read_u24(),
 
-            total_selectors: LE::read_u16(&buf[48..]),
-            selector_cb_file_ofs: LE::read_u32(&buf[50..]),
-            selector_cb_file_size: LE::read_u24(&buf[54..]),
+            total_selectors: r.read_u16(),
+            selector_cb_file_ofs: r.read_u32(),
+            selector_cb_file_size: r.read_u24(),
 
-            tables_file_ofs: LE::read_u32(&buf[57..]),
-            tables_file_size: LE::read_u32(&buf[61..]),
+            tables_file_ofs: r.read_u32(),
+            tables_file_size: r.read_u32(),
 
-            slice_desc_file_ofs: LE::read_u32(&buf[65..]),
-            extended_file_ofs: LE::read_u32(&buf[69..]),
-            extended_file_size: LE::read_u32(&buf[73..]),
-        }
+            slice_desc_file_ofs: r.read_u32(),
+            extended_file_ofs: r.read_u32(),
+            extended_file_size: r.read_u32(),
+        };
+        assert_eq!(r.pos(), Self::FILE_SIZE);
+        res
     }
 }
 
@@ -241,18 +248,21 @@ impl SliceDesc {
 
     pub fn from_file_bytes(buf: &[u8]) -> Self {
         assert!(Self::check_size(&buf));
-        Self {
-            image_index: LE::read_u24(&buf[0..]),
-            level_index: buf[3],
-            flags: buf[4],
-            orig_width: LE::read_u16(&buf[5..]),
-            orig_height: LE::read_u16(&buf[7..]),
-            num_blocks_x: LE::read_u16(&buf[9..]),
-            num_blocks_y: LE::read_u16(&buf[11..]),
-            file_ofs: LE::read_u32(&buf[13..]),
-            file_size: LE::read_u32(&buf[17..]),
-            slice_data_crc16: LE::read_u16(&buf[21..]),
-        }
+        let mut r = ByteReaderLE::new(buf);
+        let res = Self {
+            image_index: r.read_u24(),
+            level_index: r.read_u8(),
+            flags: r.read_u8(),
+            orig_width: r.read_u16(),
+            orig_height: r.read_u16(),
+            num_blocks_x: r.read_u16(),
+            num_blocks_y: r.read_u16(),
+            file_ofs: r.read_u32(),
+            file_size: r.read_u32(),
+            slice_data_crc16: r.read_u16(),
+        };
+        assert_eq!(r.pos(), Self::FILE_SIZE);
+        res
     }
 }
 
