@@ -28,6 +28,10 @@ Sample textures were copied from the official [basis_universal repo](https://git
 
 Here I'm writing a log of what I did, problems I encountered, and what I learned. Have anything to say or discuss? I'd be happy to hear from you, please send me a DM or @ me on Twitter [@JakubValtar](https://twitter.com/jakubvaltar).
 
+### 20-06-2020
+
+Just a little quality of life improvement today: added a byte reader to simplify reading structs.
+
 ### 07-06-2020
 
 I implemented ETC1S slice decoding, it was mostly a rewrite of the code in the spec (again). I checked the [unity blog - Crunch compression of ETC textures](https://blogs.unity3d.com/2017/12/15/crunch-compression-of-etc-textures/) to learn more about ETC1 and how to decode endpoints and selectors into RGBA data. I added PNG export to check that the textures are being decoded correctly.
