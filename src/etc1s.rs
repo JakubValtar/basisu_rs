@@ -28,6 +28,7 @@ pub struct Etc1sDecoder {
 
     selector_history_buffer_size: u32,
     is_video: bool,
+    y_flipped: bool,
 
     endpoints: Vec<Endpoint>,
     selectors: Vec<Selector>,
@@ -69,6 +70,7 @@ impl Etc1sDecoder {
             endpoints,
             selectors,
             is_video: header.tex_type == TextureType::VideoFrames as u8,
+            y_flipped: header.has_y_flipped(),
         })
     }
 
@@ -372,6 +374,7 @@ impl Etc1sDecoder {
             w: slice_desc.orig_width as u32,
             h: slice_desc.orig_height as u32,
             stride: slice_desc.num_blocks_x as u32 * 4 * 4,
+            y_flipped: self.y_flipped,
             data: pixels,
         })
     }

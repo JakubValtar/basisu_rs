@@ -50,8 +50,15 @@ fn save<P: AsRef<Path>>(path: P, image: &basisu::Image<u8>) -> std::io::Result<(
     let mut w = writer.stream_writer();
 
     let num_channels = 4;
-    for line in image.data.chunks_exact(image.stride as usize).take(image.h as usize) {
-        w.write_all(&line[0..(image.w * num_channels) as usize])?;
+    if image.y_flipped {
+        // TODO: Is texture with y flipped aligned to the top or to the bottom? This code assumes to the top.
+        for line in image.data.chunks_exact(image.stride as usize).take(image.h as usize).rev() {
+            w.write_all(&line[0..(image.w * num_channels) as usize])?;
+        }
+    } else {
+        for line in image.data.chunks_exact(image.stride as usize).take(image.h as usize) {
+            w.write_all(&line[0..(image.w * num_channels) as usize])?;
+        }
     }
 
     Ok(())

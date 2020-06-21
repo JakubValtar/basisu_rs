@@ -169,6 +169,10 @@ impl Header {
         (self.flags & HeaderFlags::HasAlphaSlices as u16) != 0
     }
 
+    pub fn has_y_flipped(&self) -> bool {
+        (self.flags & HeaderFlags::YFlipped as u16) != 0
+    }
+
     pub fn texture_format(&self) -> Result<TexFormat> {
         TexFormat::try_from(self.tex_format)
     }
