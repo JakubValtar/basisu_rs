@@ -5,7 +5,7 @@ use std::time::UNIX_EPOCH;
 
 use std::path::Path;
 use std::fs::File;
-use std::io::BufWriter;
+use std::io::{ BufWriter, Write };
 
 use png::{ Encoder, ColorType, BitDepth };
 
@@ -42,12 +42,17 @@ fn save<P: AsRef<Path>>(path: P, image: &basisu::Image<u8>) -> std::io::Result<(
     let file = File::create(path)?;
     let ref mut w = BufWriter::new(file);
 
-    let mut encoder = Encoder::new(w, image.w, image.h); // Width is 2 pixels and height is 1.
+    let mut encoder = Encoder::new(w, image.w, image.h);
     encoder.set_color(ColorType::RGBA);
     encoder.set_depth(BitDepth::Eight);
     let mut writer = encoder.write_header()?;
 
-    writer.write_image_data(&image.data)?; // Save
+    let mut w = writer.stream_writer();
+
+    let num_channels = 4;
+    for line in image.data.chunks_exact(image.stride as usize).take(image.h as usize) {
+        w.write_all(&line[0..(image.w * num_channels) as usize])?;
+    }
 
     Ok(())
 }

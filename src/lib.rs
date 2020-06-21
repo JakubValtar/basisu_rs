@@ -66,6 +66,7 @@ macro_rules! mask {
 pub struct Image<T> {
     pub w: u32,
     pub h: u32,
+    pub stride: u32,
     pub data: Vec<T>,
 }
 
@@ -74,6 +75,7 @@ impl Image<Color32> {
         Image {
             w: self.w,
             h: self.h,
+            stride: self.stride,
             data: Color32::as_rgba_bytes(self.data),
         }
     }

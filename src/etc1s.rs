@@ -369,8 +369,9 @@ impl Etc1sDecoder {
         }
 
         Ok(Image {
-            w: slice_desc.num_blocks_x as u32 * 4,
-            h: slice_desc.num_blocks_y as u32 * 4,
+            w: slice_desc.orig_width as u32,
+            h: slice_desc.orig_height as u32,
+            stride: slice_desc.num_blocks_x as u32 * 4 * 4,
             data: pixels,
         })
     }
