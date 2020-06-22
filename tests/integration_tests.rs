@@ -53,5 +53,7 @@ fn save<P: AsRef<Path>>(path: P, image: &basisu::Image<u8>) -> std::io::Result<(
         w.write_all(row)?;
     }
 
+    w.finish()?;
+
     Ok(())
 }
