@@ -19,14 +19,18 @@ Sample textures were copied from the official [basis_universal repo](https://git
 - [x] Decoding endpoint codebooks
 - [x] Decoding selector codebooks
 - [x] Decoding ETC1S slices
-- [ ] Textures with flipped Y
-- [ ] Textures with dimensions not divisible by 4
+- [x] Textures with flipped Y
+- [x] Textures with dimensions not divisible by 4
 - [ ] Writing out ETC1S textures
 - [ ] Decoding UASTC
 
 ## Log
 
 Here I'm writing a log of what I did, problems I encountered, and what I learned. Have anything to say or discuss? I'd be happy to hear from you, please send me a DM or @ me on Twitter [@JakubValtar](https://twitter.com/jakubvaltar).
+
+### 22-06-2020
+
+Now handling textures with dimensions not divisible by 4 and textures with Y flipped.
 
 ### 20-06-2020
 
