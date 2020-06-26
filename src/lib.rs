@@ -67,25 +67,8 @@ pub struct Image<T> {
     pub w: u32,
     pub h: u32,
     pub stride: u32,
-    pub pixel_stride: u32,
     pub y_flipped: bool,
     pub data: Vec<T>,
-}
-
-impl<T> Image<T> {
-    pub fn rows<'a>(&'a self) -> Box<dyn Iterator<Item=&'a [T]> + 'a> {
-        // TODO: Is texture with y flipped aligned to the top or to the bottom? This code assumes to the top.
-        let res = self.data
-            .chunks_exact(self.stride as usize)
-            .take(self.h as usize)
-            .map(move |r| &r[0..(self.w * self.pixel_stride) as usize]);
-
-        if self.y_flipped {
-            Box::new(res.rev())
-        } else {
-            Box::new(res)
-        }
-    }
 }
 
 impl Image<Color32> {
@@ -94,7 +77,6 @@ impl Image<Color32> {
             w: self.w,
             h: self.h,
             stride: self.stride * 4,
-            pixel_stride: 4,
             y_flipped: self.y_flipped,
             data: Color32::into_rgba_bytes(self.data),
         }

@@ -181,7 +181,6 @@ impl Decoder {
             w: slice_desc.orig_width as u32,
             h: slice_desc.orig_height as u32,
             stride: slice_desc.num_blocks_x as u32 * 4,
-            pixel_stride: 1,
             y_flipped: self.y_flipped,
             data: pixels,
         })
@@ -212,7 +211,6 @@ impl Decoder {
             w: slice_desc.orig_width as u32,
             h: slice_desc.orig_height as u32,
             stride: slice_desc.num_blocks_x as u32 * 4,
-            pixel_stride: 1,
             y_flipped: self.y_flipped,
             data: blocks,
         })
@@ -482,7 +480,6 @@ impl Image<Etc1Block> {
             w: self.w,
             h: self.h,
             stride: self.stride * 4,
-            pixel_stride: 4,
             y_flipped: self.y_flipped,
             data: Etc1Block::into_etc1_bytes(self.data),
         }
