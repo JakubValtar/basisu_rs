@@ -37,14 +37,14 @@ pub fn read_file<P: AsRef<Path>>(path: P) -> Result<Vec<Image<u8>>> {
         if header.has_alpha() {
             let mut images = Vec::with_capacity(header.total_slices as usize / 2);
             for slice_desc in slice_descs.chunks_exact(2) {
-                let image = decoder.decode_rgba_slice(&slice_desc[0], &slice_desc[1], &buf)?;
+                let image = decoder.decode_to_rgba(&slice_desc[0], &slice_desc[1], &buf)?;
                 images.push(image.into_rgba_bytes());
             }
             return Ok(images);
         } else {
             let mut images = Vec::with_capacity(header.total_slices as usize);
             for slice_desc in &slice_descs {
-                let image = decoder.decode_rgb_slice(slice_desc, &buf)?;
+                let image = decoder.decode_to_rgb(slice_desc, &buf)?;
                 images.push(image.into_rgba_bytes());
             }
             return Ok(images);

@@ -59,6 +59,13 @@ const INTENS: [[i16; 4]; 8] = [
     [-183, -47, 47, 183],
 ];
 
+pub struct DecodedBlock {
+    block_x: u32,
+    block_y: u32,
+    endpoint_index: u16,
+    selector_index: u16,
+}
+
 pub struct Decoder {
     endpoint_pred_model: HuffmanDecodingTable,
     delta_endpoint_model: HuffmanDecodingTable,
@@ -113,23 +120,72 @@ impl Decoder {
         })
     }
 
-    pub(crate) fn decode_rgb_slice(&self, slice_desc: &SliceDesc, bytes: &[u8]) -> Result<Image<Color32>> {
-        self.decode_slice(slice_desc, bytes)
-    }
-
-    pub(crate) fn decode_rgba_slice(&self, rgb_desc: &SliceDesc, alpha_desc: &SliceDesc, bytes: &[u8]) -> Result<Image<Color32>> {
+    pub(crate) fn decode_to_rgba(&self, rgb_desc: &SliceDesc, alpha_desc: &SliceDesc, bytes: &[u8]) -> Result<Image<Color32>> {
         if !alpha_desc.has_alpha() {
             return Err("Expected slice with alpha".into());
         }
-        let mut rgb = self.decode_slice(rgb_desc, bytes)?;
-        let alpha = self.decode_slice(alpha_desc, bytes)?;
+        let mut rgb = self.decode_to_rgb(rgb_desc, bytes)?;
+        let alpha = self.decode_to_rgb(alpha_desc, bytes)?;
         for (rgb, alpha) in rgb.data.iter_mut().zip(alpha.data.iter()) {
             rgb.0[3] = alpha.0[1];
         }
         Ok(rgb)
     }
 
-    pub(crate) fn decode_slice(&self, slice_desc: &SliceDesc, bytes: &[u8]) -> Result<Image<Color32>> {
+    pub(crate) fn decode_to_rgb(&self, slice_desc: &SliceDesc, bytes: &[u8]) -> Result<Image<Color32>> {
+        let num_blocks_x = slice_desc.num_blocks_x as u32;
+        let num_blocks_y = slice_desc.num_blocks_y as u32;
+
+        let mut pixels = vec![Color32::default(); (num_blocks_x * num_blocks_y) as usize * 16];
+
+        let block_to_rgb = |block: DecodedBlock| {
+            let endpoint: Endpoint = self.endpoints[block.endpoint_index as usize];
+            let selector: Selector = self.selectors[block.selector_index as usize];
+
+            let modifiers = INTENS[endpoint.inten5 as usize];
+
+            let mut colors: [Color32; 4] = [endpoint.color5; 4];
+
+            for i in 0..4 {
+                let modifier = modifiers[i];
+                for c in 0..3 {
+                    let val = (colors[i].0[c] << 3) as i16 + modifier;
+                    colors[i].0[c] = i16::max(0, i16::min(val, 255)) as u8;
+                }
+            }
+
+            let block_pos_x = (block.block_x * 4) as usize;
+            let block_pos_y = (block.block_y * 4) as usize;
+            let stride = (num_blocks_x * 4) as usize;
+
+            for y in 0..4 {
+                for x in 0..4 {
+                    let sel = selector.get_selector(x, y);
+                    let mut col = colors[sel];
+                    col.0[3] = 0xFF;
+                    let gx = block_pos_x + x;
+                    let gy = block_pos_y + y;
+                    let gid = gx + gy * stride;
+                    pixels[gid] = col;
+                }
+            }
+        };
+
+        self.decode_blocks(slice_desc, bytes, block_to_rgb)?;
+
+        Ok(Image {
+            w: slice_desc.orig_width as u32,
+            h: slice_desc.orig_height as u32,
+            stride: slice_desc.num_blocks_x as u32 * 4,
+            pixel_stride: 1,
+            y_flipped: self.y_flipped,
+            data: pixels,
+        })
+    }
+
+    pub(crate) fn decode_blocks<F>(&self, slice_desc: &SliceDesc, bytes: &[u8], mut f: F) -> Result<()>
+        where F: FnMut(DecodedBlock)
+    {
 
         let reader = {
             let start = slice_desc.file_ofs as usize;
@@ -144,8 +200,6 @@ impl Decoder {
 
         let num_blocks_x = slice_desc.num_blocks_x as u32;
         let num_blocks_y = slice_desc.num_blocks_y as u32;
-
-        let mut pixels = vec![Color32::default(); (num_blocks_x * num_blocks_y) as usize * 16];
 
         #[derive(Clone, Copy, Default)]
         struct BlockPreds {
@@ -353,47 +407,15 @@ impl Decoder {
                 assert!(endpoint_index < num_endpoints);
                 assert!(selector_index < num_selectors);
 
-                let endpoint: Endpoint = self.endpoints[endpoint_index as usize];
-                let selector: Selector = self.selectors[selector_index as usize];
+                let block = DecodedBlock {
+                    block_x, block_y, endpoint_index, selector_index
+                };
 
-                let modifiers = INTENS[endpoint.inten5 as usize];
-
-                let mut colors: [Color32; 4] = [endpoint.color5; 4];
-
-                for i in 0..4 {
-                    let modifier = modifiers[i];
-                    for c in 0..3 {
-                        let val = (colors[i].0[c] << 3) as i16 + modifier;
-                        colors[i].0[c] = i16::max(0, i16::min(val, 255)) as u8;
-                    }
-                }
-
-                let block_pos_x = (block_x * 4) as usize;
-                let block_pos_y = (block_y * 4) as usize;
-                let stride = (num_blocks_x * 4) as usize;
-
-                for y in 0..4 {
-                    for x in 0..4 {
-                        let sel = selector.get_selector(x, y);
-                        let mut col = colors[sel];
-                        col.0[3] = 0xFF;
-                        let gx = block_pos_x + x;
-                        let gy = block_pos_y + y;
-                        let gid = gx + gy * stride;
-                        pixels[gid] = col;
-                    }
-                }
+                f(block);
             }
         }
 
-        Ok(Image {
-            w: slice_desc.orig_width as u32,
-            h: slice_desc.orig_height as u32,
-            stride: slice_desc.num_blocks_x as u32 * 4,
-            pixel_stride: 1,
-            y_flipped: self.y_flipped,
-            data: pixels,
-        })
+        Ok(())
     }
 }
 
