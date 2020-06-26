@@ -32,7 +32,7 @@ pub fn read_file<P: AsRef<Path>>(path: P) -> Result<Vec<Image<u8>>> {
             return Err("File has alpha, but slice count is odd".into());
         }
 
-        let decoder = etc1s::Etc1sDecoder::from_file_bytes(&header, &buf)?;
+        let decoder = etc1s::Decoder::from_file_bytes(&header, &buf)?;
 
         if header.has_alpha() {
             let mut images = Vec::with_capacity(header.total_slices as usize / 2);

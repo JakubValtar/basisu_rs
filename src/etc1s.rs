@@ -59,7 +59,7 @@ const INTENS: [[i16; 4]; 8] = [
     [-183, -47, 47, 183],
 ];
 
-pub struct Etc1sDecoder {
+pub struct Decoder {
     endpoint_pred_model: HuffmanDecodingTable,
     delta_endpoint_model: HuffmanDecodingTable,
     selector_model: HuffmanDecodingTable,
@@ -73,7 +73,7 @@ pub struct Etc1sDecoder {
     selectors: Vec<Selector>,
 }
 
-impl Etc1sDecoder {
+impl Decoder {
     pub(crate) fn from_file_bytes(header: &Header, bytes: &[u8]) -> Result<Self> {
         let endpoints = {
             let num_endpoints = header.total_endpoints as usize;
