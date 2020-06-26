@@ -30,7 +30,7 @@ fn read_file() {
 
     for filename in &filenames {
         println!("{}", filename);
-        let images = basisu::read_file(texture_dir.join(filename)).unwrap();
+        let images = basisu::read_to_rgba(texture_dir.join(filename)).unwrap();
         for (i, image) in images.iter().enumerate() {
             let path = out_dir.join(format!("{}-slice{:02}-{}.png", filename, i, timestamp));
             save(path, &image).unwrap();

@@ -16,7 +16,7 @@ use basis::{
 type Error = Box<dyn std::error::Error>;
 type Result<T> = std::result::Result<T, Error>;
 
-pub fn read_file<P: AsRef<Path>>(path: P) -> Result<Vec<Image<u8>>> {
+pub fn read_to_rgba<P: AsRef<Path>>(path: P) -> Result<Vec<Image<u8>>> {
     let buf = std::fs::read(path)?;
 
     let header = basis::read_header(&buf)?;
@@ -49,6 +49,35 @@ pub fn read_file<P: AsRef<Path>>(path: P) -> Result<Vec<Image<u8>>> {
             }
             return Ok(images);
         }
+    } else {
+        unimplemented!();
+    }
+}
+
+pub fn read_to_etc1<P: AsRef<Path>>(path: P) -> Result<Vec<Image<u8>>> {
+    let buf = std::fs::read(path)?;
+
+    let header = basis::read_header(&buf)?;
+
+    if !basis::check_file_checksum(&buf, &header) {
+        return Err("Data CRC16 failed".into());
+    }
+
+    let slice_descs = basis::read_slice_descs(&buf, &header)?;
+
+    if header.texture_format()? == TexFormat::ETC1S {
+        if header.has_alpha() && (header.total_slices % 2) != 0 {
+            return Err("File has alpha, but slice count is odd".into());
+        }
+
+        let decoder = etc1s::Decoder::from_file_bytes(&header, &buf)?;
+
+        let mut images = Vec::with_capacity(header.total_slices as usize);
+        for slice_desc in &slice_descs {
+            let image = decoder.transcode_to_etc1(slice_desc, &buf)?;
+            images.push(image.into_etc1_bytes());
+        }
+        return Ok(images);
     } else {
         unimplemented!();
     }
