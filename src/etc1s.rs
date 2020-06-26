@@ -187,6 +187,37 @@ impl Decoder {
         })
     }
 
+    pub(crate) fn transcode_to_etc1(&self, slice_desc: &SliceDesc, bytes: &[u8]) -> Result<Image<Etc1Block>> {
+        let num_blocks_x = slice_desc.num_blocks_x as u32;
+        let num_blocks_y = slice_desc.num_blocks_y as u32;
+
+        let mut blocks = vec![Etc1Block::default(); (num_blocks_x * num_blocks_y) as usize * 16];
+
+        let block_to_etc1 = |block: DecodedBlock| {
+            let endpoint: Endpoint = self.endpoints[block.endpoint_index as usize];
+            let selector: Selector = self.selectors[block.selector_index as usize];
+
+            let block_id = block.block_y * num_blocks_x + block.block_x;
+            let block = &mut blocks[block_id as usize];
+            block.color5_delta3_r = endpoint.color5[0] << 3;
+            block.color5_delta3_g = endpoint.color5[1] << 3;
+            block.color5_delta3_b = endpoint.color5[2] << 3;
+            block.codeword3_codeword3_diff1_flip1 = endpoint.inten5 << 5 | endpoint.inten5 << 2 | 0b11;
+            block.pixel_index_bits = selector.etc1_bytes;
+        };
+
+        self.decode_blocks(slice_desc, bytes, block_to_etc1)?;
+
+        Ok(Image {
+            w: slice_desc.orig_width as u32,
+            h: slice_desc.orig_height as u32,
+            stride: slice_desc.num_blocks_x as u32 * 4,
+            pixel_stride: 1,
+            y_flipped: self.y_flipped,
+            data: blocks,
+        })
+    }
+
     pub(crate) fn decode_blocks<F>(&self, slice_desc: &SliceDesc, bytes: &[u8], mut f: F) -> Result<()>
         where F: FnMut(DecodedBlock)
     {
@@ -420,6 +451,41 @@ impl Decoder {
         }
 
         Ok(())
+    }
+}
+
+#[derive(Clone, Copy, Default)]
+#[repr(C)]
+pub struct Etc1Block {
+    color5_delta3_r: u8,
+    color5_delta3_g: u8,
+    color5_delta3_b: u8,
+    codeword3_codeword3_diff1_flip1: u8,
+    pixel_index_bits: [u8; 4],
+}
+
+impl Etc1Block {
+    pub fn as_etc1_bytes(data: Vec<Self>) -> Vec<u8> {
+        let len = data.len();
+        let new_len = std::mem::size_of::<Self>() * len;
+        unsafe {
+            let mut bytes: Vec<u8> = std::mem::transmute(data);
+            bytes.set_len(new_len);
+            bytes
+        }
+    }
+}
+
+impl Image<Etc1Block> {
+    pub fn into_etc1_bytes(self) -> Image<u8> {
+        Image {
+            w: self.w,
+            h: self.h,
+            stride: self.stride * 4,
+            pixel_stride: 4,
+            y_flipped: self.y_flipped,
+            data: Etc1Block::as_etc1_bytes(self.data),
+        }
     }
 }
 
