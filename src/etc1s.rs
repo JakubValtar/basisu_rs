@@ -210,7 +210,7 @@ impl Decoder {
         Ok(Image {
             w: slice_desc.orig_width as u32,
             h: slice_desc.orig_height as u32,
-            stride: slice_desc.num_blocks_x as u32 * 4,
+            stride: slice_desc.num_blocks_x as u32,
             y_flipped: self.y_flipped,
             data: blocks,
         })
@@ -476,10 +476,11 @@ impl Etc1Block {
 
 impl Image<Etc1Block> {
     pub fn into_etc1_bytes(self) -> Image<u8> {
+        let bytes_per_block = std::mem::size_of::<Etc1Block>() as u32;
         Image {
             w: self.w,
             h: self.h,
-            stride: self.stride * 4,
+            stride: self.stride * bytes_per_block,
             y_flipped: self.y_flipped,
             data: Etc1Block::into_etc1_bytes(self.data),
         }
