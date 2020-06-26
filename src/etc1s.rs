@@ -20,6 +20,45 @@ use crate::{
     }
 };
 
+const ENDPOINT_PRED_TOTAL_SYMBOLS: u16 = (4 * 4 * 4 * 4) + 1;
+const ENDPOINT_PRED_REPEAT_LAST_SYMBOL: u16 = ENDPOINT_PRED_TOTAL_SYMBOLS - 1;
+const ENDPOINT_PRED_MIN_REPEAT_COUNT: u32 = 3;
+const ENDPOINT_PRED_COUNT_VLC_BITS: u32 = 4;
+
+const NUM_ENDPOINT_PREDS: u8 = 3;
+const CR_ENDPOINT_PRED_INDEX: u8 = NUM_ENDPOINT_PREDS - 1;
+const NO_ENDPOINT_PRED_INDEX: u8 = 3;
+
+const MAX_SELECTOR_HISTORY_BUF_SIZE: u32 = 64;
+const SELECTOR_HISTORY_BUF_RLE_COUNT_THRESH: u32 = 3;
+const SELECTOR_HISTORY_BUF_RLE_COUNT_BITS: u32 = 6;
+const SELECTOR_HISTORY_BUF_RLE_COUNT_TOTAL: u32 = 1 << SELECTOR_HISTORY_BUF_RLE_COUNT_BITS;
+
+// const int COLOR5_PAL0_PREV_HI = 9, COLOR5_PAL0_DELTA_LO = -9, COLOR5_PAL0_DELTA_HI = 31;
+// const int COLOR5_PAL1_PREV_HI = 21, COLOR5_PAL1_DELTA_LO = -21, COLOR5_PAL1_DELTA_HI = 21;
+// const int COLOR5_PAL2_PREV_HI = 31, COLOR5_PAL2_DELTA_LO = -31, COLOR5_PAL2_DELTA_HI = 9;
+
+const COLOR5_PAL0_PREV_HI: i32 = 9;
+const COLOR5_PAL0_DELTA_LO: i32 = -9;
+const COLOR5_PAL0_DELTA_HI: i32 = 31;
+const COLOR5_PAL1_PREV_HI: i32 = 21;
+const COLOR5_PAL1_DELTA_LO: i32 = -21;
+const COLOR5_PAL1_DELTA_HI: i32 = 21;
+const COLOR5_PAL2_PREV_HI: i32 = 31;
+const COLOR5_PAL2_DELTA_LO: i32 = -31;
+const COLOR5_PAL2_DELTA_HI: i32 = 9;
+
+const INTENS: [[i16; 4]; 8] = [
+    [-8, -2, 2, 8],
+    [-17, -5, 5, 17],
+    [-29, -9, 9, 29],
+    [-42, -13, 13, 42],
+    [-60, -18, 18, 60],
+    [-80, -24, 24, 80],
+    [-106, -33, 33, 106],
+    [-183, -47, 47, 183],
+];
+
 pub struct Etc1sDecoder {
     endpoint_pred_model: HuffmanDecodingTable,
     delta_endpoint_model: HuffmanDecodingTable,
@@ -91,15 +130,6 @@ impl Etc1sDecoder {
     }
 
     pub(crate) fn decode_slice(&self, slice_desc: &SliceDesc, bytes: &[u8]) -> Result<Image<Color32>> {
-        const ENDPOINT_PRED_TOTAL_SYMBOLS: u16 = (4 * 4 * 4 * 4) + 1;
-        const ENDPOINT_PRED_REPEAT_LAST_SYMBOL: u16 = ENDPOINT_PRED_TOTAL_SYMBOLS - 1;
-        const ENDPOINT_PRED_MIN_REPEAT_COUNT: u32 = 3;
-        const ENDPOINT_PRED_COUNT_VLC_BITS: u32 = 4;
-
-        const NUM_ENDPOINT_PREDS: u8 = 3;
-        const CR_ENDPOINT_PRED_INDEX: u8 = NUM_ENDPOINT_PREDS - 1;
-        const NO_ENDPOINT_PRED_INDEX: u8 = 3;
-
 
         let reader = {
             let start = slice_desc.file_ofs as usize;
@@ -248,10 +278,6 @@ impl Etc1sDecoder {
                 // Now we have fully decoded the ETC1S endpoint codebook index, in endpoint_index.
 
                 // Now decode the selector index (see the next block of code, below).
-                const MAX_SELECTOR_HISTORY_BUF_SIZE: u32 = 64;
-                const SELECTOR_HISTORY_BUF_RLE_COUNT_THRESH: u32 = 3;
-                const SELECTOR_HISTORY_BUF_RLE_COUNT_BITS: u32 = 6;
-                const SELECTOR_HISTORY_BUF_RLE_COUNT_TOTAL: u32 = 1 << SELECTOR_HISTORY_BUF_RLE_COUNT_BITS;
 
                 // Decode selector index, unless it's texture video and the endpoint predictor indicated that the
                 // block's endpoints were reused from the previous frame.
@@ -330,16 +356,6 @@ impl Etc1sDecoder {
                 let endpoint: Endpoint = self.endpoints[endpoint_index as usize];
                 let selector: Selector = self.selectors[selector_index as usize];
 
-                const INTENS: [[i16; 4]; 8] = [
-                    [-8, -2, 2, 8],
-                    [-17, -5, 5, 17],
-                    [-29, -9, 9, 29],
-                    [-42, -13, 13, 42],
-                    [-60, -18, 18, 60],
-                    [-80, -24, 24, 80],
-                    [-106, -33, 33, 106],
-                    [-183, -47, 47, 183],
-                ];
                 let modifiers = INTENS[endpoint.inten5 as usize];
 
                 let mut colors: [Color32; 4] = [endpoint.color5; 4];
@@ -389,20 +405,6 @@ fn decode_endpoints(num_endpoints: usize, bytes: &[u8]) -> Result<Vec<Endpoint>>
     let color5_delta_model2 = huffman::read_huffman_table(reader)?;
     let inten_delta_model = huffman::read_huffman_table(reader)?;
     let grayscale = reader.read(1) == 1;
-
-    // const int COLOR5_PAL0_PREV_HI = 9, COLOR5_PAL0_DELTA_LO = -9, COLOR5_PAL0_DELTA_HI = 31;
-    // const int COLOR5_PAL1_PREV_HI = 21, COLOR5_PAL1_DELTA_LO = -21, COLOR5_PAL1_DELTA_HI = 21;
-    // const int COLOR5_PAL2_PREV_HI = 31, COLOR5_PAL2_DELTA_LO = -31, COLOR5_PAL2_DELTA_HI = 9;
-
-    const COLOR5_PAL0_PREV_HI: i32 = 9;
-    const COLOR5_PAL0_DELTA_LO: i32 = -9;
-    const COLOR5_PAL0_DELTA_HI: i32 = 31;
-    const COLOR5_PAL1_PREV_HI: i32 = 21;
-    const COLOR5_PAL1_DELTA_LO: i32 = -21;
-    const COLOR5_PAL1_DELTA_HI: i32 = 21;
-    const COLOR5_PAL2_PREV_HI: i32 = 31;
-    const COLOR5_PAL2_DELTA_LO: i32 = -31;
-    const COLOR5_PAL2_DELTA_HI: i32 = 9;
 
     // Assume previous endpoint color is (16, 16, 16), and the previous intensity is 0.
     let mut prev_color5 = Color32::new(16, 16, 16, 0);
