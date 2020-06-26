@@ -485,8 +485,8 @@ struct Endpoint {
 
 #[derive(Clone, Copy, Debug,  Default)]
 struct Selector {
-    // Plain selectors (2-bits per value)
-    selectors: [u8; 16],
+    // Plain selectors (2-bits per value), one byte for each row
+    selectors: [u8; 4],
 }
 
 impl Selector {
@@ -495,14 +495,21 @@ impl Selector {
     fn get_selector(&self, x: usize, y: usize) -> usize {
         assert!(x < 4);
         assert!(y < 4);
-        self.selectors[x + 4 * y] as usize
+
+        let shift = 2 * x;
+        let val = (self.selectors[y] >> shift) & 0b11;
+        val as usize
     }
 
     fn set_selector(&mut self, x: usize, y: usize, val: u8) {
         assert!(x < 4);
         assert!(y < 4);
         assert!(val < 4);
-        self.selectors[x + 4 * y] = val as u8;
+
+        // Pack the two-bit value into the byte for the appropriate row
+        let shift = 2 * x;
+        self.selectors[y] &= !(0b11 << shift);
+        self.selectors[y] |= (val as u8) << shift;
     }
 }
 
