@@ -111,9 +111,10 @@ impl Color32 {
 
     pub fn as_rgba_bytes(data: Vec<Self>) -> Vec<u8> {
         let len = data.len();
+        let new_len = std::mem::size_of::<Self>() * len;
         unsafe {
             let mut bytes: Vec<u8> = std::mem::transmute(data);
-            bytes.set_len(4 * len);
+            bytes.set_len(new_len);
             bytes
         }
     }
