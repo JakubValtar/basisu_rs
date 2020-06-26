@@ -96,7 +96,7 @@ impl Image<Color32> {
             stride: self.stride * 4,
             pixel_stride: 4,
             y_flipped: self.y_flipped,
-            data: Color32::as_rgba_bytes(self.data),
+            data: Color32::into_rgba_bytes(self.data),
         }
     }
 }
@@ -109,7 +109,7 @@ impl Color32 {
         Self([r, g, b, a])
     }
 
-    pub fn as_rgba_bytes(data: Vec<Self>) -> Vec<u8> {
+    pub fn into_rgba_bytes(data: Vec<Self>) -> Vec<u8> {
         let len = data.len();
         let new_len = std::mem::size_of::<Self>() * len;
         unsafe {

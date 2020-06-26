@@ -465,7 +465,7 @@ pub struct Etc1Block {
 }
 
 impl Etc1Block {
-    pub fn as_etc1_bytes(data: Vec<Self>) -> Vec<u8> {
+    pub fn into_etc1_bytes(data: Vec<Self>) -> Vec<u8> {
         let len = data.len();
         let new_len = std::mem::size_of::<Self>() * len;
         unsafe {
@@ -484,7 +484,7 @@ impl Image<Etc1Block> {
             stride: self.stride * 4,
             pixel_stride: 4,
             y_flipped: self.y_flipped,
-            data: Etc1Block::as_etc1_bytes(self.data),
+            data: Etc1Block::into_etc1_bytes(self.data),
         }
     }
 }
