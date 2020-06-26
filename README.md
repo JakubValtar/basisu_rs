@@ -21,12 +21,20 @@ Sample textures were copied from the official [basis_universal repo](https://git
 - [x] Decoding ETC1S slices
 - [x] Textures with flipped Y
 - [x] Textures with dimensions not divisible by 4
-- [ ] Writing out ETC1S textures
+- [x] Writing out ETC1 textures
 - [ ] Decoding UASTC
 
 ## Log
 
 Here I'm writing a log of what I did, problems I encountered, and what I learned. Have anything to say or discuss? I'd be happy to hear from you, please send me a DM or @ me on Twitter [@JakubValtar](https://twitter.com/jakubvaltar).
+
+### 26-06-2020
+
+Implemented writing out ETC1 textures, I used the [Khronos spec](https://www.khronos.org/registry/DataFormat/specs/1.1/dataformat.1.1.html#ETC1). I refactored selectors to use less space and added a field which stores the values in ETC1 format. Since selectors are reused, preparing this data beforehand makes much more sense than recalculating it for every block.
+
+I found a bug in the RGBA decoding in the process. The ETC1 spec says that 5-bit color values should be converted to 8-bit by shifting three bits left and replicating top three bits into the bottom three bits. I wasn't replicating the bits, so there was some loss of quality, although barely noticeable.
+
+There doesn't seem to be any easy way to export the ETC1 data in some file format which could be opened by some engine or texture viewer. I will have to look into validating the ETC1 output later.
 
 ### 22-06-2020
 
