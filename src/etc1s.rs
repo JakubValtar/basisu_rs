@@ -487,6 +487,9 @@ struct Endpoint {
 struct Selector {
     // Plain selectors (2-bits per value), one byte for each row
     selectors: [u8; 4],
+
+    // Selectors in ETC1 format, ready to be written to an ETC1 texture
+    etc1_bytes: [u8; 4],
 }
 
 impl Selector {
@@ -510,6 +513,27 @@ impl Selector {
         let shift = 2 * x;
         self.selectors[y] &= !(0b11 << shift);
         self.selectors[y] |= (val as u8) << shift;
+
+        // Convert to ETC1 format according to the spec
+        let mod_id: u8 = [0b11, 0b10, 0b00, 0b01][val as usize];
+
+        // ETC1 indexes pixels from top to bottom within each column
+        let pixel_id = x * 4 + y;
+
+        // MS bit of pixel 0..8 goes to byte 1
+        // MS bit of pixel 8..16 goes to byte 0
+        let ms_byte_id = 1 - (pixel_id / 8);
+
+        // LS bit of pixel 0..8 goes to byte 3
+        // LS bit of pixel 8..16 goes to byte 2
+        let ls_byte_id = ms_byte_id + 2;
+
+        let bit_id = pixel_id % 8;
+
+        self.etc1_bytes[ls_byte_id] &= !(1 << bit_id);
+        self.etc1_bytes[ls_byte_id] |= 1 << (mod_id % 2);
+        self.etc1_bytes[ms_byte_id] &= !(1 << bit_id);
+        self.etc1_bytes[ms_byte_id] |= 1 << (mod_id / 2);
     }
 }
 
