@@ -146,10 +146,14 @@ impl Decoder {
 
             let mut colors: [Color32; 4] = [endpoint.color5; 4];
 
+            fn extend_5_to_8(x: u8) -> u8 {
+                (x << 3) | (x >> 2)
+            }
+
             for i in 0..4 {
                 let modifier = modifiers[i];
                 for c in 0..3 {
-                    let val = (colors[i].0[c] << 3) as i16 + modifier;
+                    let val = extend_5_to_8(colors[i].0[c]) as i16 + modifier;
                     colors[i].0[c] = i16::max(0, i16::min(val, 255)) as u8;
                 }
             }
