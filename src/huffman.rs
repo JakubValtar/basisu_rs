@@ -116,6 +116,7 @@ pub fn read_huffman_table(reader: &mut BitReaderLSB) -> Result<HuffmanDecodingTa
 
 #[derive(Clone, Copy)]
 struct HuffmanTableEntry {
+    symbol: u16,
     code: u16,
     code_size: u8,
 }
@@ -150,18 +151,19 @@ impl HuffmanDecodingTable {
 
         for n in 0..total_syms {
             let size = code_sizes[n] as usize;
+            let symbol = n as u16;
             if size != 0 {
                 let code = (next_code[size].reverse_bits() >> (code_width - size)) as u16;
-                entries.push(HuffmanTableEntry { code, code_size: size as u8 });
+                entries.push(HuffmanTableEntry { symbol, code, code_size: size as u8 });
                 next_code[size] += 1;
-            } else {
-                entries.push(HuffmanTableEntry { code: 0, code_size: 0 });
             }
         }
 
         if next_code.iter().any(|&c| c > u16::MAX as u32 + 1) {
             return Err("Code lengths are invalid, codes don't fit into 16 bits".into());
         }
+
+        entries.sort_by_key(|e| e.code_size);
 
         Ok(Self {
             entries,
@@ -170,13 +172,11 @@ impl HuffmanDecodingTable {
 
     pub fn decode_symbol(&self, reader: &mut BitReaderLSB) -> Result<u16> {
         let bits = reader.peek(16) as u16;
-        for (sym, entry) in self.entries.iter().enumerate() {
-            if entry.code_size > 0 {
-                let code = bits & mask!(entry.code_size as u16);
-                if code == entry.code {
-                    reader.remove(entry.code_size as usize);
-                    return Ok(sym as u16);
-                }
+        for entry in &self.entries {
+            let code = bits & mask!(entry.code_size as u16);
+            if code == entry.code {
+                reader.remove(entry.code_size as usize);
+                return Ok(entry.symbol);
             }
         }
         Err(format!("No matching code found in the decoding table, bits: {:016b}", bits).into())
