@@ -182,22 +182,3 @@ impl HuffmanDecodingTable {
         Err(format!("No matching code found in the decoding table, bits: {:016b}", bits).into())
     }
 }
-
-impl fmt::Debug for HuffmanDecodingTable {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut debug = f.debug_list();
-        let max_size = self.entries.iter().map(|e| e.code_size).max().unwrap_or(16) as usize + 1;
-        for (sym, &entry) in self.entries.iter().enumerate() {
-            if entry.code_size > 0 {
-                debug.entry(&format_args!(
-                    "{:4}:{:pad_width$}{:0code_width$b}",
-                    sym, " ", entry.code,
-                    pad_width = max_size - entry.code_size as usize,
-                    code_width = entry.code_size as usize
-                ));
-            }
-        }
-        debug.finish()?;
-        Ok(())
-    }
-}
