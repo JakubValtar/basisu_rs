@@ -31,7 +31,7 @@ impl<'a> BitReaderLSB<'a> {
 
         {
             let bit = self.bit_pos % 8;
-            let byte_val = if byte < self.bytes.len() { self.bytes[byte] } else { 0 };
+            let byte_val = self.bytes.get(byte).copied().unwrap_or(0);
             result |= (byte_val >> bit) as u32;
             read += 8 - bit;
             byte += 1;
@@ -39,12 +39,9 @@ impl<'a> BitReaderLSB<'a> {
 
         loop {
             if read >= count {
-                if count < 32 {
-                    result &= mask!(count as u32);
-                }
-                return result;
+                return result & mask!(count as u32);
             }
-            let byte_val = if byte < self.bytes.len() { self.bytes[byte] } else { 0 };
+            let byte_val = self.bytes.get(byte).copied().unwrap_or(0);
             result |= (byte_val as u32) << read;
             read += 8;
             byte += 1;
