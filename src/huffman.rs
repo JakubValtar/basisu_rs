@@ -114,16 +114,15 @@ pub fn read_huffman_table(reader: &mut BitReaderLSB) -> Result<HuffmanDecodingTa
     return HuffmanDecodingTable::from_sizes(&symbol_code_sizes);
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 struct HuffmanTableEntry {
     symbol: u16,
-    code: u16,
-    code_size: u8,
+    code_size: u16,
 }
 
 #[derive(Clone)]
 pub struct HuffmanDecodingTable {
-    entries: Vec<HuffmanTableEntry>,
+    lookup: Vec<HuffmanTableEntry>,
 }
 
 impl HuffmanDecodingTable {
@@ -145,7 +144,8 @@ impl HuffmanDecodingTable {
             next_code[bits] = total;
         }
 
-        let mut entries = Vec::with_capacity(total_syms);
+        // TODO: Lot of waste for tables with small max code len
+        let mut lookup = vec![HuffmanTableEntry::default(); 1 << MaxSupportedCodeSize];
 
         let code_width = std::mem::size_of_val(&next_code[0]) * 8;
 
@@ -154,7 +154,15 @@ impl HuffmanDecodingTable {
             let symbol = n as u16;
             if size != 0 {
                 let code = (next_code[size].reverse_bits() >> (code_width - size)) as u16;
-                entries.push(HuffmanTableEntry { symbol, code, code_size: size as u8 });
+
+                // Generate all lookup entries ending with this code
+                let variant_count: u16 = 1 << (MaxSupportedCodeSize - size);
+                for fill in 0..variant_count {
+                    let id = (fill.wrapping_shl(size as u32) | code) as usize;
+                    lookup[id].symbol = symbol;
+                    lookup[id].code_size = size as u16;
+                }
+
                 next_code[size] += 1;
             }
         }
@@ -163,21 +171,17 @@ impl HuffmanDecodingTable {
             return Err("Code lengths are invalid, codes don't fit into 16 bits".into());
         }
 
-        entries.sort_by_key(|e| e.code_size);
-
         Ok(Self {
-            entries,
+            lookup,
         })
     }
 
     pub fn decode_symbol(&self, reader: &mut BitReaderLSB) -> Result<u16> {
         let bits = reader.peek(16) as u16;
-        for entry in &self.entries {
-            let code = bits & mask!(entry.code_size as u16);
-            if code == entry.code {
-                reader.remove(entry.code_size as usize);
-                return Ok(entry.symbol);
-            }
+        let entry = self.lookup[bits as usize];
+        if entry.code_size > 0 {
+            reader.remove(entry.code_size as usize);
+            return Ok(entry.symbol);
         }
         Err(format!("No matching code found in the decoding table, bits: {:016b}", bits).into())
     }
