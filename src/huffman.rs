@@ -123,6 +123,7 @@ struct HuffmanTableEntry {
 #[derive(Clone)]
 pub struct HuffmanDecodingTable {
     lookup: Vec<HuffmanTableEntry>,
+    max_code_size: usize,
 }
 
 impl HuffmanDecodingTable {
@@ -132,8 +133,10 @@ impl HuffmanDecodingTable {
         let total_syms = code_sizes.len();
 
         let mut syms_using_codesize = [0u32; MaxSupportedCodeSize+1];
+        let mut max_code_size = 0;
         for &count in code_sizes {
             syms_using_codesize[count as usize] += 1;
+            max_code_size = max_code_size.max(count as usize);
         }
 
         let mut total = 0;
@@ -144,8 +147,7 @@ impl HuffmanDecodingTable {
             next_code[bits] = total;
         }
 
-        // TODO: Lot of waste for tables with small max code len
-        let mut lookup = vec![HuffmanTableEntry::default(); 1 << MaxSupportedCodeSize];
+        let mut lookup = vec![HuffmanTableEntry::default(); 1 << max_code_size];
 
         let code_width = std::mem::size_of_val(&next_code[0]) * 8;
 
@@ -156,7 +158,7 @@ impl HuffmanDecodingTable {
                 let code = (next_code[size].reverse_bits() >> (code_width - size)) as u16;
 
                 // Generate all lookup entries ending with this code
-                let variant_count: u16 = 1 << (MaxSupportedCodeSize - size);
+                let variant_count: u16 = 1 << (max_code_size - size);
                 for fill in 0..variant_count {
                     let id = (fill.wrapping_shl(size as u32) | code) as usize;
                     lookup[id].symbol = symbol;
@@ -173,12 +175,13 @@ impl HuffmanDecodingTable {
 
         Ok(Self {
             lookup,
+            max_code_size: max_code_size,
         })
     }
 
     pub fn decode_symbol(&self, reader: &mut BitReaderLSB) -> Result<u16> {
-        let bits = reader.peek(16) as u16;
-        let entry = self.lookup[bits as usize];
+        let bits = reader.peek(self.max_code_size) as usize;
+        let entry = self.lookup[bits];
         if entry.code_size > 0 {
             reader.remove(entry.code_size as usize);
             return Ok(entry.symbol);
