@@ -22,11 +22,24 @@ Sample textures were copied from the official [basis_universal repo](https://git
 - [x] Textures with flipped Y
 - [x] Textures with dimensions not divisible by 4
 - [x] Writing out ETC1 textures
+- [x] Lookup tables for faster Huffman decoding
 - [ ] Decoding UASTC
 
 ## Log
 
 Here I'm writing a log of what I did, problems I encountered, and what I learned. Have anything to say or discuss? I'd be happy to hear from you, please send me a DM or @ me on Twitter [@JakubValtar](https://twitter.com/jakubvaltar).
+
+### 27-06-2020
+
+I decided to optimize Huffman decoding today, to get the low-hanging fruit. I still run a linear search to find the right entry in the decoding table.
+
+First I switched to a sparse table ([6824f2](https://github.com/JakubValtar/basisu_rs/commit/6824f262293c0435e53db7c8c32cd1ca86dcbe4a)). I added the symbol to the table entry, which allowed me to get rid of empty entries and to sort the table by code size, since the entries are not tied to the position in the table anymore. This led to a 2x speedup, because shorter codes appear more frequently in the bit stream.
+
+Next I switched to a lookup table ([46ffc8](https://github.com/JakubValtar/basisu_rs/commit/46ffc8752fe78639c542719a2dbd7e8d4f5e1f47)). I decided to keep it simple and start with a full table. The maximum code size is 16 bits, which means 2^16 entries. Each entry is copied into all the slots which end with the code of the entry. This led to a 15x speedup.
+
+The last thing I did today was to make the size of the lookup table adapt to the size of the longest code present ([29e323](https://github.com/JakubValtar/basisu_rs/commit/29e3233c3e55741211dc9cdf41f8f7ba36843fc4)). The decoding table is constructed from a slice of code sizes of the symbols, so it's easy to find the longest code. Instead of 2^16, the lookup table size is now 2^max_code_size. This helps, because half of the tables have at most 21 entries and we don't have to waste time on generating lookup tables with 2^16 entries. This led to a 1.5x speedup.
+
+The combined speedup for today ended up being around 45x. I'm pretty happy with this :)
 
 ### 26-06-2020
 
