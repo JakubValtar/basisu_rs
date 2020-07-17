@@ -26,7 +26,7 @@ pub struct DecodedBlock {
     block_x: u32,
     block_y: u32,
     mode_index: usize,
-    trans_flags: Option<TranscodingFlags>,
+    trans_flags: TranscodingFlags,
     pat: u8,
     compsel: u8,
     data: ModeData,
@@ -50,7 +50,7 @@ enum ModeData {
     ModeE8W32(ModeE8W32),
     Mode8 {
         r: u8, g: u8, b: u8, a: u8,
-        etc1d: bool, etc1i: u8, etc1s: u8,
+        etc1i: u8, etc1s: u8,
         etc1r: u8, etc1g: u8, etc1b: u8,
     },
 }
@@ -153,7 +153,7 @@ fn decode_block(block_x: u32, block_y: u32, bytes: &[u8]) -> Result<DecodedBlock
 
     reader.remove(mode.code_size as usize);
 
-    let trans_flags = decode_trans_flags(reader, mode_index);
+    let mut trans_flags = decode_trans_flags(reader, mode_index);
 
     let compsel = match mode_index {
         6 | 11 | 13 => {
@@ -174,17 +174,20 @@ fn decode_block(block_x: u32, block_y: u32, bytes: &[u8]) -> Result<DecodedBlock
 
     let data = match mode_index {
         8 => {
+            let r = reader.read_u8(8);
+            let g = reader.read_u8(8);
+            let b = reader.read_u8(8);
+            let a = reader.read_u8(8);
+            trans_flags.etc1d = reader.read_bool();
+            let etc1i = reader.read_u8(3);
+            let etc1s = reader.read_u8(2);
+            let etc1r = reader.read_u8(5);
+            let etc1g = reader.read_u8(5);
+            let etc1b = reader.read_u8(5);
             ModeData::Mode8 {
-                r: reader.read_u8(8),
-                g: reader.read_u8(8),
-                b: reader.read_u8(8),
-                a: reader.read_u8(8),
-                etc1d: reader.read_bool(),
-                etc1i: reader.read_u8(3),
-                etc1s: reader.read_u8(2),
-                etc1r: reader.read_u8(5),
-                etc1g: reader.read_u8(5),
-                etc1b: reader.read_u8(5),
+                r, g, b, a,
+                etc1i, etc1s,
+                etc1r, etc1g, etc1b,
             }
         }
         6 | 11 | 13 | 17 => {
@@ -210,11 +213,11 @@ fn decode_block(block_x: u32, block_y: u32, bytes: &[u8]) -> Result<DecodedBlock
     })
 }
 
-fn decode_trans_flags(reader: &mut BitReaderLSB, mode_index: usize) -> Option<TranscodingFlags> {
-    if mode_index == 8 {
-        return None;
-    }
+fn decode_trans_flags(reader: &mut BitReaderLSB, mode_index: usize) -> TranscodingFlags {
     let mut flags = TranscodingFlags::default();
+    if mode_index == 8 {
+        return flags; // Mode 8 has a different field order, flags will be read into this struct later
+    }
     flags.bc1h0 = reader.read_bool();
     if mode_index < 10 || mode_index > 12 {
         flags.bc1h1 = reader.read_bool();
@@ -229,7 +232,7 @@ fn decode_trans_flags(reader: &mut BitReaderLSB, mode_index: usize) -> Option<Tr
     if mode_index >= 9 && mode_index <= 17 {
         flags.etc2tm = reader.read_u8(8);
     }
-    Some(flags)
+    flags
 }
 
 #[derive(Clone, Copy, Default)]
