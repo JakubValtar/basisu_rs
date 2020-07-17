@@ -123,7 +123,7 @@ impl Decoder {
 
         for block_y in 0..num_blocks_y {
             for block_x in 0..num_blocks_x {
-                let block = decode_block(block_x, block_y, &bytes[block_offset..block_offset + BLOCK_SIZE])?;
+                let block = decode_block(block_x, block_y, &bytes[block_offset..block_offset + BLOCK_SIZE]);
                 f(block);
                 block_offset += BLOCK_SIZE;
             }
@@ -146,7 +146,7 @@ fn block_to_rgba(block: &DecodedBlock) -> [Color32; 16] {
     }
 }
 
-fn decode_block(block_x: u32, block_y: u32, bytes: &[u8]) -> Result<DecodedBlock> {
+fn decode_block(block_x: u32, block_y: u32, bytes: &[u8]) -> DecodedBlock {
 
     let reader = &mut BitReaderLSB::new(bytes);
 
@@ -215,9 +215,9 @@ fn decode_block(block_x: u32, block_y: u32, bytes: &[u8]) -> Result<DecodedBlock
         result
     };
 
-    Ok(DecodedBlock {
+    DecodedBlock {
         block_x, block_y, mode_index, trans_flags, compsel, pat, data,
-    })
+    }
 }
 
 fn decode_trans_flags(reader: &mut BitReaderLSB, mode_index: usize) -> TranscodingFlags {
@@ -488,7 +488,7 @@ mod tests {
     #[test]
     fn test_uastc() -> Result<()> {
         for block in TEST_BLOCK_DATA.iter() {
-            let block = decode_block(0, 0, block)?;
+            let decoded_block = decode_block(0, 0, block);
         }
         Ok(())
     }
