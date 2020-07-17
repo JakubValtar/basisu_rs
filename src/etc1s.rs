@@ -105,7 +105,7 @@ impl Decoder {
         let delta_endpoint_model = huffman::read_huffman_table(reader)?;
         let selector_model = huffman::read_huffman_table(reader)?;
         let selector_history_buf_rle_model = huffman::read_huffman_table(reader)?;
-        let selector_history_buffer_size = reader.read(13);
+        let selector_history_buffer_size = reader.read_u32(13);
 
         Ok(Self {
             endpoint_pred_model,
@@ -494,7 +494,7 @@ fn decode_endpoints(num_endpoints: usize, bytes: &[u8]) -> Result<Vec<Endpoint>>
     let color5_delta_model1 = huffman::read_huffman_table(reader)?;
     let color5_delta_model2 = huffman::read_huffman_table(reader)?;
     let inten_delta_model = huffman::read_huffman_table(reader)?;
-    let grayscale = reader.read(1) == 1;
+    let grayscale = reader.read_bool();
 
     // Assume previous endpoint color is (16, 16, 16), and the previous intensity is 0.
     let mut prev_color5 = Color32::new(16, 16, 16, 0);
@@ -604,9 +604,9 @@ impl Selector {
 fn decode_selectors(num_selectors: usize, bytes: &[u8]) -> Result<Vec<Selector>> {
     let reader = &mut BitReaderLSB::new(bytes);
 
-    let global = reader.read(1) == 1;
-    let hybrid = reader.read(1) == 1;
-    let raw = reader.read(1) == 1;
+    let global = reader.read_bool();
+    let hybrid = reader.read_bool();
+    let raw = reader.read_bool();
 
     if global {
         return Err("Global selector codebooks are not supported".into());
@@ -627,7 +627,7 @@ fn decode_selectors(num_selectors: usize, bytes: &[u8]) -> Result<Vec<Selector>>
             if i == 0 {
                 // First selector is sent raw
                 for y in 0..4 {
-                    let cur_byte = reader.read(8) as u8;
+                    let cur_byte = reader.read_u8(8);
                     prev_bytes[y] = cur_byte;
 
                     for x in 0..4 {
@@ -652,7 +652,7 @@ fn decode_selectors(num_selectors: usize, bytes: &[u8]) -> Result<Vec<Selector>>
     } else {
         for i in 0..num_selectors {
             for y in 0..4 {
-                let cur_byte = reader.read(8) as u8;
+                let cur_byte = reader.read_u8(8);
                 for x in 0..4 {
                     selectors[i].set_selector(x, y, (cur_byte >> (x*2)) & 3);
                 }
@@ -673,7 +673,7 @@ fn decode_vlc(reader: &mut BitReaderLSB, chunk_bits: u32) -> u32 {
     let mut ofs = 0;
 
     loop {
-        let s = reader.read(chunk_bits as usize + 1);
+        let s = reader.read_u32(chunk_bits as usize + 1);
         v |= (s & chunk_mask) << ofs;
         ofs += chunk_bits;
 

@@ -157,17 +157,17 @@ fn decode_block(block_x: u32, block_y: u32, bytes: &[u8]) -> Result<DecodedBlock
 
     let compsel = match mode_index {
         6 | 11 | 13 => {
-            reader.read(2) as u8
+            reader.read_u8(2)
         }
         _ => 0
     };
 
     let pat = match mode_index {
         3 => {
-            reader.read(4) as u8
+            reader.read_u8(4)
         }
         2 | 4 | 7 | 9 | 16 => {
-            reader.read(5) as u8
+            reader.read_u8(5)
         }
         _ => 0
     };
@@ -175,16 +175,16 @@ fn decode_block(block_x: u32, block_y: u32, bytes: &[u8]) -> Result<DecodedBlock
     let data = match mode_index {
         8 => {
             ModeData::Mode8 {
-                r: reader.read(8) as u8,
-                g: reader.read(8) as u8,
-                b: reader.read(8) as u8,
-                a: reader.read(8) as u8,
-                etc1d: reader.read(1) == 1,
-                etc1i: reader.read(3) as u8,
-                etc1s: reader.read(2) as u8,
-                etc1r: reader.read(5) as u8,
-                etc1g: reader.read(5) as u8,
-                etc1b: reader.read(5) as u8,
+                r: reader.read_u8(8),
+                g: reader.read_u8(8),
+                b: reader.read_u8(8),
+                a: reader.read_u8(8),
+                etc1d: reader.read_bool(),
+                etc1i: reader.read_u8(3),
+                etc1s: reader.read_u8(2),
+                etc1r: reader.read_u8(5),
+                etc1g: reader.read_u8(5),
+                etc1b: reader.read_u8(5),
             }
         }
         6 | 11 | 13 | 17 => {
@@ -215,19 +215,19 @@ fn decode_trans_flags(reader: &mut BitReaderLSB, mode_index: usize) -> Option<Tr
         return None;
     }
     let mut flags = TranscodingFlags::default();
-    flags.bc1h0 = reader.read(1) == 1;
+    flags.bc1h0 = reader.read_bool();
     if mode_index < 10 || mode_index > 12 {
-        flags.bc1h1 = reader.read(1) == 1;
+        flags.bc1h1 = reader.read_bool();
     }
-    flags.etc1f = reader.read(1) == 1;
-    flags.etc1d = reader.read(1) == 1;
-    flags.etc1i0 = reader.read(3) as u8;
-    flags.etc1i1 = reader.read(3) as u8;
+    flags.etc1f = reader.read_bool();
+    flags.etc1d = reader.read_bool();
+    flags.etc1i0 = reader.read_u8(3);
+    flags.etc1i1 = reader.read_u8(3);
     if mode_index < 10 || mode_index > 12 {
-        flags.etc1bias = reader.read(5) as u8;
+        flags.etc1bias = reader.read_u8(5);
     }
     if mode_index >= 9 && mode_index <= 17 {
-        flags.etc2tm = reader.read(8) as u8;
+        flags.etc2tm = reader.read_u8(8);
     }
     Some(flags)
 }
@@ -335,7 +335,7 @@ fn decode_endpoint(reader: &mut BitReaderLSB, range_index: u8, value_count: usiz
         const BITS_PER_GROUP: usize = 7;
         let mut out_pos = 0;
         for _ in 0..(value_count / QUINTS_PER_GROUP) as usize {
-            let mut quints = reader.read(BITS_PER_GROUP) as u8;
+            let mut quints = reader.read_u8(BITS_PER_GROUP);
             for _ in 0..QUINTS_PER_GROUP {
                 output[out_pos as usize].trit_quint = quints % 5;
                 quints /= 5;
@@ -349,7 +349,7 @@ fn decode_endpoint(reader: &mut BitReaderLSB, range_index: u8, value_count: usiz
                 2 => 5,
                 _ => unreachable!(),
             };
-            let mut quints = reader.read(bits_used) as u8;
+            let mut quints = reader.read_u8(bits_used);
             for _ in 0..remaining {
                 output[out_pos as usize].trit_quint = quints % 5;
                 quints /= 5;
@@ -363,7 +363,7 @@ fn decode_endpoint(reader: &mut BitReaderLSB, range_index: u8, value_count: usiz
         const BITS_PER_GROUP: usize = 8;
         let mut out_pos = 0;
         for _ in 0..(value_count / TRITS_PER_GROUP) as usize {
-            let mut trits = reader.read(BITS_PER_GROUP) as u8;
+            let mut trits = reader.read_u8(BITS_PER_GROUP);
             for _ in 0..TRITS_PER_GROUP {
                 output[out_pos as usize].trit_quint = trits % 3;
                 trits /= 3;
@@ -379,7 +379,7 @@ fn decode_endpoint(reader: &mut BitReaderLSB, range_index: u8, value_count: usiz
                 4 => 7,
                 _ => unreachable!(),
             };
-            let mut trits = reader.read(bits_used) as u8;
+            let mut trits = reader.read_u8(bits_used);
             for _ in 0..remaining {
                 output[out_pos as usize].trit_quint = trits % 3;
                 trits /= 3;
@@ -390,7 +390,7 @@ fn decode_endpoint(reader: &mut BitReaderLSB, range_index: u8, value_count: usiz
 
     if bit_count > 0 {
         for i in 0..value_count {
-            let bits = reader.read(bit_count as usize) as u8;
+            let bits = reader.read_u8(bit_count as usize);
             output[i].bits = bits;
         }
     }

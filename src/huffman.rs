@@ -47,10 +47,10 @@ pub fn read_huffman_table(reader: &mut BitReaderLSB) -> Result<HuffmanDecodingTa
 
     // TODO: sanity & overflow checks
 
-    let total_used_syms = reader.read(MaxSymsLog2) as usize;  // [1, MaxSyms]
+    let total_used_syms = reader.read_u32(MaxSymsLog2) as usize;  // [1, MaxSyms]
 
     let codelength_table = {
-        let num_codelength_codes = reader.read(5) as usize; // [1, TotalCodelengthCodes]
+        let num_codelength_codes = reader.read_u32(5) as usize; // [1, TotalCodelengthCodes]
 
         let indices = [
             SmallZeroRunCode, BigZeroRunCode,
@@ -60,7 +60,7 @@ pub fn read_huffman_table(reader: &mut BitReaderLSB) -> Result<HuffmanDecodingTa
 
         let mut codelength_code_sizes = [0u8; TotalCodelengthCodes];
         for i in 0..num_codelength_codes {
-            codelength_code_sizes[indices[i]] = reader.read(3) as u8;
+            codelength_code_sizes[indices[i]] = reader.read_u32(3) as u8;
         }
 
         HuffmanDecodingTable::from_sizes(&codelength_code_sizes)?
@@ -74,13 +74,13 @@ pub fn read_huffman_table(reader: &mut BitReaderLSB) -> Result<HuffmanDecodingTa
                 symbol_code_sizes.push(symbol_code_size as u8);
             }
             SmallZeroRunCode => {
-                let count = SmallZeroRunSizeMin + reader.read(SmallZeroRunExtraBits) as usize;
+                let count = SmallZeroRunSizeMin + reader.read_u32(SmallZeroRunExtraBits) as usize;
                 for _ in 0..count {
                     symbol_code_sizes.push(0);
                 }
             }
             BigZeroRunCode => {
-                let count = BigZeroRunSizeMin + reader.read(BigZeroRunExtraBits) as usize;
+                let count = BigZeroRunSizeMin + reader.read_u32(BigZeroRunExtraBits) as usize;
                 for _ in 0..count {
                     symbol_code_sizes.push(0);
                 }
@@ -91,7 +91,7 @@ pub fn read_huffman_table(reader: &mut BitReaderLSB) -> Result<HuffmanDecodingTa
                 if prev_sym_code_size == 0 {
                     return Err("Encountered SmallRepeatCode, but the previous symbol's code length was 0".into());
                 }
-                let count = SmallRepeatSizeMin + reader.read(SmallRepeatExtraBits) as usize;
+                let count = SmallRepeatSizeMin + reader.read_u32(SmallRepeatExtraBits) as usize;
                 for _ in 0..count {
                     symbol_code_sizes.push(prev_sym_code_size);
                 }
@@ -102,7 +102,7 @@ pub fn read_huffman_table(reader: &mut BitReaderLSB) -> Result<HuffmanDecodingTa
                 if prev_sym_code_size == 0 {
                     return Err("Encountered BigRepeatCode, but the previous symbol's code length was 0".into());
                 }
-                let count = BigRepeatSizeMin + reader.read(BigRepeatExtraBits) as usize;
+                let count = BigRepeatSizeMin + reader.read_u32(BigRepeatExtraBits) as usize;
                 for _ in 0..count {
                     symbol_code_sizes.push(prev_sym_code_size);
                 }

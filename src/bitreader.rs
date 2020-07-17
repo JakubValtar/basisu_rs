@@ -13,7 +13,21 @@ impl<'a> BitReaderLSB<'a> {
         }
     }
 
-    pub fn read(&mut self, count: usize) -> u32 {
+    pub fn read_bool(&mut self) -> bool {
+        self.read(1) == 1
+    }
+
+    pub fn read_u8(&mut self, count: usize) -> u8 {
+        assert!(count <= 8);
+        self.read(count) as u8
+    }
+
+    pub fn read_u32(&mut self, count: usize) -> u32 {
+        assert!(count <= 32);
+        self.read(count)
+    }
+
+    fn read(&mut self, count: usize) -> u32 {
         let res = self.peek(count);
         self.remove(count);
         res
