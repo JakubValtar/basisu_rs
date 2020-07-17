@@ -117,6 +117,10 @@ impl Decoder {
 
         const BLOCK_SIZE: usize = 16;
 
+        if bytes.len() < BLOCK_SIZE * num_blocks_x as usize * num_blocks_y as usize {
+            return Err("Not enough bytes for all blocks".into());
+        }
+
         for block_y in 0..num_blocks_y {
             for block_x in 0..num_blocks_x {
                 let block = decode_block(block_x, block_y, &bytes[block_offset..block_offset + BLOCK_SIZE])?;
