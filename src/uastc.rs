@@ -22,7 +22,6 @@ use crate::{
 
 const MAX_ENDPOINT_COUNT: usize = 18;
 
-#[derive(Debug)]
 pub struct DecodedBlock {
     block_x: u32,
     block_y: u32,
@@ -39,16 +38,9 @@ struct ModeE18W16 {
     weights: [u8; 16],
 }
 
-#[derive(Clone, Copy, Debug, Default)]
-struct ModeE8W32 {
-    endpoints: [u8; 8],
-    weights: [u8; 32],
-}
-
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 enum ModeData {
-    ModeE18W16(ModeE18W16),
-    ModeE8W32(ModeE8W32),
+    ModeEW([u8; 40]),
     Mode8 {
         r: u8, g: u8, b: u8, a: u8,
         etc1i: u8, etc1s: u8,
@@ -146,11 +138,8 @@ fn block_to_rgba(block: &DecodedBlock) -> [Color32; 16] {
     let mode = MODES[block.mode_index];
 
     let (endpoints, weights): (&[u8], &[u8]) = match block.data {
-        ModeData::ModeE18W16(ref data) => {
-            (&data.endpoints, &data.weights)
-        }
-        ModeData::ModeE8W32(ref data) => {
-            (&data.endpoints, &data.weights)
+        ModeData::ModeEW(ref data) => {
+            data.split_at(mode.endpoint_count as usize)
         }
         _ => unreachable!()
     };
@@ -236,6 +225,7 @@ fn decode_block(block_x: u32, block_y: u32, bytes: &[u8]) -> DecodedBlock {
         _ => 0
     };
 
+    // Pattern id for modes with multiple subsets
     let pat = match mode_index {
         3 => {
             reader.read_u8(4)
@@ -263,26 +253,18 @@ fn decode_block(block_x: u32, block_y: u32, bytes: &[u8]) -> DecodedBlock {
             etc1r, etc1g, etc1b,
         }
     } else {
-        let mut result = match mode.plane_count {
-            1 => ModeData::ModeE18W16(ModeE18W16::default()),
-            2 => ModeData::ModeE8W32(ModeE8W32::default()),
-            _ => unreachable!()
-        };
+        let mut data = [0; 40];
 
-        let (endpoints, weights) = match result {
-            ModeData::ModeE18W16(ref mut d) => (&mut d.endpoints[..], &mut d.weights[..]),
-            ModeData::ModeE8W32(ref mut d) => (&mut d.endpoints[..], &mut d.weights[..]),
-            _ => unreachable!()
-        };
+        let (endpoints, weights) = data.split_at_mut(mode.endpoint_count as usize);
 
         let quant_endpoints = decode_endpoints(reader, mode.endpoint_range_index, endpoint_count);
-        for (i, quant) in quant_endpoints.iter().take(endpoint_count).enumerate() {
-            endpoints[i] = unquant_endpoint(*quant, mode.endpoint_range_index);
+        for (quant, unquant) in quant_endpoints.iter().zip(endpoints.iter_mut()) {
+            *unquant = unquant_endpoint(*quant, mode.endpoint_range_index);
         }
         let plane_count = mode.plane_count as usize;
         decode_weights(reader, mode.weight_bits, plane_count, weights);
         unquant_weights(weights, mode.weight_bits);
-        result
+        ModeData::ModeEW(data)
     };
 
     DecodedBlock {
@@ -574,7 +556,7 @@ mod tests {
             for i in 0..16 {
                 rgba_c32[i] = Color32::from_rgba_u32(rgba[i]);
             }
-            assert_eq!(&output, rgba, "\n{:?}\n{:?}\n{:?}", decoded_block, decoded_rgba, rgba_c32);
+            assert_eq!(&output, rgba, "\n{:?}\n{:?}", decoded_rgba, rgba_c32);
         }
     }
 
