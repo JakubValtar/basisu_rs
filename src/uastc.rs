@@ -172,40 +172,43 @@ fn decode_block(block_x: u32, block_y: u32, bytes: &[u8]) -> Result<DecodedBlock
         _ => 0
     };
 
-    let data = match mode_index {
-        8 => {
-            let r = reader.read_u8(8);
-            let g = reader.read_u8(8);
-            let b = reader.read_u8(8);
-            let a = reader.read_u8(8);
-            trans_flags.etc1d = reader.read_bool();
-            let etc1i = reader.read_u8(3);
-            let etc1s = reader.read_u8(2);
-            let etc1r = reader.read_u8(5);
-            let etc1g = reader.read_u8(5);
-            let etc1b = reader.read_u8(5);
-            ModeData::Mode8 {
-                r, g, b, a,
-                etc1i, etc1s,
-                etc1r, etc1g, etc1b,
-            }
+    let data = if mode_index == 8 {
+        let r = reader.read_u8(8);
+        let g = reader.read_u8(8);
+        let b = reader.read_u8(8);
+        let a = reader.read_u8(8);
+        trans_flags.etc1d = reader.read_bool();
+        let etc1i = reader.read_u8(3);
+        let etc1s = reader.read_u8(2);
+        let etc1r = reader.read_u8(5);
+        let etc1g = reader.read_u8(5);
+        let etc1b = reader.read_u8(5);
+        ModeData::Mode8 {
+            r, g, b, a,
+            etc1i, etc1s,
+            etc1r, etc1g, etc1b,
         }
-        6 | 11 | 13 | 17 => {
-            let mut data = ModeE8W32::default();
-            let quant_endpoints = decode_endpoints(reader, mode.endpoint_range_index, endpoint_count);
-            for (i, quant) in quant_endpoints.iter().take(endpoint_count).enumerate() {
-                data.endpoints[i] = unquant_endpoint(*quant, mode.endpoint_range_index);
-            }
-            ModeData::ModeE8W32(data)
+    } else {
+        let mut result = match mode.plane_count {
+            1 => ModeData::ModeE18W16(ModeE18W16::default()),
+            2 => ModeData::ModeE8W32(ModeE8W32::default()),
+            _ => unreachable!()
+        };
+
+        let (endpoints, weights) = match result {
+            ModeData::ModeE18W16(ref mut d) => (&mut d.endpoints[..], &mut d.weights[..]),
+            ModeData::ModeE8W32(ref mut d) => (&mut d.endpoints[..], &mut d.weights[..]),
+            _ => unreachable!()
+        };
+
+        let quant_endpoints = decode_endpoints(reader, mode.endpoint_range_index, endpoint_count);
+        for (i, quant) in quant_endpoints.iter().take(endpoint_count).enumerate() {
+            endpoints[i] = unquant_endpoint(*quant, mode.endpoint_range_index);
         }
-        _ => {
-            let mut data = ModeE18W16::default();
-            let quant_endpoints = decode_endpoints(reader, mode.endpoint_range_index, endpoint_count);
-            for (i, quant) in quant_endpoints.iter().take(endpoint_count).enumerate() {
-                data.endpoints[i] = unquant_endpoint(*quant, mode.endpoint_range_index);
-            }
-            ModeData::ModeE18W16(data)
-        }
+        let plane_count = mode.plane_count as usize;
+        decode_weights(reader, mode.weight_bits, plane_count, weights);
+        unquant_weights(weights, mode.weight_bits);
+        result
     };
 
     Ok(DecodedBlock {
@@ -243,29 +246,35 @@ pub struct Mode {
     endpoint_range_index: u8,
     endpoint_count: u8,
     weight_bits: u8,
+    plane_count: u8,
 }
 
 static MODES: [Mode; 20] = [
-    Mode { code: 0x01, code_size: 4, block_size: 128, endpoint_range_index: 19, endpoint_count:  6, weight_bits: 4 }, //  0
-    Mode { code: 0x35, code_size: 6, block_size: 100, endpoint_range_index: 20, endpoint_count:  6, weight_bits: 2 }, //  1
-    Mode { code: 0x1D, code_size: 5, block_size: 119, endpoint_range_index:  8, endpoint_count: 12, weight_bits: 3 }, //  2
-    Mode { code: 0x03, code_size: 5, block_size: 118, endpoint_range_index:  7, endpoint_count: 18, weight_bits: 2 }, //  3
-    Mode { code: 0x13, code_size: 5, block_size: 119, endpoint_range_index: 12, endpoint_count: 12, weight_bits: 2 }, //  4
-    Mode { code: 0x0B, code_size: 5, block_size: 115, endpoint_range_index: 20, endpoint_count:  6, weight_bits: 3 }, //  5
-    Mode { code: 0x1B, code_size: 5, block_size: 128, endpoint_range_index: 18, endpoint_count:  6, weight_bits: 2 }, //  6
-    Mode { code: 0x07, code_size: 5, block_size: 119, endpoint_range_index: 12, endpoint_count: 12, weight_bits: 2 }, //  7
-    Mode { code: 0x17, code_size: 5, block_size:  58, endpoint_range_index:  0, endpoint_count:  0, weight_bits: 0 }, //  8
-    Mode { code: 0x0F, code_size: 5, block_size: 127, endpoint_range_index:  8, endpoint_count: 16, weight_bits: 2 }, //  9
-    Mode { code: 0x02, code_size: 3, block_size: 128, endpoint_range_index: 13, endpoint_count:  8, weight_bits: 4 }, // 10
-    Mode { code: 0x00, code_size: 2, block_size: 128, endpoint_range_index: 13, endpoint_count:  8, weight_bits: 2 }, // 11
-    Mode { code: 0x06, code_size: 3, block_size: 128, endpoint_range_index: 19, endpoint_count:  8, weight_bits: 3 }, // 12
-    Mode { code: 0x1F, code_size: 5, block_size: 124, endpoint_range_index: 20, endpoint_count:  8, weight_bits: 1 }, // 13
-    Mode { code: 0x0D, code_size: 5, block_size: 123, endpoint_range_index: 20, endpoint_count:  8, weight_bits: 2 }, // 14
-    Mode { code: 0x05, code_size: 7, block_size: 125, endpoint_range_index: 20, endpoint_count:  4, weight_bits: 4 }, // 15
-    Mode { code: 0x15, code_size: 6, block_size: 128, endpoint_range_index: 20, endpoint_count:  8, weight_bits: 2 }, // 16
-    Mode { code: 0x25, code_size: 6, block_size: 123, endpoint_range_index: 20, endpoint_count:  4, weight_bits: 2 }, // 17
-    Mode { code: 0x09, code_size: 4, block_size: 128, endpoint_range_index: 11, endpoint_count:  6, weight_bits: 5 }, // 18
-    Mode { code: 0x45, code_size: 7, block_size:   0, endpoint_range_index:  0, endpoint_count:  0, weight_bits: 0 }, // 19
+    Mode { code: 0x01, code_size: 4, block_size: 128, endpoint_range_index: 19, endpoint_count:  6, weight_bits: 4, plane_count: 1 }, //  0
+    Mode { code: 0x35, code_size: 6, block_size: 100, endpoint_range_index: 20, endpoint_count:  6, weight_bits: 2, plane_count: 1 }, //  1
+    Mode { code: 0x1D, code_size: 5, block_size: 119, endpoint_range_index:  8, endpoint_count: 12, weight_bits: 3, plane_count: 1 }, //  2
+    Mode { code: 0x03, code_size: 5, block_size: 118, endpoint_range_index:  7, endpoint_count: 18, weight_bits: 2, plane_count: 1 }, //  3
+    Mode { code: 0x13, code_size: 5, block_size: 119, endpoint_range_index: 12, endpoint_count: 12, weight_bits: 2, plane_count: 1 }, //  4
+    Mode { code: 0x0B, code_size: 5, block_size: 115, endpoint_range_index: 20, endpoint_count:  6, weight_bits: 3, plane_count: 1 }, //  5
+    Mode { code: 0x1B, code_size: 5, block_size: 128, endpoint_range_index: 18, endpoint_count:  6, weight_bits: 2, plane_count: 2 }, //  6
+    Mode { code: 0x07, code_size: 5, block_size: 119, endpoint_range_index: 12, endpoint_count: 12, weight_bits: 2, plane_count: 1 }, //  7
+
+    Mode { code: 0x17, code_size: 5, block_size:  58, endpoint_range_index:  0, endpoint_count:  0, weight_bits: 0, plane_count: 0 }, //  8
+
+    Mode { code: 0x0F, code_size: 5, block_size: 127, endpoint_range_index:  8, endpoint_count: 16, weight_bits: 2, plane_count: 1 }, //  9
+    Mode { code: 0x02, code_size: 3, block_size: 128, endpoint_range_index: 13, endpoint_count:  8, weight_bits: 4, plane_count: 1 }, // 10
+    Mode { code: 0x00, code_size: 2, block_size: 128, endpoint_range_index: 13, endpoint_count:  8, weight_bits: 2, plane_count: 2 }, // 11
+    Mode { code: 0x06, code_size: 3, block_size: 128, endpoint_range_index: 19, endpoint_count:  8, weight_bits: 3, plane_count: 1 }, // 12
+    Mode { code: 0x1F, code_size: 5, block_size: 124, endpoint_range_index: 20, endpoint_count:  8, weight_bits: 1, plane_count: 2 }, // 13
+    Mode { code: 0x0D, code_size: 5, block_size: 123, endpoint_range_index: 20, endpoint_count:  8, weight_bits: 2, plane_count: 1 }, // 14
+
+    Mode { code: 0x05, code_size: 7, block_size: 125, endpoint_range_index: 20, endpoint_count:  4, weight_bits: 4, plane_count: 1 }, // 15
+    Mode { code: 0x15, code_size: 6, block_size: 128, endpoint_range_index: 20, endpoint_count:  8, weight_bits: 2, plane_count: 1 }, // 16
+    Mode { code: 0x25, code_size: 6, block_size: 123, endpoint_range_index: 20, endpoint_count:  4, weight_bits: 2, plane_count: 2 }, // 17
+
+    Mode { code: 0x09, code_size: 4, block_size: 128, endpoint_range_index: 11, endpoint_count:  6, weight_bits: 5, plane_count: 1 }, // 18
+
+    Mode { code: 0x45, code_size: 7, block_size:   0, endpoint_range_index:  0, endpoint_count:  0, weight_bits: 0, plane_count: 0 }, // 19 reserved
 ];
 
 static MODE_LUT: [u8; 128] = [
@@ -399,6 +408,38 @@ fn decode_endpoints(reader: &mut BitReaderLSB, range_index: u8, value_count: usi
     }
 
     output
+}
+
+fn unquant_weights(weights: &mut [u8], weight_bits: u8) {
+    const LUT1: [u8; 2] = [ 0, 64 ];
+    const LUT2: [u8; 4] = [ 0, 21, 43, 64 ];
+    const LUT3: [u8; 8] = [ 0, 9, 18, 27, 37, 46, 55, 64 ];
+    const LUT4: [u8; 16] = [ 0, 4, 8, 12, 17, 21, 25, 29, 35, 39, 43, 47, 52, 56, 60, 64 ];
+    const LUT5: [u8; 32] = [ 0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 34, 36, 38, 40, 42, 44, 46, 48, 50, 52, 54, 56, 58, 60, 62, 64 ];
+
+    let lut = match weight_bits {
+        1 => &LUT1[..],
+        2 => &LUT2[..],
+        3 => &LUT3[..],
+        4 => &LUT4[..],
+        5 => &LUT5[..],
+        _ => unreachable!()
+    };
+
+    for weight in weights {
+        *weight = lut[*weight as usize];
+    }
+}
+
+fn decode_weights(reader: &mut BitReaderLSB, weight_bits: u8, plane_count: usize, output: &mut [u8]) {
+    for plane in 0..plane_count {
+        // First weight of each subset is encoded with one less bit (MSB = 0)
+        let pos = 16 * plane;
+        output[pos] = reader.read_u8((weight_bits-1) as usize);
+        for i in 1..15 {
+            output[pos + i] = reader.read_u8(weight_bits as usize);
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
