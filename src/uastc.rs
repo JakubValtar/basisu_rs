@@ -135,16 +135,24 @@ impl Decoder {
 }
 
 fn block_to_rgba(block: &DecodedBlock) -> [Color32; 16] {
+    let mut output = [Color32::default(); 16];
     match block.data {
         ModeData::Mode8 { r, g, b, a, .. } => {
             let color = Color32::new(r, g, b, a);
-            return [color; 16];
+            output = [color; 16];
         }
-        _ => {
-            return [Color32::default(); 16];
-        },
-
+        ModeData::ModeE18W16(data) => {
+            match block.mode_index {
+                _ => ()
+            }
+        }
+        ModeData::ModeE8W32(data) => {
+            match block.mode_index {
+                _ => ()
+            }
+        }
     }
+    output
 }
 
 fn decode_block(block_x: u32, block_y: u32, bytes: &[u8]) -> DecodedBlock {
