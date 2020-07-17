@@ -136,6 +136,14 @@ impl Color32 {
             .copied()
             .collect()
     }
+
+    pub fn to_rgba_u32(&self) -> u32 {
+        u32::from_le_bytes(self.0)
+    }
+
+    pub fn from_rgba_u32(rgba: u32) -> Self {
+        Color32(rgba.to_le_bytes())
+    }
 }
 
 impl Index<usize> for Color32 {

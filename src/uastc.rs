@@ -22,6 +22,7 @@ use crate::{
 
 const MAX_ENDPOINT_COUNT: usize = 18;
 
+#[derive(Debug)]
 pub struct DecodedBlock {
     block_x: u32,
     block_y: u32,
@@ -32,19 +33,19 @@ pub struct DecodedBlock {
     data: ModeData,
 }
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 struct ModeE18W16 {
     endpoints: [u8; 18],
     weights: [u8; 16],
 }
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 struct ModeE8W32 {
     endpoints: [u8; 8],
     weights: [u8; 32],
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 enum ModeData {
     ModeE18W16(ModeE18W16),
     ModeE8W32(ModeE8W32),
@@ -485,12 +486,28 @@ mod tests {
 
     use super::*;
 
-    #[test]
-    fn test_uastc() -> Result<()> {
-        for block in TEST_BLOCK_DATA.iter() {
+    fn test_uastc_mode(mode: usize) {
+        let mut output = [0; 16];
+        for (block, rgba) in TEST_BLOCK_DATA.iter().zip(TEST_RGBA_DATA.iter()) {
             let decoded_block = decode_block(0, 0, block);
+            if decoded_block.mode_index != mode {
+                continue;
+            }
+            let decoded_rgba = block_to_rgba(&decoded_block);
+            for (i, actual) in decoded_rgba.iter().enumerate() {
+                output[i] = actual.to_rgba_u32();
+            }
+            let mut rgba_c32 = [Color32::default(); 16];
+            for i in 0..16 {
+                rgba_c32[i] = Color32::from_rgba_u32(rgba[i]);
+            }
+            assert_eq!(&output, rgba, "\n{:?}\n{:?}\n{:?}", decoded_block, decoded_rgba, rgba_c32);
         }
-        Ok(())
+    }
+
+    #[test]
+    fn test_uastc() {
+        test_uastc_mode(8);
     }
 
     static TEST_BLOCK_DATA: [[u8; 16]; 64] = [
