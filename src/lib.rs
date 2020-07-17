@@ -116,7 +116,7 @@ impl Image<Color32> {
 struct Color32([u8; 4]);
 
 impl Color32 {
-    pub fn new(r: u8, b: u8, g: u8, a: u8) -> Self {
+    pub fn new(r: u8, g: u8, b: u8, a: u8) -> Self {
         Self([r, g, b, a])
     }
 
