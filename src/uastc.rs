@@ -143,32 +143,30 @@ fn block_to_rgba(block: &DecodedBlock) -> [Color32; 16] {
             output = [color; 16];
         }
         ModeData::ModeE18W16(data) => {
-            match block.mode_index {
-                0 | 1 | 5 | 18 => {
-                    let (e0, e1) = {
-                        let v = &data.endpoints;
-                        (
-                            Color32::new(v[0], v[2], v[4], 0xFF),
-                            Color32::new(v[1], v[3], v[5], 0xFF),
-                        )
-                    };
-                    let weights = &data.weights;
-
-                    for y in 0..4 {
-                        for x in 0..4 {
-                            let id = (x + 4 * y) as usize;
-                            let w = weights[id];
-
-                            output[id] = Color32::new(
-                                astc_interpolate(e0[0] as u32, e1[0] as u32, w as u32, srgb),
-                                astc_interpolate(e0[1] as u32, e1[1] as u32, w as u32, srgb),
-                                astc_interpolate(e0[2] as u32, e1[2] as u32, w as u32, srgb),
-                                astc_interpolate(e0[3] as u32, e1[3] as u32, w as u32, false),
-                            );
-                        }
-                    }
+            let v = &data.endpoints;
+            let (e0, e1) = match block.mode_index {
+                0 | 1 | 5 | 18 => {(
+                    Color32::new(v[0], v[2], v[4], 0xFF),
+                    Color32::new(v[1], v[3], v[5], 0xFF),
+                )}
+                10 | 12 | 14 => {(
+                    Color32::new(v[0], v[2], v[4], v[6]),
+                    Color32::new(v[1], v[3], v[5], v[7]),
+                )}
+                _ => return output
+            };
+            let weights = &data.weights;
+            for y in 0..4 {
+                for x in 0..4 {
+                    let id = (x + 4 * y) as usize;
+                    let w = weights[id];
+                    output[id] = Color32::new(
+                        astc_interpolate(e0[0] as u32, e1[0] as u32, w as u32, srgb),
+                        astc_interpolate(e0[1] as u32, e1[1] as u32, w as u32, srgb),
+                        astc_interpolate(e0[2] as u32, e1[2] as u32, w as u32, srgb),
+                        astc_interpolate(e0[3] as u32, e1[3] as u32, w as u32, false),
+                    );
                 }
-                _ => ()
             }
         }
         ModeData::ModeE8W32(data) => {
@@ -588,6 +586,9 @@ mod tests {
         test_uastc_mode(5);
         test_uastc_mode(6);
         test_uastc_mode(8);
+        test_uastc_mode(10);
+        test_uastc_mode(12);
+        test_uastc_mode(14);
         test_uastc_mode(18);
     }
 
