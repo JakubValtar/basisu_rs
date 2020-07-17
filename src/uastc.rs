@@ -1,23 +1,13 @@
 
-use std::ops::{
-    Index,
-    IndexMut,
-};
 use crate::{
     Color32,
     Image,
-    mask,
     Result,
     basis::{
         Header,
         SliceDesc,
-        TextureType,
     },
     bitreader::BitReaderLSB,
-    huffman::{
-        self,
-        HuffmanDecodingTable,
-    }
 };
 
 const MAX_ENDPOINT_COUNT: usize = 18;
