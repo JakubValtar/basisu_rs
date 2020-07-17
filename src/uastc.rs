@@ -155,6 +155,11 @@ fn block_to_rgba(block: &DecodedBlock) -> [Color32; 16] {
                     Color32::new(v[0], v[2], v[4], v[6]),
                     Color32::new(v[1], v[3], v[5], v[7]),
                 ),
+                // CEM 4 - LA Direct
+                15 => (
+                    Color32::new(v[0], v[0], v[0], v[2]),
+                    Color32::new(v[1], v[1], v[1], v[3]),
+                ),
                 _ => return output
             };
             let weights = &data.weights;
@@ -181,6 +186,11 @@ fn block_to_rgba(block: &DecodedBlock) -> [Color32; 16] {
                 11 | 13 => (
                     Color32::new(v[0], v[2], v[4], v[6]),
                     Color32::new(v[1], v[3], v[5], v[7]),
+                ),
+                // CEM 4 - LA Direct
+                17 => (
+                    Color32::new(v[0], v[0], v[0], v[2]),
+                    Color32::new(v[1], v[1], v[1], v[3]),
                 ),
                 _ => return output
             };
@@ -607,6 +617,8 @@ mod tests {
         test_uastc_mode(14);
 
         // CEM 4 - LA Direct
+        test_uastc_mode(15);
+        test_uastc_mode(17);
 
         // CEM 8 - RGB Direct
         test_uastc_mode(18);
