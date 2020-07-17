@@ -137,87 +137,66 @@ impl Decoder {
 fn block_to_rgba(block: &DecodedBlock) -> [Color32; 16] {
     let srgb = false;
     let mut output = [Color32::default(); 16];
-    match block.data {
-        ModeData::Mode8 { r, g, b, a, .. } => {
-            let color = Color32::new(r, g, b, a);
-            output = [color; 16];
+    if let ModeData::Mode8 { r, g, b, a, .. } = block.data {
+        let color = Color32::new(r, g, b, a);
+        output = [color; 16];
+        return output;
+    }
+
+    let mode = MODES[block.mode_index];
+
+    let (endpoints, weights): (&[u8], &[u8]) = match block.data {
+        ModeData::ModeE18W16(ref data) => {
+            (&data.endpoints, &data.weights)
         }
-        ModeData::ModeE18W16(data) => {
-            let v = &data.endpoints;
-            let (e0, e1) = match block.mode_index {
-                // CEM 8 - RGB Direct
-                0 | 1 | 5 | 18 => (
-                    Color32::new(v[0], v[2], v[4], 0xFF),
-                    Color32::new(v[1], v[3], v[5], 0xFF),
-                ),
-                // CEM 12 - RGBA Direct
-                10 | 12 | 14 => (
-                    Color32::new(v[0], v[2], v[4], v[6]),
-                    Color32::new(v[1], v[3], v[5], v[7]),
-                ),
-                // CEM 4 - LA Direct
-                15 => (
-                    Color32::new(v[0], v[0], v[0], v[2]),
-                    Color32::new(v[1], v[1], v[1], v[3]),
-                ),
-                _ => return output
-            };
-            let weights = &data.weights;
-            for y in 0..4 {
-                for x in 0..4 {
-                    let id = (x + 4 * y) as usize;
-                    let w = weights[id];
-                    output[id] = Color32::new(
-                        astc_interpolate(e0[0] as u32, e1[0] as u32, w as u32, srgb),
-                        astc_interpolate(e0[1] as u32, e1[1] as u32, w as u32, srgb),
-                        astc_interpolate(e0[2] as u32, e1[2] as u32, w as u32, srgb),
-                        astc_interpolate(e0[3] as u32, e1[3] as u32, w as u32, false),
-                    );
-                }
-            }
+        ModeData::ModeE8W32(ref data) => {
+            (&data.endpoints, &data.weights)
         }
-        ModeData::ModeE8W32(data) => {
-            let v = &data.endpoints;
-            let (e0, e1) = match block.mode_index {
-                6 => (
-                    Color32::new(v[0], v[2], v[4], 0xFF),
-                    Color32::new(v[1], v[3], v[5], 0xFF),
-                ),
-                11 | 13 => (
-                    Color32::new(v[0], v[2], v[4], v[6]),
-                    Color32::new(v[1], v[3], v[5], v[7]),
-                ),
-                // CEM 4 - LA Direct
-                17 => (
-                    Color32::new(v[0], v[0], v[0], v[2]),
-                    Color32::new(v[1], v[1], v[1], v[3]),
-                ),
-                _ => return output
-            };
+        _ => unreachable!()
+    };
 
-            let weights = &data.weights;
+    let (e0, e1) = match block.mode_index {
+        // CEM 8 - RGB Direct
+        0 | 1 | 5 | 6 | 18 => (
+            Color32::new(endpoints[0], endpoints[2], endpoints[4], 0xFF),
+            Color32::new(endpoints[1], endpoints[3], endpoints[5], 0xFF),
+        ),
+        // CEM 12 - RGBA Direct
+        10 | 11 | 12 | 13 | 14 => (
+            Color32::new(endpoints[0], endpoints[2], endpoints[4], endpoints[6]),
+            Color32::new(endpoints[1], endpoints[3], endpoints[5], endpoints[7]),
+        ),
+        // CEM 4 - LA Direct
+        15 | 17 => (
+            Color32::new(endpoints[0], endpoints[0], endpoints[0], endpoints[2]),
+            Color32::new(endpoints[1], endpoints[1], endpoints[1], endpoints[3]),
+        ),
+        _ => return output
+    };
 
-            let mut ws = [0; 4];
-            ws[block.compsel as usize] = 1;
+    let mut w_plane_id = [0; 4];
+    let ws_per_texel = mode.plane_count as usize;
+    if ws_per_texel > 1 {
+        w_plane_id[block.compsel as usize] = 1;
+    }
 
-            for y in 0..4 {
-                for x in 0..4 {
-                    let id = (x + 4 * y) as usize;
-                    let wr = weights[2*id + ws[0]] as u32;
-                    let wg = weights[2*id + ws[1]] as u32;
-                    let wb = weights[2*id + ws[2]] as u32;
-                    let wa = weights[2*id + ws[3]] as u32;
+    for y in 0..4 {
+        for x in 0..4 {
+            let id = (x + 4 * y) as usize;
+            let wr = weights[ws_per_texel*id + w_plane_id[0]] as u32;
+            let wg = weights[ws_per_texel*id + w_plane_id[1]] as u32;
+            let wb = weights[ws_per_texel*id + w_plane_id[2]] as u32;
+            let wa = weights[ws_per_texel*id + w_plane_id[3]] as u32;
 
-                    output[id] = Color32::new(
-                        astc_interpolate(e0[0] as u32, e1[0] as u32, wr, srgb),
-                        astc_interpolate(e0[1] as u32, e1[1] as u32, wg, srgb),
-                        astc_interpolate(e0[2] as u32, e1[2] as u32, wb, srgb),
-                        astc_interpolate(e0[3] as u32, e1[3] as u32, wa, false),
-                    );
-                }
-            }
+            output[id] = Color32::new(
+                astc_interpolate(e0[0] as u32, e1[0] as u32, wr, srgb),
+                astc_interpolate(e0[1] as u32, e1[1] as u32, wg, srgb),
+                astc_interpolate(e0[2] as u32, e1[2] as u32, wb, srgb),
+                astc_interpolate(e0[3] as u32, e1[3] as u32, wa, false),
+            );
         }
     }
+
     output
 }
 
