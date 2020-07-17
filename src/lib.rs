@@ -7,6 +7,7 @@ mod huffman;
 mod bitreader;
 mod bytereader;
 mod etc1s;
+mod uastc;
 mod basis;
 
 use basis::{
@@ -49,6 +50,15 @@ pub fn read_to_rgba<P: AsRef<Path>>(path: P) -> Result<Vec<Image<u8>>> {
             }
             return Ok(images);
         }
+    } else if header.texture_format()? == TexFormat::UASTC4x4 {
+        let decoder = uastc::Decoder::from_file_bytes(&header, &buf)?;
+
+        let mut images = Vec::with_capacity(header.total_slices as usize);
+            for slice_desc in &slice_descs {
+                let image = decoder.decode_to_rgba(slice_desc, &buf)?;
+                images.push(image.into_rgba_bytes());
+            }
+            return Ok(images);
     } else {
         unimplemented!();
     }

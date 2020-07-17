@@ -10,7 +10,7 @@ use std::io::{ BufWriter, Write };
 use png::{ Encoder, ColorType, BitDepth };
 
 #[test]
-fn read_to_rgba() {
+fn read_et1s_to_rgba() {
 
     let texture_dir: &Path = Path::new("textures");
     let out_dir: &Path = Path::new("out");
@@ -39,7 +39,7 @@ fn read_to_rgba() {
 }
 
 #[test]
-fn read_to_etc1() {
+fn read_et1s_to_etc1() {
 
     let texture_dir: &Path = Path::new("textures");
 
@@ -56,6 +56,31 @@ fn read_to_etc1() {
         let images = basisu::read_to_etc1(texture_dir.join(filename))
             .expect(&format!("ETC1: {}", filename));
         // TODO: export or otherwise check that the output ETC1 textures are valid
+    }
+}
+
+#[test]
+fn read_uastc_to_rgb() {
+
+    let texture_dir: &Path = Path::new("textures");
+    let out_dir: &Path = Path::new("out");
+
+    std::fs::create_dir_all(out_dir).unwrap();
+
+    let filenames = [
+        "kodim26_uastc_1024.basis",
+        "kodim03_uastc.basis",
+    ];
+
+    let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis();
+
+    for filename in &filenames {
+        let images = basisu::read_to_rgba(texture_dir.join(filename))
+            .expect(&format!("RGBA: {}", filename));
+        for (i, image) in images.iter().enumerate() {
+            let path = out_dir.join(format!("{}-slice{:02}-{}.png", filename, i, timestamp));
+            save(path, &image).unwrap();
+        }
     }
 }
 
