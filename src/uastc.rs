@@ -227,10 +227,12 @@ fn decode_block(block_x: u32, block_y: u32, bytes: &[u8]) -> DecodedBlock {
 
     let mut trans_flags = decode_trans_flags(reader, mode_index);
 
+    // Component selector for dual-plane modes
     let compsel = match mode_index {
         6 | 11 | 13 => {
             reader.read_u8(2)
-        }
+        },
+        17 => 3,
         _ => 0
     };
 
