@@ -173,6 +173,36 @@ fn block_to_rgba(block: &DecodedBlock) -> [Color32; 16] {
         }
         ModeData::ModeE8W32(data) => {
             match block.mode_index {
+                6 => {
+                    let (e0, e1) = {
+                        let v = &data.endpoints;
+                        (
+                            Color32::new(v[0], v[2], v[4], 0xFF),
+                            Color32::new(v[1], v[3], v[5], 0xFF),
+                        )
+                    };
+                    let weights = &data.weights;
+
+                    let mut ws = [0; 4];
+                    ws[block.compsel as usize] = 1;
+
+                    for y in 0..4 {
+                        for x in 0..4 {
+                            let id = (x + 4 * y) as usize;
+                            let wr = weights[2*id + ws[0]] as u32;
+                            let wg = weights[2*id + ws[1]] as u32;
+                            let wb = weights[2*id + ws[2]] as u32;
+                            let wa = weights[2*id + ws[3]] as u32;
+
+                            output[id] = Color32::new(
+                                astc_interpolate(e0[0] as u32, e1[0] as u32, wr, srgb),
+                                astc_interpolate(e0[1] as u32, e1[1] as u32, wg, srgb),
+                                astc_interpolate(e0[2] as u32, e1[2] as u32, wb, srgb),
+                                astc_interpolate(e0[3] as u32, e1[3] as u32, wa, false),
+                            );
+                        }
+                    }
+                }
                 _ => ()
             }
         }
@@ -557,6 +587,7 @@ mod tests {
         test_uastc_mode(0);
         test_uastc_mode(1);
         test_uastc_mode(5);
+        test_uastc_mode(6);
         test_uastc_mode(8);
         test_uastc_mode(18);
     }
