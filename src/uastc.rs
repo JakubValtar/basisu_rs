@@ -145,11 +145,13 @@ fn block_to_rgba(block: &DecodedBlock) -> [Color32; 16] {
         ModeData::ModeE18W16(data) => {
             let v = &data.endpoints;
             let (e0, e1) = match block.mode_index {
+                // CEM 8 - RGB Direct
                 0 | 1 | 5 | 18 => (
                     Color32::new(v[0], v[2], v[4], 0xFF),
                     Color32::new(v[1], v[3], v[5], 0xFF),
-                )}
-                10 | 12 | 14 => {(
+                ),
+                // CEM 12 - RGBA Direct
+                10 | 12 | 14 => (
                     Color32::new(v[0], v[2], v[4], v[6]),
                     Color32::new(v[1], v[3], v[5], v[7]),
                 ),
@@ -331,6 +333,7 @@ pub struct Mode {
 }
 
 static MODES: [Mode; 20] = [
+    // CEM 8 - RGB Direct
     Mode { code: 0x01, code_size: 4, block_size: 128, endpoint_range_index: 19, endpoint_count:  6, weight_bits: 4, plane_count: 1 }, //  0
     Mode { code: 0x35, code_size: 6, block_size: 100, endpoint_range_index: 20, endpoint_count:  6, weight_bits: 2, plane_count: 1 }, //  1
     Mode { code: 0x1D, code_size: 5, block_size: 119, endpoint_range_index:  8, endpoint_count: 12, weight_bits: 3, plane_count: 1 }, //  2
@@ -340,8 +343,10 @@ static MODES: [Mode; 20] = [
     Mode { code: 0x1B, code_size: 5, block_size: 128, endpoint_range_index: 18, endpoint_count:  6, weight_bits: 2, plane_count: 2 }, //  6
     Mode { code: 0x07, code_size: 5, block_size: 119, endpoint_range_index: 12, endpoint_count: 12, weight_bits: 2, plane_count: 1 }, //  7
 
+    // Void-Extent
     Mode { code: 0x17, code_size: 5, block_size:  58, endpoint_range_index:  0, endpoint_count:  0, weight_bits: 0, plane_count: 0 }, //  8
 
+    // CEM 12 - RGBA Direct
     Mode { code: 0x0F, code_size: 5, block_size: 127, endpoint_range_index:  8, endpoint_count: 16, weight_bits: 2, plane_count: 1 }, //  9
     Mode { code: 0x02, code_size: 3, block_size: 128, endpoint_range_index: 13, endpoint_count:  8, weight_bits: 4, plane_count: 1 }, // 10
     Mode { code: 0x00, code_size: 2, block_size: 128, endpoint_range_index: 13, endpoint_count:  8, weight_bits: 2, plane_count: 2 }, // 11
@@ -349,10 +354,12 @@ static MODES: [Mode; 20] = [
     Mode { code: 0x1F, code_size: 5, block_size: 124, endpoint_range_index: 20, endpoint_count:  8, weight_bits: 1, plane_count: 2 }, // 13
     Mode { code: 0x0D, code_size: 5, block_size: 123, endpoint_range_index: 20, endpoint_count:  8, weight_bits: 2, plane_count: 1 }, // 14
 
+    // CEM 4 - LA Direct
     Mode { code: 0x05, code_size: 7, block_size: 125, endpoint_range_index: 20, endpoint_count:  4, weight_bits: 4, plane_count: 1 }, // 15
     Mode { code: 0x15, code_size: 6, block_size: 128, endpoint_range_index: 20, endpoint_count:  8, weight_bits: 2, plane_count: 1 }, // 16
     Mode { code: 0x25, code_size: 6, block_size: 123, endpoint_range_index: 20, endpoint_count:  4, weight_bits: 2, plane_count: 2 }, // 17
 
+    // CEM 8 - RGB Direct
     Mode { code: 0x09, code_size: 4, block_size: 128, endpoint_range_index: 11, endpoint_count:  6, weight_bits: 5, plane_count: 1 }, // 18
 
     Mode { code: 0x45, code_size: 7, block_size:   0, endpoint_range_index:  0, endpoint_count:  0, weight_bits: 0, plane_count: 0 }, // 19 reserved
@@ -582,17 +589,29 @@ mod tests {
 
     #[test]
     fn test_uastc() {
+
+        // CEM 8 - RGB Direct
         test_uastc_mode(0);
         test_uastc_mode(1);
         test_uastc_mode(5);
         test_uastc_mode(6);
+
+        // Void-Extent
         test_uastc_mode(8);
+
+        // CEM 12 - RGBA Direct
         test_uastc_mode(10);
         test_uastc_mode(11);
         test_uastc_mode(12);
         test_uastc_mode(13);
         test_uastc_mode(14);
+
+        // CEM 4 - LA Direct
+
+        // CEM 8 - RGB Direct
         test_uastc_mode(18);
+
+        // Modes 7, 16, 17 missing in TEST_BLOCK_DATA
     }
 
     static TEST_BLOCK_DATA: [[u8; 16]; 64] = [
