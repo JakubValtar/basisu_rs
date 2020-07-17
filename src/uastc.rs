@@ -135,6 +135,7 @@ impl Decoder {
 }
 
 fn block_to_rgba(block: &DecodedBlock) -> [Color32; 16] {
+    let srgb = false;
     let mut output = [Color32::default(); 16];
     match block.data {
         ModeData::Mode8 { r, g, b, a, .. } => {
@@ -143,6 +144,30 @@ fn block_to_rgba(block: &DecodedBlock) -> [Color32; 16] {
         }
         ModeData::ModeE18W16(data) => {
             match block.mode_index {
+                0 | 1 | 5 | 18 => {
+                    let (e0, e1) = {
+                        let v = &data.endpoints;
+                        (
+                            Color32::new(v[0], v[2], v[4], 0xFF),
+                            Color32::new(v[1], v[3], v[5], 0xFF),
+                        )
+                    };
+                    let weights = &data.weights;
+
+                    for y in 0..4 {
+                        for x in 0..4 {
+                            let id = (x + 4 * y) as usize;
+                            let w = weights[id];
+
+                            output[id] = Color32::new(
+                                astc_interpolate(e0[0] as u32, e1[0] as u32, w as u32, srgb),
+                                astc_interpolate(e0[1] as u32, e1[1] as u32, w as u32, srgb),
+                                astc_interpolate(e0[2] as u32, e1[2] as u32, w as u32, srgb),
+                                astc_interpolate(e0[3] as u32, e1[3] as u32, w as u32, false),
+                            );
+                        }
+                    }
+                }
                 _ => ()
             }
         }
@@ -153,6 +178,20 @@ fn block_to_rgba(block: &DecodedBlock) -> [Color32; 16] {
         }
     }
     output
+}
+
+fn astc_interpolate(mut l: u32, mut h: u32, w: u32, srgb: bool) -> u8 {
+    if srgb {
+        l = (l << 8) | 0x80;
+        h = (h << 8) | 0x80;
+    } else {
+        l = (l << 8) | l;
+        h = (h << 8) | h;
+    }
+
+    let k = (l * (64 - w) + h * w + 32) >> 6;
+
+    return (k >> 8) as u8;
 }
 
 fn decode_block(block_x: u32, block_y: u32, bytes: &[u8]) -> DecodedBlock {
@@ -515,7 +554,11 @@ mod tests {
 
     #[test]
     fn test_uastc() {
+        test_uastc_mode(0);
+        test_uastc_mode(1);
+        test_uastc_mode(5);
         test_uastc_mode(8);
+        test_uastc_mode(18);
     }
 
     static TEST_BLOCK_DATA: [[u8; 16]; 64] = [
