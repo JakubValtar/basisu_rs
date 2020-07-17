@@ -192,7 +192,7 @@ fn decode_block(block_x: u32, block_y: u32, bytes: &[u8]) -> Result<DecodedBlock
         }
         6 | 11 | 13 | 17 => {
             let mut data = ModeE8W32::default();
-            let quant_endpoints = decode_endpoint(reader, mode.endpoint_range_index, endpoint_count);
+            let quant_endpoints = decode_endpoints(reader, mode.endpoint_range_index, endpoint_count);
             for (i, quant) in quant_endpoints.iter().take(endpoint_count).enumerate() {
                 data.endpoints[i] = unquant_endpoint(*quant, mode.endpoint_range_index);
             }
@@ -200,7 +200,7 @@ fn decode_block(block_x: u32, block_y: u32, bytes: &[u8]) -> Result<DecodedBlock
         }
         _ => {
             let mut data = ModeE18W16::default();
-            let quant_endpoints = decode_endpoint(reader, mode.endpoint_range_index, endpoint_count);
+            let quant_endpoints = decode_endpoints(reader, mode.endpoint_range_index, endpoint_count);
             for (i, quant) in quant_endpoints.iter().take(endpoint_count).enumerate() {
                 data.endpoints[i] = unquant_endpoint(*quant, mode.endpoint_range_index);
             }
@@ -324,7 +324,7 @@ fn unquant_endpoint(quant: QuantEndpoint, range_index: u8) -> u8 {
     }
 }
 
-fn decode_endpoint(reader: &mut BitReaderLSB, range_index: u8, value_count: usize) -> [QuantEndpoint; MAX_ENDPOINT_COUNT] {
+fn decode_endpoints(reader: &mut BitReaderLSB, range_index: u8, value_count: usize) -> [QuantEndpoint; MAX_ENDPOINT_COUNT] {
     assert!(value_count <= MAX_ENDPOINT_COUNT);
 
     let mut output = [QuantEndpoint::default(); MAX_ENDPOINT_COUNT];
