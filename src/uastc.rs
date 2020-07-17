@@ -514,13 +514,12 @@ fn unquant_weights(weights: &mut [u8], weight_bits: u8) {
 }
 
 fn decode_weights(reader: &mut BitReaderLSB, weight_bits: u8, plane_count: usize, output: &mut [u8]) {
-    for plane in 0..plane_count {
-        // First weight of each subset is encoded with one less bit (MSB = 0)
-        let pos = 16 * plane;
-        output[pos] = reader.read_u8((weight_bits-1) as usize);
-        for i in 1..15 {
-            output[pos + i] = reader.read_u8(weight_bits as usize);
-        }
+    // First weight of each subset is encoded with one less bit (MSB = 0)
+    for i in 0..plane_count {
+        output[i] = reader.read_u8((weight_bits-1) as usize);
+    }
+    for i in plane_count..16*plane_count {
+        output[i] = reader.read_u8(weight_bits as usize);
     }
 }
 
