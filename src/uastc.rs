@@ -140,34 +140,33 @@ fn block_to_rgba(block: &DecodedBlock) -> [Color32; 16] {
         _ => unreachable!()
     };
 
-    let (e0, e1) = match block.mode_index {
-        // CEM 8 - RGB Direct
-        0 | 1 | 5 | 6 | 18 => (
-            Color32::new(endpoints[0], endpoints[2], endpoints[4], 0xFF),
-            Color32::new(endpoints[1], endpoints[3], endpoints[5], 0xFF),
-        ),
-        // CEM 12 - RGBA Direct
-        10 | 11 | 12 | 13 | 14 => (
-            Color32::new(endpoints[0], endpoints[2], endpoints[4], endpoints[6]),
-            Color32::new(endpoints[1], endpoints[3], endpoints[5], endpoints[7]),
-        ),
-        // CEM 4 - LA Direct
-        15 | 17 => (
-            Color32::new(endpoints[0], endpoints[0], endpoints[0], endpoints[2]),
-            Color32::new(endpoints[1], endpoints[1], endpoints[1], endpoints[3]),
-        ),
-        _ => return output
-    };
+    if mode.subset_count == 1 {
+        let (e0, e1) = match block.mode_index {
+            // CEM 8 - RGB Direct
+            0 | 1 | 5 | 6 | 18 => (
+                Color32::new(endpoints[0], endpoints[2], endpoints[4], 0xFF),
+                Color32::new(endpoints[1], endpoints[3], endpoints[5], 0xFF),
+            ),
+            // CEM 12 - RGBA Direct
+            10 | 11 | 12 | 13 | 14 => (
+                Color32::new(endpoints[0], endpoints[2], endpoints[4], endpoints[6]),
+                Color32::new(endpoints[1], endpoints[3], endpoints[5], endpoints[7]),
+            ),
+            // CEM 4 - LA Direct
+            15 | 17 => (
+                Color32::new(endpoints[0], endpoints[0], endpoints[0], endpoints[2]),
+                Color32::new(endpoints[1], endpoints[1], endpoints[1], endpoints[3]),
+            ),
+            _ => unreachable!()
+        };
 
-    let mut w_plane_id = [0; 4];
-    let ws_per_texel = mode.plane_count as usize;
-    if ws_per_texel > 1 {
-        w_plane_id[block.compsel as usize] = 1;
-    }
+        let mut w_plane_id = [0; 4];
+        let ws_per_texel = mode.plane_count as usize;
+        if ws_per_texel > 1 {
+            w_plane_id[block.compsel as usize] = 1;
+        }
 
-    for y in 0..4 {
-        for x in 0..4 {
-            let id = (x + 4 * y) as usize;
+        for id in 0..16 {
             let wr = weights[ws_per_texel*id + w_plane_id[0]] as u32;
             let wg = weights[ws_per_texel*id + w_plane_id[1]] as u32;
             let wb = weights[ws_per_texel*id + w_plane_id[2]] as u32;
@@ -178,6 +177,56 @@ fn block_to_rgba(block: &DecodedBlock) -> [Color32; 16] {
                 astc_interpolate(e0[1] as u32, e1[1] as u32, wg, srgb),
                 astc_interpolate(e0[2] as u32, e1[2] as u32, wb, srgb),
                 astc_interpolate(e0[3] as u32, e1[3] as u32, wa, false),
+            );
+        }
+    } else {
+        let mut e = [(Color32::default(), Color32::default()); 3];
+
+        match block.mode_index {
+            // CEM 8 - RGB Direct
+            2 | 3 | 4 | 7 => for subset in 0..mode.subset_count as usize {
+                let i = 6 * subset;
+                e[subset] = (
+                    Color32::new(endpoints[i+0], endpoints[i+2], endpoints[i+4], 0xFF),
+                    Color32::new(endpoints[i+1], endpoints[i+3], endpoints[i+5], 0xFF),
+                );
+            }
+            // CEM 12 - RGBA Direct
+            9 => for subset in 0..mode.subset_count as usize {
+                let i = 8 * subset;
+                e[subset] = (
+                    Color32::new(endpoints[i+0], endpoints[i+2], endpoints[i+4], endpoints[i+6]),
+                    Color32::new(endpoints[i+1], endpoints[i+3], endpoints[i+5], endpoints[i+7]),
+                );
+            }
+            // CEM 4 - LA Direct
+            16 => for subset in 0..mode.subset_count as usize {
+                let i = 4 * subset;
+                e[subset] = (
+                    Color32::new(endpoints[i+0], endpoints[i+0], endpoints[i+0], endpoints[i+2]),
+                    Color32::new(endpoints[i+1], endpoints[i+1], endpoints[i+1], endpoints[i+3]),
+                );
+            }
+            _ => unreachable!()
+        }
+
+        let pattern = match block.mode_index {
+            2 | 4 | 9 | 16 => PATTERNS_2[block.pat as usize],
+            3 => PATTERNS_3[block.pat as usize],
+            7 => PATTERNS_2_3[block.pat as usize],
+            _ => unreachable!(),
+        };
+
+        for id in 0..16 {
+            let subset = pattern[id] as usize;
+            let (e0, e1) = e[subset];
+            let w = weights[id] as u32;
+
+            output[id] = Color32::new(
+                astc_interpolate(e0[0] as u32, e1[0] as u32, w, srgb),
+                astc_interpolate(e0[1] as u32, e1[1] as u32, w, srgb),
+                astc_interpolate(e0[2] as u32, e1[2] as u32, w, srgb),
+                astc_interpolate(e0[3] as u32, e1[3] as u32, w, false),
             );
         }
     }
@@ -574,6 +623,48 @@ const TOTAL_ASTC_BC7_COMMON_PARTITIONS2: usize = 30;
 const TOTAL_ASTC_BC7_COMMON_PARTITIONS3: usize = 11;
 const TOTAL_BC7_3_ASTC2_COMMON_PARTITIONS: usize = 19;
 
+// UASTC pattern table for the 2-subset modes
+static PATTERNS_2: [[u8; 16]; TOTAL_ASTC_BC7_COMMON_PARTITIONS2] = [
+   [ 0,0,1,1,0,0,1,1,0,0,1,1,0,0,1,1 ], [ 0,0,0,1,0,0,0,1,0,0,0,1,0,0,0,1 ],
+   [ 1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0 ], [ 0,0,0,1,0,0,1,1,0,0,1,1,0,1,1,1 ],
+   [ 1,1,1,1,1,1,1,0,1,1,1,0,1,1,0,0 ], [ 0,0,1,1,0,1,1,1,0,1,1,1,1,1,1,1 ],
+   [ 1,1,1,0,1,1,0,0,1,0,0,0,0,0,0,0 ], [ 1,1,1,1,1,1,1,0,1,1,0,0,1,0,0,0 ],
+   [ 0,0,0,0,0,0,0,0,0,0,0,1,0,0,1,1 ], [ 1,1,0,0,1,0,0,0,0,0,0,0,0,0,0,0 ],
+   [ 0,0,0,0,0,0,0,1,0,1,1,1,1,1,1,1 ], [ 1,1,1,1,1,1,1,1,1,1,1,0,1,0,0,0 ],
+   [ 1,1,1,0,1,0,0,0,0,0,0,0,0,0,0,0 ], [ 1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0 ],
+   [ 0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1 ], [ 1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0 ],
+   [ 1,0,0,0,1,1,1,0,1,1,1,1,1,1,1,1 ], [ 1,1,1,1,1,1,1,1,0,1,1,1,0,0,0,1 ],
+   [ 0,1,1,1,0,0,1,1,0,0,0,1,0,0,0,0 ], [ 0,0,1,1,0,0,0,1,0,0,0,0,0,0,0,0 ],
+   [ 0,0,0,0,1,0,0,0,1,1,0,0,1,1,1,0 ], [ 1,1,1,1,1,1,1,1,0,1,1,1,0,0,1,1 ],
+   [ 1,0,0,0,1,1,0,0,1,1,0,0,1,1,1,0 ], [ 0,0,1,1,0,0,0,1,0,0,0,1,0,0,0,0 ],
+   [ 1,1,1,1,0,1,1,1,0,1,1,1,0,0,1,1 ], [ 0,1,1,0,0,1,1,0,0,1,1,0,0,1,1,0 ],
+   [ 1,1,1,1,0,0,0,0,0,0,0,0,1,1,1,1 ], [ 1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0 ],
+   [ 1,1,1,1,0,0,0,0,1,1,1,1,0,0,0,0 ], [ 1,0,0,1,0,0,1,1,0,1,1,0,1,1,0,0 ],
+];
+
+// UASTC pattern table for the 3-subset modes
+static PATTERNS_3: [[u8; 16]; TOTAL_ASTC_BC7_COMMON_PARTITIONS3] = [
+   [ 0,0,0,0,0,0,0,0,1,1,2,2,1,1,2,2 ], [ 1,1,1,1,1,1,1,1,0,0,0,0,2,2,2,2 ],
+   [ 1,1,1,1,0,0,0,0,0,0,0,0,2,2,2,2 ], [ 1,1,1,1,2,2,2,2,0,0,0,0,0,0,0,0 ],
+   [ 1,1,2,0,1,1,2,0,1,1,2,0,1,1,2,0 ], [ 0,1,1,2,0,1,1,2,0,1,1,2,0,1,1,2 ],
+   [ 0,2,1,1,0,2,1,1,0,2,1,1,0,2,1,1 ], [ 2,0,0,0,2,0,0,0,2,1,1,1,2,1,1,1 ],
+   [ 2,0,1,2,2,0,1,2,2,0,1,2,2,0,1,2 ], [ 1,1,1,1,0,0,0,0,2,2,2,2,1,1,1,1 ],
+   [ 0,0,2,2,0,0,1,1,0,0,1,1,0,0,2,2 ]
+];
+
+static PATTERNS_2_3: [[u8; 16]; TOTAL_BC7_3_ASTC2_COMMON_PARTITIONS] = [
+   [ 0,0,0,0,1,1,1,1,0,0,0,0,0,0,0,0 ], [ 0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0 ],
+   [ 1,1,0,0,1,1,0,0,1,0,0,0,0,0,0,0 ], [ 0,0,0,0,0,0,0,1,0,0,1,1,0,0,1,1 ],
+   [ 1,1,1,1,1,1,1,1,0,0,0,0,1,1,1,1 ], [ 0,1,0,0,0,1,0,0,0,1,0,0,0,1,0,0 ],
+   [ 0,0,0,1,0,0,1,1,1,1,1,1,1,1,1,1 ], [ 0,1,1,1,0,0,1,1,0,0,1,1,0,0,1,1 ],
+   [ 1,1,0,0,0,0,0,0,0,0,1,1,1,1,0,0 ], [ 0,1,1,1,0,1,1,1,0,0,0,0,0,0,0,0 ],
+   [ 0,0,0,0,0,0,0,0,1,1,1,0,1,1,1,0 ], [ 1,1,0,0,0,0,0,0,0,0,0,0,1,1,0,0 ],
+   [ 0,1,1,1,0,0,1,1,0,0,0,0,0,0,0,0 ], [ 0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1 ],
+   [ 1,1,1,1,1,1,1,1,1,1,1,1,0,1,1,0 ], [ 1,1,0,0,1,1,0,0,1,1,0,0,1,0,0,0 ],
+   [ 1,1,1,1,1,1,1,1,1,0,0,0,1,0,0,0 ], [ 0,0,1,1,0,1,1,0,1,1,0,0,1,0,0,0 ],
+   [ 1,1,1,1,0,1,1,1,0,0,0,0,0,0,0,0 ]
+];
+
 static PATTERNS_2_ANCHORS: [[u8; 2]; TOTAL_ASTC_BC7_COMMON_PARTITIONS2] = [
    [ 0, 2 ], [ 0, 3 ], [ 1, 0 ], [ 0, 3 ], [ 7, 0 ], [ 0, 2 ], [ 3, 0 ],
    [ 7, 0 ], [ 0, 11 ], [ 2, 0 ], [ 0, 7 ], [ 11, 0 ], [ 3, 0 ], [ 8, 0 ],
@@ -623,13 +714,18 @@ mod tests {
         // CEM 8 - RGB Direct
         test_uastc_mode(0);
         test_uastc_mode(1);
+        test_uastc_mode(2);
+        test_uastc_mode(3);
+        test_uastc_mode(4);
         test_uastc_mode(5);
         test_uastc_mode(6);
+        test_uastc_mode(7);
 
         // Void-Extent
         test_uastc_mode(8);
 
         // CEM 12 - RGBA Direct
+        test_uastc_mode(9);
         test_uastc_mode(10);
         test_uastc_mode(11);
         test_uastc_mode(12);
@@ -638,6 +734,7 @@ mod tests {
 
         // CEM 4 - LA Direct
         test_uastc_mode(15);
+        test_uastc_mode(16);
         test_uastc_mode(17);
 
         // CEM 8 - RGB Direct
