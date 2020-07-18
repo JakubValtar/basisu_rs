@@ -258,7 +258,15 @@ fn decode_block(block_x: u32, block_y: u32, bytes: &[u8]) -> DecodedBlock {
             *unquant = unquant_endpoint(*quant, mode.endpoint_range_index);
         }
         let plane_count = mode.plane_count as usize;
-        decode_weights(reader, mode.weight_bits, plane_count, weights);
+
+        let anchors: &[u8] = match mode_index {
+            2 | 4 | 9 | 16 => &PATTERNS_2_ANCHORS[pat as usize],
+            3 => &PATTERNS_3_ANCHORS[pat as usize],
+            7 => &PATTERNS_2_3_ANCHORS[pat as usize],
+            _ => &[0],
+        };
+
+        decode_weights(reader, mode.weight_bits, plane_count, anchors, weights);
         unquant_weights(weights, mode.weight_bits);
         ModeData::ModeEW(ModeEW(data))
     };
@@ -489,13 +497,18 @@ fn unquant_weights(weights: &mut [u8], weight_bits: u8) {
     }
 }
 
-fn decode_weights(reader: &mut BitReaderLSB, weight_bits: u8, plane_count: usize, output: &mut [u8]) {
-    // First weight of each subset is encoded with one less bit (MSB = 0)
-    for i in 0..plane_count {
-        output[i] = reader.read_u8((weight_bits-1) as usize);
+fn decode_weights(reader: &mut BitReaderLSB, weight_bits: u8, plane_count: usize, anchors: &[u8], output: &mut [u8]) {
+    let mut bits = [weight_bits; 16];
+    for &anchor in anchors {
+        bits[anchor as usize] = weight_bits - 1;
     }
-    for i in plane_count..16*plane_count {
-        output[i] = reader.read_u8(weight_bits as usize);
+
+    // First weight of each subset is encoded with one less bit (MSB = 0)
+    for i in 0..16 {
+        let bits = bits[i] as usize;
+        for plane in 0..plane_count {
+            output[plane_count * i as usize + plane] = reader.read_u8(bits);
+        }
     }
 }
 
@@ -531,6 +544,29 @@ static BISE_RANGES: [BiseCounts; 21] = [
     BiseCounts { bits: 5, trits: 0, quints: 1, max: 159, deq_b: b"edcb0000e", deq_c:   6 }, // 18
     BiseCounts { bits: 6, trits: 1, quints: 0, max: 191, deq_b: b"fedcb000f", deq_c:   5 }, // 19
     BiseCounts { bits: 8, trits: 0, quints: 0, max: 255, deq_b: b"         ", deq_c:   0 }, // 20
+];
+
+const TOTAL_ASTC_BC7_COMMON_PARTITIONS2: usize = 30;
+const TOTAL_ASTC_BC7_COMMON_PARTITIONS3: usize = 11;
+const TOTAL_BC7_3_ASTC2_COMMON_PARTITIONS: usize = 19;
+
+static PATTERNS_2_ANCHORS: [[u8; 2]; TOTAL_ASTC_BC7_COMMON_PARTITIONS2] = [
+   [ 0, 2 ], [ 0, 3 ], [ 1, 0 ], [ 0, 3 ], [ 7, 0 ], [ 0, 2 ], [ 3, 0 ],
+   [ 7, 0 ], [ 0, 11 ], [ 2, 0 ], [ 0, 7 ], [ 11, 0 ], [ 3, 0 ], [ 8, 0 ],
+   [ 0, 4 ], [ 12, 0 ], [ 1, 0 ], [ 8, 0 ], [ 0, 1 ], [ 0, 2 ], [ 0, 4 ],
+   [ 8, 0 ], [ 1, 0 ], [ 0, 2 ], [ 4, 0 ], [ 0, 1 ], [ 4, 0 ], [ 1, 0 ],
+   [ 4, 0 ], [ 1, 0 ]
+];
+
+static PATTERNS_3_ANCHORS: [[u8; 3]; TOTAL_ASTC_BC7_COMMON_PARTITIONS3] = [
+   [ 0, 8, 10 ],  [ 8, 0, 12 ], [ 4, 0, 12 ], [ 8, 0, 4 ], [ 3, 0, 2 ],
+   [ 0, 1, 3 ], [ 0, 2, 1 ], [ 1, 9, 0 ], [ 1, 2, 0 ], [ 4, 0, 8 ], [ 0, 6, 2 ]
+];
+
+static PATTERNS_2_3_ANCHORS: [[u8; 2]; TOTAL_BC7_3_ASTC2_COMMON_PARTITIONS] = [
+   [ 0, 4 ], [ 0, 2 ], [ 2, 0 ], [ 0, 7 ], [ 8, 0 ], [ 0, 1 ], [ 0, 3 ],
+   [ 0, 1 ], [ 2, 0 ], [ 0, 1 ], [ 0, 8 ], [ 2, 0 ], [ 0, 1 ], [ 0, 7 ],
+   [ 12, 0 ], [ 2, 0 ], [ 9, 0 ], [ 0, 2 ], [ 4, 0 ]
 ];
 
 #[cfg(test)]
