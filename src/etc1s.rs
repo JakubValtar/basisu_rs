@@ -595,9 +595,9 @@ impl Selector {
         let bit_id = pixel_id % 8;
 
         self.etc1_bytes[ls_byte_id] &= !(1 << bit_id);
-        self.etc1_bytes[ls_byte_id] |= 1 << (mod_id % 2);
+        self.etc1_bytes[ls_byte_id] |= (mod_id % 2) << bit_id;
         self.etc1_bytes[ms_byte_id] &= !(1 << bit_id);
-        self.etc1_bytes[ms_byte_id] |= 1 << (mod_id / 2);
+        self.etc1_bytes[ms_byte_id] |= (mod_id / 2) << bit_id;
     }
 }
 
