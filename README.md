@@ -23,11 +23,20 @@ Sample textures were copied from the official [basis_universal repo](https://git
 - [x] Textures with dimensions not divisible by 4
 - [x] Writing out ETC1 textures
 - [x] Lookup tables for faster Huffman decoding
-- [ ] Decoding UASTC
+- [x] Decoding UASTC
+- [ ] Test on more textures
+- [ ] Check for invalid input data
+- [ ] Transcoding UASTC into other formats
 
 ## Log
 
 Here I'm writing a log of what I did, problems I encountered, and what I learned. Have anything to say or discuss? I'd be happy to hear from you, please send me a DM or @ me on Twitter [@JakubValtar](https://twitter.com/jakubvaltar).
+
+### 18-07-2020
+
+Today I implemented all the multiple subset modes. I used the partition pattern tables from the spec. Changing the decoding function to use the tables for appropriate modes was pretty straightforward. What gave me some trouble were anchor weight indices. At first I though I need to worry about them only during encoding. I read about anchors in the [BC7 chapter of the Khronos spec](https://www.khronos.org/registry/DataFormat/specs/1.1/dataformat.1.1.html#_bc7) and it made things a bit clearer. After that I was able to use the anchor tables from the UASTC spec for decoding weights correctly.
+
+I also spotted an error in ETC1 selector storage. Should be fixed in [6824f2](https://github.com/JakubValtar/basisu_rs/commit/6824f262293c0435e53db7c8c32cd1ca86dcbe4a), though there will probably be more bugs, because I still don't have tests for ETC1S -> ETC1 transcoding.
 
 ### 17-07-2020
 
