@@ -10,8 +10,11 @@ use crate::{
     bitreader::BitReaderLSB,
 };
 
+use std::fmt;
+
 const MAX_ENDPOINT_COUNT: usize = 18;
 
+#[derive(Debug)]
 pub struct DecodedBlock {
     block_x: u32,
     block_y: u32,
@@ -22,20 +25,23 @@ pub struct DecodedBlock {
     data: ModeData,
 }
 
-#[derive(Clone, Copy, Debug, Default)]
-struct ModeE18W16 {
-    endpoints: [u8; 18],
-    weights: [u8; 16],
-}
+#[derive(Copy, Clone)]
+struct ModeEW([u8; 40]);
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 enum ModeData {
-    ModeEW([u8; 40]),
+    ModeEW(ModeEW),
     Mode8 {
         r: u8, g: u8, b: u8, a: u8,
         etc1i: u8, etc1s: u8,
         etc1r: u8, etc1g: u8, etc1b: u8,
     },
+}
+
+impl fmt::Debug for ModeEW {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_list().entries(self.0.iter()).finish()
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -129,7 +135,7 @@ fn block_to_rgba(block: &DecodedBlock) -> [Color32; 16] {
 
     let (endpoints, weights): (&[u8], &[u8]) = match block.data {
         ModeData::ModeEW(ref data) => {
-            data.split_at(mode.endpoint_count as usize)
+            data.0.split_at(mode.endpoint_count as usize)
         }
         _ => unreachable!()
     };
@@ -254,7 +260,7 @@ fn decode_block(block_x: u32, block_y: u32, bytes: &[u8]) -> DecodedBlock {
         let plane_count = mode.plane_count as usize;
         decode_weights(reader, mode.weight_bits, plane_count, weights);
         unquant_weights(weights, mode.weight_bits);
-        ModeData::ModeEW(data)
+        ModeData::ModeEW(ModeEW(data))
     };
 
     DecodedBlock {
@@ -284,7 +290,7 @@ fn decode_trans_flags(reader: &mut BitReaderLSB, mode_index: usize) -> Transcodi
     flags
 }
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct Mode {
     code: u8,
     code_size: u8,
@@ -546,7 +552,7 @@ mod tests {
             for i in 0..16 {
                 rgba_c32[i] = Color32::from_rgba_u32(rgba[i]);
             }
-            assert_eq!(&output, rgba, "\n{:?}\n{:?}", decoded_rgba, rgba_c32);
+            assert_eq!(&output, rgba, "\n{:?}\n{:?}\n{:?}", decoded_block, decoded_rgba, rgba_c32);
         }
     }
 
