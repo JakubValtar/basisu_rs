@@ -60,7 +60,7 @@ fn read_et1s_to_etc1() {
 }
 
 #[test]
-fn read_uastc_to_rgb() {
+fn read_uastc_to_rgba() {
 
     let texture_dir: &Path = Path::new("textures");
     let out_dir: &Path = Path::new("out");
