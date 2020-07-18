@@ -232,6 +232,30 @@ fn decode_block(block_x: u32, block_y: u32, bytes: &[u8]) -> DecodedBlock {
         _ => 0
     };
 
+    // Check pattern bounds
+    let pat_valid = match mode_index {
+        2 | 4 | 9 | 16 => (pat as usize) < TOTAL_ASTC_BC7_COMMON_PARTITIONS2,
+        3 => (pat as usize) < TOTAL_ASTC_BC7_COMMON_PARTITIONS3,
+        7 => (pat as usize) < TOTAL_BC7_3_ASTC2_COMMON_PARTITIONS,
+        _ => pat == 0,
+    };
+
+    if !pat_valid {
+        // TODO: This is not ideal, also check that all the values below are valid
+        return DecodedBlock {
+            block_x, block_y,
+            mode_index: 8,
+            trans_flags: TranscodingFlags::default(),
+            compsel: 0,
+            pat: 0,
+            data: ModeData::Mode8 {
+                r: 255, g: 0, b: 255, a: 255,
+                etc1i: 0, etc1s: 0,
+                etc1r: 0b11111, etc1g: 0, etc1b: 0b11111,
+            }
+        };
+    }
+
     let data = if mode_index == 8 {
         let r = reader.read_u8(8);
         let g = reader.read_u8(8);
