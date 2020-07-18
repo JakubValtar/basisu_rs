@@ -299,39 +299,40 @@ pub struct Mode {
     endpoint_count: u8,
     weight_bits: u8,
     plane_count: u8,
+    subset_count: u8,
 }
 
 static MODES: [Mode; 20] = [
     // CEM 8 - RGB Direct
-    Mode { code: 0x01, code_size: 4, block_size: 128, endpoint_range_index: 19, endpoint_count:  6, weight_bits: 4, plane_count: 1 }, //  0
-    Mode { code: 0x35, code_size: 6, block_size: 100, endpoint_range_index: 20, endpoint_count:  6, weight_bits: 2, plane_count: 1 }, //  1
-    Mode { code: 0x1D, code_size: 5, block_size: 119, endpoint_range_index:  8, endpoint_count: 12, weight_bits: 3, plane_count: 1 }, //  2
-    Mode { code: 0x03, code_size: 5, block_size: 118, endpoint_range_index:  7, endpoint_count: 18, weight_bits: 2, plane_count: 1 }, //  3
-    Mode { code: 0x13, code_size: 5, block_size: 119, endpoint_range_index: 12, endpoint_count: 12, weight_bits: 2, plane_count: 1 }, //  4
-    Mode { code: 0x0B, code_size: 5, block_size: 115, endpoint_range_index: 20, endpoint_count:  6, weight_bits: 3, plane_count: 1 }, //  5
-    Mode { code: 0x1B, code_size: 5, block_size: 128, endpoint_range_index: 18, endpoint_count:  6, weight_bits: 2, plane_count: 2 }, //  6
-    Mode { code: 0x07, code_size: 5, block_size: 119, endpoint_range_index: 12, endpoint_count: 12, weight_bits: 2, plane_count: 1 }, //  7
+    Mode { code: 0x01, code_size: 4, block_size: 128, endpoint_range_index: 19, endpoint_count:  6, weight_bits: 4, plane_count: 1, subset_count: 1 }, //  0
+    Mode { code: 0x35, code_size: 6, block_size: 100, endpoint_range_index: 20, endpoint_count:  6, weight_bits: 2, plane_count: 1, subset_count: 1 }, //  1
+    Mode { code: 0x1D, code_size: 5, block_size: 119, endpoint_range_index:  8, endpoint_count: 12, weight_bits: 3, plane_count: 1, subset_count: 2 }, //  2
+    Mode { code: 0x03, code_size: 5, block_size: 118, endpoint_range_index:  7, endpoint_count: 18, weight_bits: 2, plane_count: 1, subset_count: 3 }, //  3
+    Mode { code: 0x13, code_size: 5, block_size: 119, endpoint_range_index: 12, endpoint_count: 12, weight_bits: 2, plane_count: 1, subset_count: 2 }, //  4
+    Mode { code: 0x0B, code_size: 5, block_size: 115, endpoint_range_index: 20, endpoint_count:  6, weight_bits: 3, plane_count: 1, subset_count: 1 }, //  5
+    Mode { code: 0x1B, code_size: 5, block_size: 128, endpoint_range_index: 18, endpoint_count:  6, weight_bits: 2, plane_count: 2, subset_count: 1 }, //  6
+    Mode { code: 0x07, code_size: 5, block_size: 119, endpoint_range_index: 12, endpoint_count: 12, weight_bits: 2, plane_count: 1, subset_count: 2 }, //  7
 
     // Void-Extent
-    Mode { code: 0x17, code_size: 5, block_size:  58, endpoint_range_index:  0, endpoint_count:  0, weight_bits: 0, plane_count: 0 }, //  8
+    Mode { code: 0x17, code_size: 5, block_size:  58, endpoint_range_index:  0, endpoint_count:  0, weight_bits: 0, plane_count: 0, subset_count: 0 }, //  8
 
     // CEM 12 - RGBA Direct
-    Mode { code: 0x0F, code_size: 5, block_size: 127, endpoint_range_index:  8, endpoint_count: 16, weight_bits: 2, plane_count: 1 }, //  9
-    Mode { code: 0x02, code_size: 3, block_size: 128, endpoint_range_index: 13, endpoint_count:  8, weight_bits: 4, plane_count: 1 }, // 10
-    Mode { code: 0x00, code_size: 2, block_size: 128, endpoint_range_index: 13, endpoint_count:  8, weight_bits: 2, plane_count: 2 }, // 11
-    Mode { code: 0x06, code_size: 3, block_size: 128, endpoint_range_index: 19, endpoint_count:  8, weight_bits: 3, plane_count: 1 }, // 12
-    Mode { code: 0x1F, code_size: 5, block_size: 124, endpoint_range_index: 20, endpoint_count:  8, weight_bits: 1, plane_count: 2 }, // 13
-    Mode { code: 0x0D, code_size: 5, block_size: 123, endpoint_range_index: 20, endpoint_count:  8, weight_bits: 2, plane_count: 1 }, // 14
+    Mode { code: 0x0F, code_size: 5, block_size: 127, endpoint_range_index:  8, endpoint_count: 16, weight_bits: 2, plane_count: 1, subset_count: 2 }, //  9
+    Mode { code: 0x02, code_size: 3, block_size: 128, endpoint_range_index: 13, endpoint_count:  8, weight_bits: 4, plane_count: 1, subset_count: 1 }, // 10
+    Mode { code: 0x00, code_size: 2, block_size: 128, endpoint_range_index: 13, endpoint_count:  8, weight_bits: 2, plane_count: 2, subset_count: 1 }, // 11
+    Mode { code: 0x06, code_size: 3, block_size: 128, endpoint_range_index: 19, endpoint_count:  8, weight_bits: 3, plane_count: 1, subset_count: 1 }, // 12
+    Mode { code: 0x1F, code_size: 5, block_size: 124, endpoint_range_index: 20, endpoint_count:  8, weight_bits: 1, plane_count: 2, subset_count: 1 }, // 13
+    Mode { code: 0x0D, code_size: 5, block_size: 123, endpoint_range_index: 20, endpoint_count:  8, weight_bits: 2, plane_count: 1, subset_count: 1 }, // 14
 
     // CEM 4 - LA Direct
-    Mode { code: 0x05, code_size: 7, block_size: 125, endpoint_range_index: 20, endpoint_count:  4, weight_bits: 4, plane_count: 1 }, // 15
-    Mode { code: 0x15, code_size: 6, block_size: 128, endpoint_range_index: 20, endpoint_count:  8, weight_bits: 2, plane_count: 1 }, // 16
-    Mode { code: 0x25, code_size: 6, block_size: 123, endpoint_range_index: 20, endpoint_count:  4, weight_bits: 2, plane_count: 2 }, // 17
+    Mode { code: 0x05, code_size: 7, block_size: 125, endpoint_range_index: 20, endpoint_count:  4, weight_bits: 4, plane_count: 1, subset_count: 1 }, // 15
+    Mode { code: 0x15, code_size: 6, block_size: 128, endpoint_range_index: 20, endpoint_count:  8, weight_bits: 2, plane_count: 1, subset_count: 2 }, // 16
+    Mode { code: 0x25, code_size: 6, block_size: 123, endpoint_range_index: 20, endpoint_count:  4, weight_bits: 2, plane_count: 2, subset_count: 1 }, // 17
 
     // CEM 8 - RGB Direct
-    Mode { code: 0x09, code_size: 4, block_size: 128, endpoint_range_index: 11, endpoint_count:  6, weight_bits: 5, plane_count: 1 }, // 18
+    Mode { code: 0x09, code_size: 4, block_size: 128, endpoint_range_index: 11, endpoint_count:  6, weight_bits: 5, plane_count: 1, subset_count: 1 }, // 18
 
-    Mode { code: 0x45, code_size: 7, block_size:   0, endpoint_range_index:  0, endpoint_count:  0, weight_bits: 0, plane_count: 0 }, // 19 reserved
+    Mode { code: 0x45, code_size: 7, block_size:   0, endpoint_range_index:  0, endpoint_count:  0, weight_bits: 0, plane_count: 0, subset_count: 0 }, // 19 reserved
 ];
 
 static MODE_LUT: [u8; 128] = [
