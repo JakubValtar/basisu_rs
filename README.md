@@ -29,6 +29,22 @@ Sample textures were copied from the official [basis_universal repo](https://git
 
 Here I'm writing a log of what I did, problems I encountered, and what I learned. Have anything to say or discuss? I'd be happy to hear from you, please send me a DM or @ me on Twitter [@JakubValtar](https://twitter.com/jakubvaltar).
 
+### 17-07-2020
+
+It's time for UASTC! First I implemented mode 8, which is the easiest, a single color block. Next I implemented mode 0, which looked like the simplest mode using endpoints and weights; it's an RGB mode with a single plane and a single subset. For this to work I had to first implement BISE decoding. It is not hard to understand, but dealing with incomplete groups of trits/quints make it a bit more involved.
+
+Then comes endpoint unquantization, which is a hot contender for the most complex thing I had to figure out so far. I somehow missed the precomputed table in the UASTC spec, so I implemented it from the [Khronos spec](https://www.khronos.org/registry/DataFormat/specs/1.1/dataformat.1.1.html#astc-endpoint-unquantization). For weight dequantization I used the lookup table from the UASTC spec.
+
+I was following the Khronos spec for calculating texel colors from endpoints and weights and I accidentally implemented blue contraction as well. Turns out it is not used in UASTC. Other thing which caused some problems was using sRGB in ASTC interpolation. I was not sure if I should use sRGB mode or not, there was no field for it and I couln't find it in the spec. Leaving it on made some colors slightly different than they should be, so I turned it off. Later I found in the project readme that UASTC indeed does not use sRGB (yet).
+
+With mode 0 working, it was easy to add other RGB modes which have a single plane and a single subset, just different ranges of endpoints/weights (these are 1, 5, 18). After this, adding RGBA modes (10, 12, 14) and Luminance+Alpha modes (15) was pretty trivial, most of the code is the same, except for calculating base colors.
+
+The next step was adding dual-plane modes (6, 11, 13, 17). Dual-plane means that each texel now has two weights, the second weight being used for one component in the block. E.g. red, green and alpha can use one weight, while blue uses the other one. I had to make a small change to weight decoding to decode the second set of weights correctly. I got a little bit confused by anchor weight indices, but it turned out they are only used in modes with multiple subsets, not multiple planes. Other than that, adding second set of weights to the existing block decoding was easy.
+
+I struggled a bit with mode 17, I forgot that it does not have a `compsel` field to select which component uses the second set of weights. My code defaulted to 0 for Red, and it caused some red/cyan artifacts in mode 17 blocks. After a while I found in the spec that mode 17 has always `compsel = 3` for Alpha. It makes sense, it is a grayscale mode, so using any other value would cause coloration, but I didn't realize it at the time. I was using the 64 example blocks from the UASTC spec as a basic test that my code is doing the right thing. After the trouble with mode 17, I found out that there are no blocks with mode 7, 16, or 17 in the example set. I'm planning to add more testing data soon.
+
+Tomorrow I will be implementing modes with multiple subsets.
+
 ### 27-06-2020
 
 I decided to optimize Huffman decoding today, to get the low-hanging fruit. I still run a linear search to find the right entry in the decoding table.
