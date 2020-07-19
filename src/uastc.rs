@@ -141,19 +141,19 @@ fn block_to_rgba(block: &DecodedBlock) -> [Color32; 16] {
     };
 
     if mode.subset_count == 1 {
-        let (e0, e1) = match block.mode_index {
+        let (e0, e1) = match mode.cem {
             // CEM 8 - RGB Direct
-            0 | 1 | 5 | 6 | 18 => (
+            CEM_RGB => (
                 Color32::new(endpoints[0], endpoints[2], endpoints[4], 0xFF),
                 Color32::new(endpoints[1], endpoints[3], endpoints[5], 0xFF),
             ),
             // CEM 12 - RGBA Direct
-            10 | 11 | 12 | 13 | 14 => (
+            CEM_RGBA => (
                 Color32::new(endpoints[0], endpoints[2], endpoints[4], endpoints[6]),
                 Color32::new(endpoints[1], endpoints[3], endpoints[5], endpoints[7]),
             ),
             // CEM 4 - LA Direct
-            15 | 17 => (
+            CEM_LA => (
                 Color32::new(endpoints[0], endpoints[0], endpoints[0], endpoints[2]),
                 Color32::new(endpoints[1], endpoints[1], endpoints[1], endpoints[3]),
             ),
@@ -182,9 +182,9 @@ fn block_to_rgba(block: &DecodedBlock) -> [Color32; 16] {
     } else {
         let mut e = [(Color32::default(), Color32::default()); 3];
 
-        match block.mode_index {
+        match mode.cem {
             // CEM 8 - RGB Direct
-            2 | 3 | 4 | 7 => for subset in 0..mode.subset_count as usize {
+            CEM_RGB => for subset in 0..mode.subset_count as usize {
                 let i = 6 * subset;
                 e[subset] = (
                     Color32::new(endpoints[i+0], endpoints[i+2], endpoints[i+4], 0xFF),
@@ -192,7 +192,7 @@ fn block_to_rgba(block: &DecodedBlock) -> [Color32; 16] {
                 );
             }
             // CEM 12 - RGBA Direct
-            9 => for subset in 0..mode.subset_count as usize {
+            CEM_RGBA => for subset in 0..mode.subset_count as usize {
                 let i = 8 * subset;
                 e[subset] = (
                     Color32::new(endpoints[i+0], endpoints[i+2], endpoints[i+4], endpoints[i+6]),
@@ -200,7 +200,7 @@ fn block_to_rgba(block: &DecodedBlock) -> [Color32; 16] {
                 );
             }
             // CEM 4 - LA Direct
-            16 => for subset in 0..mode.subset_count as usize {
+            CEM_LA => for subset in 0..mode.subset_count as usize {
                 let i = 4 * subset;
                 e[subset] = (
                     Color32::new(endpoints[i+0], endpoints[i+0], endpoints[i+0], endpoints[i+2]),
@@ -210,10 +210,11 @@ fn block_to_rgba(block: &DecodedBlock) -> [Color32; 16] {
             _ => unreachable!()
         }
 
-        let pattern = match block.mode_index {
-            2 | 4 | 9 | 16 => PATTERNS_2[block.pat as usize],
-            3 => PATTERNS_3[block.pat as usize],
-            7 => PATTERNS_2_3[block.pat as usize],
+        let pattern = match (block.mode_index, mode.subset_count) {
+            // Mode 7 has 2 subsets, but needs 2/3 patern table
+            (7, _) => PATTERNS_2_3[block.pat as usize],
+            (_, 2) => PATTERNS_2[block.pat as usize],
+            (_, 3) => PATTERNS_3[block.pat as usize],
             _ => unreachable!(),
         };
 
@@ -262,30 +263,28 @@ fn decode_block(block_x: u32, block_y: u32, bytes: &[u8]) -> DecodedBlock {
     let mut trans_flags = decode_trans_flags(reader, mode_index);
 
     // Component selector for dual-plane modes
-    let compsel = match mode_index {
-        6 | 11 | 13 => {
+    let compsel = match (mode.plane_count, mode.cem) {
+        (2, CEM_RGB) | (2, CEM_RGBA) => {
             reader.read_u8(2)
         },
-        17 => 3,
-        _ => 0
+        // LA modes always have component selector 3 for alpha
+        (2, CEM_LA) => 3,
+        _ => 0,
     };
 
     // Pattern id for modes with multiple subsets
-    let pat = match mode_index {
-        3 => {
-            reader.read_u8(4)
-        }
-        2 | 4 | 7 | 9 | 16 => {
-            reader.read_u8(5)
-        }
+    let pat = match (mode_index, mode.subset_count) {
+        (7, _) => reader.read_u8(5),
+        (_, 2) => reader.read_u8(5),
+        (_, 3) => reader.read_u8(4),
         _ => 0
     };
 
     // Check pattern bounds
-    let pat_valid = match mode_index {
-        2 | 4 | 9 | 16 => (pat as usize) < TOTAL_ASTC_BC7_COMMON_PARTITIONS2,
-        3 => (pat as usize) < TOTAL_ASTC_BC7_COMMON_PARTITIONS3,
-        7 => (pat as usize) < TOTAL_BC7_3_ASTC2_COMMON_PARTITIONS,
+    let pat_valid = match (mode_index, mode.subset_count) {
+        (7, _) => (pat as usize) < TOTAL_BC7_3_ASTC2_COMMON_PARTITIONS,
+        (_, 2) => (pat as usize) < TOTAL_ASTC_BC7_COMMON_PARTITIONS2,
+        (_, 3) => (pat as usize) < TOTAL_ASTC_BC7_COMMON_PARTITIONS3,
         _ => pat == 0,
     };
 
@@ -332,10 +331,10 @@ fn decode_block(block_x: u32, block_y: u32, bytes: &[u8]) -> DecodedBlock {
         }
         let plane_count = mode.plane_count as usize;
 
-        let anchors: &[u8] = match mode_index {
-            2 | 4 | 9 | 16 => &PATTERNS_2_ANCHORS[pat as usize],
-            3 => &PATTERNS_3_ANCHORS[pat as usize],
-            7 => &PATTERNS_2_3_ANCHORS[pat as usize],
+        let anchors: &[u8] = match (mode_index, mode.subset_count) {
+            (7, _) => &PATTERNS_2_3_ANCHORS[pat as usize],
+            (_, 2) => &PATTERNS_2_ANCHORS[pat as usize],
+            (_, 3) => &PATTERNS_3_ANCHORS[pat as usize],
             _ => &[0],
         };
 
@@ -354,6 +353,9 @@ fn decode_trans_flags(reader: &mut BitReaderLSB, mode_index: usize) -> Transcodi
     if mode_index == 8 {
         return flags; // Mode 8 has a different field order, flags will be read into this struct later
     }
+
+    let mode = MODES[mode_index];
+
     flags.bc1h0 = reader.read_bool();
     if mode_index < 10 || mode_index > 12 {
         flags.bc1h1 = reader.read_bool();
@@ -365,7 +367,8 @@ fn decode_trans_flags(reader: &mut BitReaderLSB, mode_index: usize) -> Transcodi
     if mode_index < 10 || mode_index > 12 {
         flags.etc1bias = reader.read_u8(5);
     }
-    if mode_index >= 9 && mode_index <= 17 {
+    if mode.cem == CEM_RGBA || mode.cem == CEM_LA {
+        // Only for modes with alpha
         flags.etc2tm = reader.read_u8(8);
     }
     flags
