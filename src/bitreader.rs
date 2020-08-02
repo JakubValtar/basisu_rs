@@ -71,11 +71,12 @@ mod tests {
     fn test_bitreader() {
         let pattern = 0x5555_5555_5555_5555u64;
         for i in 0..16 {
+            let segment = mask!(16u64);
             let xor_mask =
-                ((mask!(16u16) * ((i >> 3) & 0x1)) as u64) << 3*16 |
-                ((mask!(16u16) * ((i >> 2) & 0x1)) as u64) << 2*16 |
-                ((mask!(16u16) * ((i >> 1) & 0x1)) as u64) << 1*16 |
-                ((mask!(16u16) * ((i >> 0) & 0x1)) as u64) << 0*16;
+                (segment * ((i >> 3) & 0x1)) << 48 |
+                (segment * ((i >> 2) & 0x1)) << 32 |
+                (segment * ((i >> 1) & 0x1)) << 16 |
+                (segment * (i & 0x1));
             let data = pattern ^ xor_mask;
             let bytes = data.to_le_bytes();
             for len in 0..32 {
