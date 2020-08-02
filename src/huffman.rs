@@ -172,7 +172,7 @@ impl HuffmanDecodingTable {
 
         Ok(Self {
             lookup,
-            max_code_size: max_code_size,
+            max_code_size,
         })
     }
 
