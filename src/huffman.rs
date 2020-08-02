@@ -108,7 +108,7 @@ pub fn read_huffman_table(reader: &mut BitReaderLSB) -> Result<HuffmanDecodingTa
         }
     }
 
-    return HuffmanDecodingTable::from_sizes(&symbol_code_sizes);
+    HuffmanDecodingTable::from_sizes(&symbol_code_sizes)
 }
 
 #[derive(Clone, Copy, Default)]
@@ -181,8 +181,9 @@ impl HuffmanDecodingTable {
         let entry = self.lookup[bits];
         if entry.code_size > 0 {
             reader.remove(entry.code_size as usize);
-            return Ok(entry.symbol);
+            Ok(entry.symbol)
+        } else {
+            Err(format!("No matching code found in the decoding table, bits: {:016b}", bits).into())
         }
-        Err(format!("No matching code found in the decoding table, bits: {:016b}", bits).into())
     }
 }
