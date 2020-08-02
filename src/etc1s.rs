@@ -704,13 +704,13 @@ impl ApproxMoveToFront {
 
 impl Index<usize> for ApproxMoveToFront {
     type Output = u16;
-    fn index<'a>(&'a self, i: usize) -> &'a Self::Output {
+    fn index(&self, i: usize) -> &Self::Output {
         &self.values[i]
     }
 }
 
 impl IndexMut<usize> for ApproxMoveToFront {
-    fn index_mut<'a>(&'a mut self, i: usize) -> &'a mut Self::Output {
+    fn index_mut(&mut self, i: usize) -> &mut Self::Output {
         &mut self.values[i]
     }
 }
