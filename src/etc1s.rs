@@ -628,11 +628,11 @@ fn decode_selectors(num_selectors: usize, bytes: &[u8]) -> Result<Vec<Selector>>
             }
         }
     } else {
-        for i in 0..num_selectors {
+        for selector in &mut selectors {
             for y in 0..4 {
                 let cur_byte = reader.read_u8(8);
                 for x in 0..4 {
-                    selectors[i].set_selector(x, y, (cur_byte >> (x*2)) & 3);
+                    selector.set_selector(x, y, (cur_byte >> (x*2)) & 3);
                 }
             }
         }
