@@ -38,13 +38,16 @@ const SELECTOR_HISTORY_BUF_RLE_COUNT_TOTAL: u32 = 1 << SELECTOR_HISTORY_BUF_RLE_
 // const int COLOR5_PAL1_PREV_HI = 21, COLOR5_PAL1_DELTA_LO = -21, COLOR5_PAL1_DELTA_HI = 21;
 // const int COLOR5_PAL2_PREV_HI = 31, COLOR5_PAL2_DELTA_LO = -31, COLOR5_PAL2_DELTA_HI = 9;
 
-const COLOR5_PAL0_PREV_HI: i32 = 9;
+const COLOR5_PAL0_PREV_LO: u8 = 0;
+const COLOR5_PAL0_PREV_HI: u8 = 9;
 const COLOR5_PAL0_DELTA_LO: i32 = -9;
 const COLOR5_PAL0_DELTA_HI: i32 = 31;
-const COLOR5_PAL1_PREV_HI: i32 = 21;
+const COLOR5_PAL1_PREV_LO: u8 = 10;
+const COLOR5_PAL1_PREV_HI: u8 = 21;
 const COLOR5_PAL1_DELTA_LO: i32 = -21;
 const COLOR5_PAL1_DELTA_HI: i32 = 21;
-const COLOR5_PAL2_PREV_HI: i32 = 31;
+const COLOR5_PAL2_PREV_LO: u8 = 22;
+const COLOR5_PAL2_PREV_HI: u8 = 31;
 const COLOR5_PAL2_DELTA_LO: i32 = -31;
 const COLOR5_PAL2_DELTA_HI: i32 = 9;
 
@@ -493,18 +496,19 @@ fn decode_endpoints(num_endpoints: usize, bytes: &[u8]) -> Result<Vec<Endpoint>>
         for c in 0..channel_count {
 
             // The Huffman table used to decode the delta depends on the previous color's value
-            let delta = match prev_color5[c as usize] as i32 {
-                i if i <= COLOR5_PAL0_PREV_HI => color5_delta_model0.decode_symbol(reader),
-                i if i <= COLOR5_PAL1_PREV_HI => color5_delta_model1.decode_symbol(reader),
-                _ => color5_delta_model2.decode_symbol(reader),
-            }?;
+            let delta = match prev_color5[c as usize] {
+                COLOR5_PAL0_PREV_LO..=COLOR5_PAL0_PREV_HI => color5_delta_model0.decode_symbol(reader)?,
+                COLOR5_PAL1_PREV_LO..=COLOR5_PAL1_PREV_HI => color5_delta_model1.decode_symbol(reader)?,
+                COLOR5_PAL2_PREV_LO..=COLOR5_PAL2_PREV_HI => color5_delta_model2.decode_symbol(reader)?,
+                _ => unreachable!()
+            };
 
             // Apply the delta
-            let v = (prev_color5[c] as u32 + delta as u32) & 31;
+            let v = prev_color5[c].wrapping_add(delta as u8) & 31;
 
-            endpoint.color5[c] = v as u8;
+            endpoint.color5[c] = v;
 
-            prev_color5[c] = v as u8;
+            prev_color5[c] = v;
         }
 
         // If the endpoints are grayscale, set G and B to match R.
