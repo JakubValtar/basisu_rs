@@ -604,9 +604,9 @@ fn decode_selectors(num_selectors: usize, bytes: &[u8]) -> Result<Vec<Selector>>
         for (i, selector) in selectors.iter_mut().enumerate() {
             if i == 0 {
                 // First selector is sent raw
-                for y in 0..4 {
+                for (y, prev_byte) in prev_bytes.iter_mut().enumerate() {
                     let cur_byte = reader.read_u8(8);
-                    prev_bytes[y] = cur_byte;
+                    *prev_byte = cur_byte;
 
                     for x in 0..4 {
                         selector.set_selector(x, y, (cur_byte >> (x*2)) & 3);
