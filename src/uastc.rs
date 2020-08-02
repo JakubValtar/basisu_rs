@@ -69,8 +69,8 @@ impl Decoder {
     pub(crate) fn decode_to_rgba(&self, slice_desc: &SliceDesc, bytes: &[u8]) -> Result<Image<Color32>> {
 
         let mut image = Image {
-            w: 4*slice_desc.num_blocks_x as u32,
-            h: 4*slice_desc.num_blocks_y as u32,
+            w: slice_desc.orig_width as u32,
+            h: slice_desc.orig_height as u32,
             stride: 4*slice_desc.num_blocks_x as u32,
             y_flipped: false,
             data: vec![Color32::default(); slice_desc.num_blocks_x as usize * slice_desc.num_blocks_y as usize * 16],
