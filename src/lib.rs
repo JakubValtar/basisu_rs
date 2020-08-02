@@ -151,13 +151,13 @@ impl Color32 {
 
 impl Index<usize> for Color32 {
     type Output = u8;
-    fn index<'a>(&'a self, i: usize) -> &'a Self::Output {
+    fn index(&self, i: usize) -> &Self::Output {
         &self.0[i]
     }
 }
 
 impl IndexMut<usize> for Color32 {
-    fn index_mut<'a>(&'a mut self, i: usize) -> &'a mut Self::Output {
+    fn index_mut(&mut self, i: usize) -> &mut Self::Output {
         &mut self.0[i]
     }
 }
