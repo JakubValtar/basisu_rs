@@ -85,13 +85,15 @@ pub struct TranscodingFlags {
 }
 
 pub struct Decoder {
-
+    y_flipped: bool,
 }
 
 impl Decoder {
     pub(crate) fn from_file_bytes(header: &Header, bytes: &[u8]) -> Result<Self> {
         // TODO: LUTs
-        Ok(Self { })
+        Ok(Self {
+            y_flipped: header.has_y_flipped(),
+        })
     }
 
     pub(crate) fn decode_to_rgba(&self, slice_desc: &SliceDesc, bytes: &[u8]) -> Result<Image<Color32>> {
@@ -100,7 +102,7 @@ impl Decoder {
             w: slice_desc.orig_width as u32,
             h: slice_desc.orig_height as u32,
             stride: 4*slice_desc.num_blocks_x as u32,
-            y_flipped: false,
+            y_flipped: self.y_flipped,
             data: vec![Color32::default(); slice_desc.num_blocks_x as usize * slice_desc.num_blocks_y as usize * 16],
         };
 
