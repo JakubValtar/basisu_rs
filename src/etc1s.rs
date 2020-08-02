@@ -464,13 +464,20 @@ pub struct Etc1Block {
 
 impl Etc1Block {
     pub fn into_etc1_bytes(data: Vec<Self>) -> Vec<u8> {
-        let len = data.len();
-        let new_len = std::mem::size_of::<Self>() * len;
-        unsafe {
-            let mut bytes: Vec<u8> = std::mem::transmute(data);
-            bytes.set_len(new_len);
-            bytes
+        let mut result = vec![0u8; data.len() * 8];
+
+        for (chunk, block) in result.chunks_exact_mut(8).zip(data.into_iter()) {
+            chunk[0] = block.color5_delta3_r;
+            chunk[1] = block.color5_delta3_g;
+            chunk[2] = block.color5_delta3_b;
+            chunk[3] = block.codeword3_codeword3_diff1_flip1;
+            chunk[4] = block.pixel_index_bits[0];
+            chunk[5] = block.pixel_index_bits[1];
+            chunk[6] = block.pixel_index_bits[2];
+            chunk[7] = block.pixel_index_bits[3];
         }
+
+        result
     }
 }
 

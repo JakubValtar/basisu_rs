@@ -131,10 +131,13 @@ impl Color32 {
     }
 
     pub fn into_rgba_bytes(data: Vec<Self>) -> Vec<u8> {
-        data.iter()
-            .flat_map(|rgba| rgba.0.iter())
-            .copied()
-            .collect()
+        let mut result = vec![0u8; data.len() * 4];
+
+        for (chunk, color) in result.chunks_exact_mut(4).zip(data.into_iter()) {
+            chunk.copy_from_slice(&color.0);
+        }
+
+        result
     }
 
     pub fn to_rgba_u32(&self) -> u32 {
