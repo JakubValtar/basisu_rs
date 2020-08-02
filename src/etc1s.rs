@@ -190,7 +190,7 @@ impl Decoder {
         let num_blocks_x = slice_desc.num_blocks_x as u32;
         let num_blocks_y = slice_desc.num_blocks_y as u32;
 
-        let mut blocks = vec![Etc1Block::default(); (num_blocks_x * num_blocks_y) as usize * 16];
+        let mut blocks = vec![Etc1Block::default(); (num_blocks_x * num_blocks_y) as usize];
 
         let block_to_etc1 = |block: DecodedBlock| {
             let endpoint: Endpoint = self.endpoints[block.endpoint_index as usize];
