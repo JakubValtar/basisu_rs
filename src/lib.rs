@@ -1,4 +1,3 @@
-#![warn(clippy::all)]
 
 use std::ops::{Index, IndexMut};
 use std::path::Path;
