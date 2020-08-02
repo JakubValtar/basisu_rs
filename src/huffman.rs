@@ -114,7 +114,7 @@ pub fn read_huffman_table(reader: &mut BitReaderLSB) -> Result<HuffmanDecodingTa
 #[derive(Clone, Copy, Default)]
 struct HuffmanTableEntry {
     symbol: u16,
-    code_size: u16,
+    code_size: u8,
 }
 
 #[derive(Clone)]
@@ -126,8 +126,6 @@ pub struct HuffmanDecodingTable {
 impl HuffmanDecodingTable {
     pub fn from_sizes(code_sizes: &[u8]) -> Result<Self> {
         // TODO: sanity checks
-
-        let total_syms = code_sizes.len();
 
         let mut syms_using_codesize = [0u32; MaxSupportedCodeSize+1];
         let mut max_code_size = 0;
@@ -148,18 +146,17 @@ impl HuffmanDecodingTable {
 
         let code_width = std::mem::size_of_val(&next_code[0]) * 8;
 
-        for n in 0..total_syms {
-            let size = code_sizes[n] as usize;
-            let symbol = n as u16;
-            if size != 0 {
+        for (symbol, code_size) in code_sizes.iter().enumerate().map(|(sym, &size)| (sym as u16, size)) {
+            if code_size != 0 {
+                let entry = HuffmanTableEntry { symbol, code_size };
+                let size = code_size as usize;
                 let code = (next_code[size].reverse_bits() >> (code_width - size)) as u16;
 
                 // Generate all lookup entries ending with this code
                 let variant_count: u16 = 1 << (max_code_size - size);
                 for fill in 0..variant_count {
                     let id = (fill.wrapping_shl(size as u32) | code) as usize;
-                    lookup[id].symbol = symbol;
-                    lookup[id].code_size = size as u16;
+                    lookup[id] = entry;
                 }
 
                 next_code[size] += 1;
