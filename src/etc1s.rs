@@ -601,7 +601,7 @@ fn decode_selectors(num_selectors: usize, bytes: &[u8]) -> Result<Vec<Selector>>
 
         let mut prev_bytes = [0u8; 4];
 
-        for i in 0..num_selectors {
+        for (i, selector) in selectors.iter_mut().enumerate() {
             if i == 0 {
                 // First selector is sent raw
                 for y in 0..4 {
@@ -609,7 +609,7 @@ fn decode_selectors(num_selectors: usize, bytes: &[u8]) -> Result<Vec<Selector>>
                     prev_bytes[y] = cur_byte;
 
                     for x in 0..4 {
-                        selectors[i].set_selector(x, y, (cur_byte >> (x*2)) & 3);
+                        selector.set_selector(x, y, (cur_byte >> (x*2)) & 3);
                     }
                 }
                 continue;
@@ -623,7 +623,7 @@ fn decode_selectors(num_selectors: usize, bytes: &[u8]) -> Result<Vec<Selector>>
                 prev_bytes[y] = cur_byte;
 
                 for x in 0..4 {
-                    selectors[i].set_selector(x, y, (cur_byte >> (x*2)) & 3);
+                        selector.set_selector(x, y, (cur_byte >> (x*2)) & 3);
                 }
             }
         }
