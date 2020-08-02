@@ -663,7 +663,7 @@ fn decode_vlc(reader: &mut BitReaderLSB, chunk_bits: u32) -> u32 {
         }
     }
 
-    return v;
+    v
 }
 
 
