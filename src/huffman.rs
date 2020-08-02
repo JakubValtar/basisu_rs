@@ -1,9 +1,6 @@
 #![allow(non_upper_case_globals)]
 
-use std::fmt;
-
 use crate::bitreader::BitReaderLSB;
-use crate::mask;
 
 use crate::Result;
 
