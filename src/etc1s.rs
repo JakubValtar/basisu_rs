@@ -615,14 +615,14 @@ fn decode_selectors(num_selectors: usize, bytes: &[u8]) -> Result<Vec<Selector>>
                 continue;
             }
 
-            // Subsequent selectors are sent with a simple form of byte-wise DPCM coding.
-            for y in 0..4 {
-                let delta_byte = delta_selector_pal_model.decode_symbol(reader)? as u8;
+                // Subsequent selectors are sent with a simple form of byte-wise DPCM coding.
+                for (y, prev_byte) in prev_bytes.iter_mut().enumerate() {
+                    let delta_byte = delta_selector_pal_model.decode_symbol(reader)? as u8;
 
-                let cur_byte = delta_byte ^ prev_bytes[y];
-                prev_bytes[y] = cur_byte;
+                    let cur_byte = delta_byte ^ *prev_byte;
+                    *prev_byte = cur_byte;
 
-                for x in 0..4 {
+                    for x in 0..4 {
                         selector.set_selector(x, y, (cur_byte >> (x*2)) & 3);
                 }
             }
