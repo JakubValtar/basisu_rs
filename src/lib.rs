@@ -85,7 +85,7 @@ pub fn read_to_etc1<P: AsRef<Path>>(path: P) -> Result<Vec<Image<u8>>> {
         let mut images = Vec::with_capacity(header.total_slices as usize);
         for slice_desc in &slice_descs {
             let image = decoder.transcode_to_etc1(slice_desc, &buf)?;
-            images.push(image.into_etc1_bytes());
+            images.push(image);
         }
         return Ok(images);
     } else {

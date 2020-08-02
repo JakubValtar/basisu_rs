@@ -186,23 +186,34 @@ impl Decoder {
         })
     }
 
-    pub(crate) fn transcode_to_etc1(&self, slice_desc: &SliceDesc, bytes: &[u8]) -> Result<Image<Etc1Block>> {
+    pub(crate) fn transcode_to_etc1(&self, slice_desc: &SliceDesc, bytes: &[u8]) -> Result<Image<u8>> {
         let num_blocks_x = slice_desc.num_blocks_x as u32;
         let num_blocks_y = slice_desc.num_blocks_y as u32;
 
-        let mut blocks = vec![Etc1Block::default(); (num_blocks_x * num_blocks_y) as usize];
+        const BLOCK_SIZE: usize = 8;
+
+        let block_count = (num_blocks_x * num_blocks_y) as usize;
+
+        let mut blocks = vec![0u8; BLOCK_SIZE * block_count];
 
         let block_to_etc1 = |block: DecodedBlock| {
             let endpoint: Endpoint = self.endpoints[block.endpoint_index as usize];
             let selector: Selector = self.selectors[block.selector_index as usize];
 
-            let block_id = block.block_y * num_blocks_x + block.block_x;
-            let block = &mut blocks[block_id as usize];
-            block.color5_delta3_r = endpoint.color5[0] << 3;
-            block.color5_delta3_g = endpoint.color5[1] << 3;
-            block.color5_delta3_b = endpoint.color5[2] << 3;
-            block.codeword3_codeword3_diff1_flip1 = endpoint.inten5 << 5 | endpoint.inten5 << 2 | 0b11;
-            block.pixel_index_bits = selector.etc1_bytes;
+            let block_id = (block.block_y * num_blocks_x + block.block_x) as usize;
+            let block_start = BLOCK_SIZE * block_id;
+            let block = &mut blocks[block_start..block_start + BLOCK_SIZE];
+
+            // color_r: 5 | delta: 3
+            block[0] = endpoint.color5[0] << 3;
+            // color_g: 5 | delta: 3
+            block[1] = endpoint.color5[1] << 3;
+            // color_b: 5 | delta: 3
+            block[2] = endpoint.color5[2] << 3;
+            // codeword: 3 | codeword: 3 | diff: 1 | flip: 1
+            block[3] = endpoint.inten5 << 5 | endpoint.inten5 << 2 | 0b11;
+            // selector bits: 16 x 2 bits
+            block[4..].copy_from_slice(&selector.etc1_bytes);
         };
 
         self.decode_blocks(slice_desc, bytes, block_to_etc1)?;
@@ -210,7 +221,7 @@ impl Decoder {
         Ok(Image {
             w: slice_desc.orig_width as u32,
             h: slice_desc.orig_height as u32,
-            stride: slice_desc.num_blocks_x as u32,
+            stride: BLOCK_SIZE as u32 * slice_desc.num_blocks_x as u32,
             y_flipped: self.y_flipped,
             data: blocks,
         })
@@ -449,48 +460,6 @@ impl Decoder {
         }
 
         Ok(())
-    }
-}
-
-#[derive(Clone, Copy, Default)]
-#[repr(C)]
-pub struct Etc1Block {
-    color5_delta3_r: u8,
-    color5_delta3_g: u8,
-    color5_delta3_b: u8,
-    codeword3_codeword3_diff1_flip1: u8,
-    pixel_index_bits: [u8; 4],
-}
-
-impl Etc1Block {
-    pub fn into_etc1_bytes(data: Vec<Self>) -> Vec<u8> {
-        let mut result = vec![0u8; data.len() * 8];
-
-        for (chunk, block) in result.chunks_exact_mut(8).zip(data.into_iter()) {
-            chunk[0] = block.color5_delta3_r;
-            chunk[1] = block.color5_delta3_g;
-            chunk[2] = block.color5_delta3_b;
-            chunk[3] = block.codeword3_codeword3_diff1_flip1;
-            chunk[4] = block.pixel_index_bits[0];
-            chunk[5] = block.pixel_index_bits[1];
-            chunk[6] = block.pixel_index_bits[2];
-            chunk[7] = block.pixel_index_bits[3];
-        }
-
-        result
-    }
-}
-
-impl Image<Etc1Block> {
-    pub fn into_etc1_bytes(self) -> Image<u8> {
-        let bytes_per_block = std::mem::size_of::<Etc1Block>() as u32;
-        Image {
-            w: self.w,
-            h: self.h,
-            stride: self.stride * bytes_per_block,
-            y_flipped: self.y_flipped,
-            data: Etc1Block::into_etc1_bytes(self.data),
-        }
     }
 }
 
