@@ -482,9 +482,7 @@ fn decode_endpoints(num_endpoints: usize, bytes: &[u8]) -> Result<Vec<Endpoint>>
     let mut endpoints: Vec<Endpoint> = vec![Endpoint::default(); num_endpoints as usize];
 
     // For each endpoint codebook entry
-    for i in 0..num_endpoints {
-
-        let endpoint = &mut endpoints[i];
+    for endpoint in &mut endpoints {
 
         // Decode the intensity delta Huffman code
         let inten_delta = inten_delta_model.decode_symbol(reader)?;
