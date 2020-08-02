@@ -26,7 +26,31 @@ pub struct DecodedBlock {
 }
 
 #[derive(Copy, Clone)]
-struct ModeEW([u8; 40]);
+struct ModeEW {
+    endpoint_count: u8,
+    weight_count: u8,
+    data: [u8; 40],
+}
+
+impl ModeEW {
+    fn new(endpoint_count: u8, weight_count: u8) -> Self {
+        Self {
+            endpoint_count,
+            weight_count,
+            data: [0; 40],
+        }
+    }
+
+    fn get_endpoints_weights(&self) -> (&[u8], &[u8]) {
+        let combined_count = (self.endpoint_count + self.weight_count) as usize;
+        self.data[..combined_count].split_at(self.endpoint_count as usize)
+    }
+
+    fn get_endpoints_weights_mut(&mut self) -> (&mut [u8], &mut [u8]) {
+        let combined_count = (self.endpoint_count + self.weight_count) as usize;
+        self.data[..combined_count].split_at_mut(self.endpoint_count as usize)
+    }
+}
 
 #[derive(Clone, Copy, Debug)]
 enum ModeData {
@@ -40,7 +64,11 @@ enum ModeData {
 
 impl fmt::Debug for ModeEW {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.debug_list().entries(self.0.iter()).finish()
+        let (e, w) = self.get_endpoints_weights();
+        f.debug_struct("ModeEW")
+            .field("endpoints", &e)
+            .field("weights", &w)
+            .finish()
     }
 }
 
@@ -123,22 +151,20 @@ impl Decoder {
 }
 
 fn block_to_rgba(block: &DecodedBlock) -> [Color32; 16] {
-    let srgb = false;
-    let mut output = [Color32::default(); 16];
-    if let ModeData::Mode8 { r, g, b, a, .. } = block.data {
-        let color = Color32::new(r, g, b, a);
-        output = [color; 16];
-        return output;
-    }
-
-    let mode = MODES[block.mode_index];
-
     let (endpoints, weights): (&[u8], &[u8]) = match block.data {
+        ModeData::Mode8 { r, g, b, a, .. } => {
+            return [Color32::new(r, g, b, a); 16];
+        }
         ModeData::ModeEW(ref data) => {
-            data.0.split_at(mode.endpoint_count as usize)
+            data.get_endpoints_weights()
         }
         _ => unreachable!()
     };
+
+    let srgb = false;
+    let mut output = [Color32::default(); 16];
+
+    let mode = MODES[block.mode_index];
 
     if mode.subset_count == 1 {
         let (e0, e1) = match mode.cem {
@@ -256,7 +282,6 @@ fn decode_block(block_x: u32, block_y: u32, bytes: &[u8]) -> DecodedBlock {
     let mode_code = reader.peek(7) as usize;
     let mode_index = MODE_LUT[mode_code] as usize;
     let mode = MODES[mode_index];
-    let endpoint_count = mode.endpoint_count as usize;
 
     reader.remove(mode.code_size as usize);
 
@@ -321,11 +346,13 @@ fn decode_block(block_x: u32, block_y: u32, bytes: &[u8]) -> DecodedBlock {
             etc1r, etc1g, etc1b,
         }
     } else {
-        let mut data = [0; 40];
+        let endpoint_count = mode.endpoint_count;
+        let weight_count = mode.plane_count * 16;
 
-        let (endpoints, weights) = data.split_at_mut(mode.endpoint_count as usize);
+        let mut data = ModeEW::new(endpoint_count, weight_count);
+        let (endpoints, weights) = data.get_endpoints_weights_mut();
 
-        let quant_endpoints = decode_endpoints(reader, mode.endpoint_range_index, endpoint_count);
+        let quant_endpoints = decode_endpoints(reader, mode.endpoint_range_index, endpoints.len());
         for (quant, unquant) in quant_endpoints.iter().zip(endpoints.iter_mut()) {
             *unquant = unquant_endpoint(*quant, mode.endpoint_range_index);
         }
@@ -340,7 +367,7 @@ fn decode_block(block_x: u32, block_y: u32, bytes: &[u8]) -> DecodedBlock {
 
         decode_weights(reader, mode.weight_bits, plane_count, anchors, weights);
         unquant_weights(weights, mode.weight_bits);
-        ModeData::ModeEW(ModeEW(data))
+        ModeData::ModeEW(data)
     };
 
     DecodedBlock {
