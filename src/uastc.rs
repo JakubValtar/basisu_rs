@@ -501,7 +501,7 @@ fn unquant_endpoint(quant: QuantEndpoint, range_index: u8) -> u8 {
         let c = range.deq_c as u16;
         let d = quant.trit_quint as u16;
         let mut val = d * c + b;
-        val = val ^ a;
+        val ^= a;
         (a & 0x80 | val >> 2) as u8
     }
 }
