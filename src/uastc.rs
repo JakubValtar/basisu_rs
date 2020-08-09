@@ -494,8 +494,8 @@ fn unquant_endpoint(quant: QuantEndpoint, range_index: u8) -> u8 {
         for j in 0..9 {
             b <<= 1;
             let shift = range.deq_b[j];
-            if shift != '0' as u8 {
-                b |= (quant_bits >> (shift - 'a' as u8)) & 0x1;
+            if shift != b'0' {
+                b |= (quant_bits >> (shift - b'a')) & 0x1;
             }
         }
         let c = range.deq_c as u16;
