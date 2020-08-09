@@ -16,8 +16,6 @@ const MAX_ENDPOINT_COUNT: usize = 18;
 
 #[derive(Debug)]
 pub struct DecodedBlock {
-    block_x: u32,
-    block_y: u32,
     mode_index: usize,
     trans_flags: TranscodingFlags,
     pat: u8,
@@ -106,11 +104,11 @@ impl Decoder {
             data: vec![Color32::default(); slice_desc.num_blocks_x as usize * slice_desc.num_blocks_y as usize * 16],
         };
 
-        let block_to_rgba = |block: DecodedBlock| {
+        let block_to_rgba = |block_x: u32, block_y: u32, block: Result<DecodedBlock>| {
             let rgba = block_to_rgba(&block);
             for y in 0..4 {
-                let x_start = 4 * block.block_x as usize;
-                let image_start = (4 * block.block_y as usize + y) * image.stride as usize + x_start;
+                let x_start = 4 * block_x as usize;
+                let image_start = (4 * block_y as usize + y) * image.stride as usize + x_start;
                 image.data[image_start..image_start + 4].copy_from_slice(&rgba[4 * y..4 * y + 4]);
             }
         };
@@ -121,7 +119,7 @@ impl Decoder {
     }
 
     pub(crate) fn decode_blocks<F>(&self, slice_desc: &SliceDesc, bytes: &[u8], mut f: F) -> Result<()>
-        where F: FnMut(DecodedBlock)
+        where F: FnMut(u32, u32, Result<DecodedBlock>)
     {
         let num_blocks_x = slice_desc.num_blocks_x as u32;
         let num_blocks_y = slice_desc.num_blocks_y as u32;
@@ -142,8 +140,8 @@ impl Decoder {
 
         for block_y in 0..num_blocks_y {
             for block_x in 0..num_blocks_x {
-                let block = decode_block(block_x, block_y, &bytes[block_offset..block_offset + BLOCK_SIZE]);
-                f(block);
+                let block = decode_block(&bytes[block_offset..block_offset + BLOCK_SIZE]);
+                f(block_x, block_y, block);
                 block_offset += BLOCK_SIZE;
             }
         }
@@ -152,7 +150,12 @@ impl Decoder {
     }
 }
 
-fn block_to_rgba(block: &DecodedBlock) -> [Color32; 16] {
+fn block_to_rgba(block: &Result<DecodedBlock>) -> [Color32; 16] {
+    let block = match block {
+        Ok(block) => block,
+        _ => return [INVALID_BLOCK_COLOR; 16],
+    };
+
     let (endpoints, weights): (&[u8], &[u8]) = match block.data {
         ModeData::Mode8 { r, g, b, a, .. } => {
             return [Color32::new(r, g, b, a); 16];
@@ -276,7 +279,7 @@ fn astc_interpolate(mut l: u32, mut h: u32, w: u32, srgb: bool) -> u8 {
     return (k >> 8) as u8;
 }
 
-fn decode_block(block_x: u32, block_y: u32, bytes: &[u8]) -> DecodedBlock {
+fn decode_block(bytes: &[u8]) -> Result<DecodedBlock> {
 
     let reader = &mut BitReaderLSB::new(bytes);
 
@@ -315,19 +318,7 @@ fn decode_block(block_x: u32, block_y: u32, bytes: &[u8]) -> DecodedBlock {
     };
 
     if !pat_valid {
-        // TODO: This is not ideal, also check that all the values below are valid
-        return DecodedBlock {
-            block_x, block_y,
-            mode_index: 8,
-            trans_flags: TranscodingFlags::default(),
-            compsel: 0,
-            pat: 0,
-            data: ModeData::Mode8 {
-                r: 255, g: 0, b: 255, a: 255,
-                etc1i: 0, etc1s: 0,
-                etc1r: 0b11111, etc1g: 0, etc1b: 0b11111,
-            }
-        };
+        return Err("block pattern is not valid".into());
     }
 
     let data = if mode_index == 8 {
@@ -371,9 +362,9 @@ fn decode_block(block_x: u32, block_y: u32, bytes: &[u8]) -> DecodedBlock {
         ModeData::ModeEW(data)
     };
 
-    DecodedBlock {
-        block_x, block_y, mode_index, trans_flags, compsel, pat, data,
-    }
+    Ok(DecodedBlock {
+        mode_index, trans_flags, compsel, pat, data,
+    })
 }
 
 fn decode_trans_flags(reader: &mut BitReaderLSB, mode_index: usize) -> TranscodingFlags {
@@ -401,6 +392,8 @@ fn decode_trans_flags(reader: &mut BitReaderLSB, mode_index: usize) -> Transcodi
     }
     flags
 }
+
+const INVALID_BLOCK_COLOR: Color32 = Color32::new(0xFF, 0, 0xFF, 0xFF);
 
 const CEM_RGB: u8 = 8;
 const CEM_RGBA: u8 = 12;
@@ -726,9 +719,11 @@ mod tests {
     fn test_uastc_mode(mode: usize) {
         let mut output = [0; 16];
         for (block, rgba) in TEST_BLOCK_DATA.iter().zip(TEST_RGBA_DATA.iter()) {
-            let decoded_block = decode_block(0, 0, block);
-            if decoded_block.mode_index != mode {
-                continue;
+            let decoded_block = decode_block(block);
+            if let Ok(decoded_block) = &decoded_block {
+                if decoded_block.mode_index != mode {
+                    continue;
+                }
             }
             let decoded_rgba = block_to_rgba(&decoded_block);
             for (i, actual) in decoded_rgba.iter().enumerate() {
