@@ -160,7 +160,6 @@ fn block_to_rgba(block: &DecodedBlock) -> [Color32; 16] {
         ModeData::ModeEW(ref data) => {
             data.get_endpoints_weights()
         }
-        _ => unreachable!()
     };
 
     let srgb = false;
