@@ -104,7 +104,8 @@ impl Decoder {
             data: vec![Color32::default(); slice_desc.num_blocks_x as usize * slice_desc.num_blocks_y as usize * 16],
         };
 
-        let block_to_rgba = |block_x: u32, block_y: u32, block: Result<DecodedBlock>| {
+        let block_to_rgba = |block_x: u32, block_y: u32, _block_offset: usize, block_bytes: &[u8]| {
+            let block = decode_block(&block_bytes);
             let rgba = block_to_rgba(&block);
             for y in 0..4 {
                 let x_start = 4 * block_x as usize;
@@ -113,13 +114,13 @@ impl Decoder {
             }
         };
 
-        self.decode_blocks(slice_desc, bytes, block_to_rgba)?;
+        self.iterate_blocks(slice_desc, bytes, block_to_rgba)?;
 
         Ok(image)
     }
 
-    pub(crate) fn decode_blocks<F>(&self, slice_desc: &SliceDesc, bytes: &[u8], mut f: F) -> Result<()>
-        where F: FnMut(u32, u32, Result<DecodedBlock>)
+    pub(crate) fn iterate_blocks<F>(&self, slice_desc: &SliceDesc, bytes: &[u8], mut f: F) -> Result<()>
+        where F: FnMut(u32, u32, usize, &[u8])
     {
         let num_blocks_x = slice_desc.num_blocks_x as u32;
         let num_blocks_y = slice_desc.num_blocks_y as u32;
@@ -140,8 +141,7 @@ impl Decoder {
 
         for block_y in 0..num_blocks_y {
             for block_x in 0..num_blocks_x {
-                let block = decode_block(&bytes[block_offset..block_offset + BLOCK_SIZE]);
-                f(block_x, block_y, block);
+                f(block_x, block_y, block_offset, &bytes[block_offset..block_offset + BLOCK_SIZE]);
                 block_offset += BLOCK_SIZE;
             }
         }
