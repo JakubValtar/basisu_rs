@@ -285,6 +285,11 @@ fn decode_block(bytes: &[u8]) -> Result<DecodedBlock> {
 
     let mode_code = reader.peek(7) as usize;
     let mode_index = MODE_LUT[mode_code] as usize;
+
+    if mode_index >= 19 {
+        return Err("invalid mode index".into());
+    }
+
     let mode = MODES[mode_index];
 
     reader.remove(mode.code_size as usize);
