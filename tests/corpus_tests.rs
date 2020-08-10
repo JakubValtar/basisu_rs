@@ -67,6 +67,23 @@ fn test_uastc_to_unpacked() {
 }
 
 #[test]
+fn test_uastc_to_astc() {
+    let base = PathBuf::from(UASTC_CORPUS);
+    for dir in [DIR_RGB, DIR_RGBA].iter() {
+        let base = &base.join(dir);
+        let textures = list_textures(&base).unwrap();
+        let count = textures.len();
+        textures.iter().enumerate().for_each(|(i, texture)| {
+            let case = TestCase::new(&base, &texture);
+            let decoded = basisu::read_to_rgba(&case.basis).unwrap();
+            assert_eq!(decoded.len(), 1);
+            println!("{} {}/{} {}", dir, i, count, texture);
+            compare_ktx(&case.astc_rgba, &decoded[0]).unwrap();
+        });
+    }
+}
+
+#[test]
 fn test_etc1s_to_unpacked() {
     let base = PathBuf::from(ETC1S_CORPUS);
     for dir in [DIR_RGB, DIR_RGBA].iter() {
