@@ -8,8 +8,6 @@ use ktx::header::KtxInfo;
 const UASTC_CORPUS: &str = "textures\\uastc\\";
 const ETC1S_CORPUS: &str = "textures\\etc1s\\";
 
-const DIR_L: &str = "l";
-const DIR_LA: &str = "la";
 const DIR_RGB: &str = "rgb";
 const DIR_RGBA: &str = "rgba";
 
@@ -54,7 +52,7 @@ impl TestCase {
 #[test]
 fn test_uastc_to_unpacked() {
     let base = PathBuf::from(UASTC_CORPUS);
-    for dir in [DIR_L, DIR_LA, DIR_RGB, DIR_RGBA].iter() {
+    for dir in [DIR_RGB, DIR_RGBA].iter() {
         let base = &base.join(dir);
         let textures = list_textures(&base).unwrap();
         let count = textures.len();
@@ -71,7 +69,7 @@ fn test_uastc_to_unpacked() {
 #[test]
 fn test_etc1s_to_unpacked() {
     let base = PathBuf::from(ETC1S_CORPUS);
-    for dir in [DIR_L, DIR_LA, DIR_RGB, DIR_RGBA].iter() {
+    for dir in [DIR_RGB, DIR_RGBA].iter() {
         let base = &base.join(dir);
         let textures = list_textures(&base).unwrap();
         let count = textures.len();
@@ -89,7 +87,7 @@ fn test_etc1s_to_unpacked() {
 #[test]
 fn test_etc1s_to_etc1() {
     let base = PathBuf::from(ETC1S_CORPUS);
-    for dir in [DIR_L, DIR_LA, DIR_RGB, DIR_RGBA].iter() {
+    for dir in [DIR_RGB, DIR_RGBA].iter() {
         let base = &base.join(dir);
         let textures = list_textures(&base).unwrap();
         let count = textures.len();
