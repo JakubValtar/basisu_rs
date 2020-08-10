@@ -8,6 +8,7 @@ use crate::{
         SliceDesc,
     },
     bitreader::BitReaderLSB,
+    bitwriter::BitWriterLSB,
 };
 
 use std::fmt;
@@ -118,6 +119,28 @@ impl Decoder {
         };
 
         self.iterate_blocks(slice_desc, bytes, block_to_rgba)?;
+
+        Ok(image)
+    }
+
+    pub(crate) fn transcode_to_astc(&self, slice_desc: &SliceDesc, bytes: &[u8]) -> Result<Image<u8>> {
+
+        const ASTC_BLOCK_SIZE: usize = 16;
+
+        let mut image = Image {
+            w: slice_desc.orig_width as u32,
+            h: slice_desc.orig_height as u32,
+            stride: ASTC_BLOCK_SIZE as u32 * slice_desc.num_blocks_x as u32,
+            y_flipped: self.y_flipped,
+            data: vec![0u8; slice_desc.num_blocks_x as usize * slice_desc.num_blocks_y as usize * ASTC_BLOCK_SIZE],
+        };
+
+        let block_to_astc = |_block_x: u32, _block_y: u32, block_offset: usize, block_bytes: &[u8]| {
+            let block = decode_block(&block_bytes);
+            block_to_astc(block.as_ref().ok(), &mut image.data[block_offset..block_offset + ASTC_BLOCK_SIZE]);
+        };
+
+        self.iterate_blocks(slice_desc, bytes, block_to_astc)?;
 
         Ok(image)
     }
@@ -266,6 +289,44 @@ fn block_to_rgba(block: Option<&DecodedBlock>) -> [Color32; 16] {
     }
 
     output
+}
+
+fn block_to_astc(block: Option<&DecodedBlock>, bytes: &mut [u8]) {
+    let block = match block {
+        Some(block) => block,
+        _ => {
+            bytes.iter_mut().for_each(|b| *b = 0);
+            return;
+        }
+    };
+
+    let writer = &mut BitWriterLSB::new(bytes);
+
+    let (endpoints, weights): (&[u8], &[u8]) = match block.data {
+        ModeData::Mode8 { r, g, b, a, .. } => {
+            // 0..=8: void-extent signature
+            // 9: 0 means endpoints are UNORM16, 1 means FP16
+            // 10..=11: reserved, must me 1
+            writer.write_u16(12, 0b1101_1111_1100);
+
+            // 4x 13 bits of void extent coordinates, we don't calculate
+            // them yet so we set them to all 1s to get them ignored
+            writer.write_u32(20, 0x000F_FFFF);
+            writer.write_u32(32, 0xFFFF_FFFF);
+
+            writer.write_u16(16, (r as u16) << 8 | r as u16);
+            writer.write_u16(16, (g as u16) << 8 | g as u16);
+            writer.write_u16(16, (b as u16) << 8 | b as u16);
+            writer.write_u16(16, (a as u16) << 8 | a as u16);
+
+            return;
+        }
+        ModeData::ModeEW(ref data) => {
+            data.get_endpoints_weights()
+        }
+    };
+
+    unimplemented!();
 }
 
 fn astc_interpolate(mut l: u32, mut h: u32, w: u32, srgb: bool) -> u8 {
