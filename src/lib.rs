@@ -121,7 +121,7 @@ impl Image<Color32> {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 struct Color32([u8; 4]);
 
 impl Color32 {
