@@ -16,6 +16,9 @@ use std::fmt;
 #[cfg(test)]
 mod tests_to_rgba;
 
+#[cfg(test)]
+mod tests_to_astc;
+
 const MAX_ENDPOINT_COUNT: usize = 18;
 
 #[derive(Debug)]
