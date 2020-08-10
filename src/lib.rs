@@ -4,6 +4,7 @@ use std::path::Path;
 
 mod huffman;
 mod bitreader;
+mod bitwriter;
 mod bytereader;
 mod etc1s;
 mod uastc;
