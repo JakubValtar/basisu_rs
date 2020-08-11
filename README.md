@@ -24,13 +24,39 @@ Sample textures were copied from the official [basis_universal repo](https://git
 - [x] Writing out ETC1 textures
 - [x] Lookup tables for faster Huffman decoding
 - [x] Decoding UASTC
-- [ ] Test on more textures
+- [x] Test on more textures
 - [ ] Check for invalid input data
 - [ ] Transcoding UASTC into other formats
+- [ ] Cubemap support
+- [ ] Video support
 
 ## Log
 
 Here I'm writing a log of what I did, problems I encountered, and what I learned. Have anything to say or discuss? I'd be happy to hear from you, please send me a DM or @ me on Twitter [@JakubValtar](https://twitter.com/jakubvaltar).
+
+### 11-08-2020
+
+
+
+### 10-08-2020
+
+I refactored tests and generated a set of 32 test blocks for each mode, from UASTC to ASTC and from UASTC to RGBA. This is going to be a big help when implementing transcoding to ASTC, since the block tests are fast, I can choose which modes to test, and I can easily compare expected and actual output. Compare this to testing on the texture set I put together earlier, which can take around a minute and only tells me if the whole texture got transcoded correctly (though I could improve this if I write a comparison function for each compressed format). The texture set is much larger though and is good for running a lot of variety through the transcoder, so it'll be useful in a later stage for finding more subtle bugs which my limited block set didn't find.
+
+Next I wrote a bit writer to make outputting ASTC data easier, since ASTC uses a lot of differently sized fields.
+
+To finally kick off ASTC transcoding, I implemented mode 8 (void-extent). Block tests for mode 8 are passing, which is a good sign.
+
+### 02-08-2020
+
+I put together a set of test images from my visual inspiration folder, around 200 images total. I used ImageMagick to add an alpha channel to all images (it's just the luminanace of the RGB image rotated 180°), from these RGBA images I created RGB, Luminanace-Alpha and Luminance images by making them grayscale and removing the alpha. I encoded all images to `.basis` files using the reference encoder `basisu.exe`, once using ETC1S mode and once using UASTC mode. Then I unpacked the `.basis` files using `basisu.exe`. It helpfully outputs a set KTX files which contain the texture data transcoded into various formats, like ASTC, BC7, ETC1 and ETC2. The KTX files are paired with matching PNG files, showing how they look after decoding.
+
+I fixed a minor bug in ETC1S to ETC1 transcoding, turns out I allocated sixteen times more space for the ETC1 texture than needed and the tail was just zeros. Otherwise I didn't find any problems in ETC1S decoding and transcoding to ETC1!
+
+I found a minor problem in decoding UASTC too, the dimensions of the decoded texture were based on the number of the blocks and not the original texture size stored in the header. This makes a difference when the original size is not a multiple of 4, because the last column/row of the 4x4 blocks needs to be cropped. I already implemanted the cropping when I was writing ETC1S part, I only had to set the right dimensions in the header of the output image.
+
+I had a problem getting the refrence encoder to use all block modes. I had to use `-uastc_level 3` to set a higher quality (default is 2), then it started producing blocks with multiple subsets (like mode 2, 3, 7) and higher weight precision (mode 18).
+
+Last but not least, I refactored UASTC decoding in preparation for ASTC trancoding implementation. I also made some minor changes to remove a bunch of clippy warnings.
 
 ### 18-07-2020
 
@@ -48,7 +74,7 @@ I was following the Khronos spec for calculating texel colors from endpoints and
 
 With mode 0 working, it was easy to add other RGB modes which have a single plane and a single subset, just different ranges of endpoints/weights (these are 1, 5, 18). After this, adding RGBA modes (10, 12, 14) and Luminance+Alpha modes (15) was pretty trivial, most of the code is the same, except for calculating base colors.
 
-The next step was adding dual-plane modes (6, 11, 13, 17). Dual-plane means that each texel now has two weights, the second weight being used for one component in the block. E.g. red, green and alpha can use one weight, while blue uses the other one. I had to make a small change to weight decoding to decode the second set of weights correctly. I got a little bit confused by anchor weight indices, but it turned out they are only used in modes with multiple subsets, not multiple planes. Other than that, adding second set of weights to the existing block decoding was easy.
+The next step was adding dual-plane modes (6, 11, 13, 17). Dual-plane means that each texel now has two weights, the second weight being used for one component in the block. E.g. red, green and alpha can use one weight, while blue uses the other one. I had to make a small change to weight decoding to decode the second set of weights correctly. I got a little bit confused by anchor weight indices, but it turned out they are only used in modes with multiple subsets, not multiple planes. Other than that, adding a second set of weights to the existing block decoding was easy.
 
 I struggled a bit with mode 17, I forgot that it does not have a `compsel` field to select which component uses the second set of weights. My code defaulted to 0 for Red, and it caused some red/cyan artifacts in mode 17 blocks. After a while I found in the spec that mode 17 has always `compsel = 3` for Alpha. It makes sense, it is a grayscale mode, so using any other value would cause coloration, but I didn't realize it at the time. I was using the 64 example blocks from the UASTC spec as a basic test that my code is doing the right thing. After the trouble with mode 17, I found out that there are no blocks with mode 7, 16, or 17 in the example set. I'm planning to add more testing data soon.
 
