@@ -4,11 +4,6 @@ fn test_uastc_mode(mode: usize) {
     let test_blocks = TEST_DATA_UASTC_RGBA[mode];
     for (block, rgba) in test_blocks.iter() {
         let decoded_block = decode_block(block);
-        if let Ok(decoded_block) = &decoded_block {
-            if decoded_block.mode_index != mode {
-                continue;
-            }
-        }
         let decoded_rgba = block_to_rgba(decoded_block.as_ref().ok());
         let mut rgba_c32 = [Color32::default(); 16];
         for i in 0..16 {
