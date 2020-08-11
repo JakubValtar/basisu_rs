@@ -3,13 +3,12 @@ use super::*;
 fn test_uastc_mode(mode: usize) {
     let test_blocks = TEST_DATA_UASTC_RGBA[mode];
     for (block, rgba) in test_blocks.iter() {
-        let decoded_block = decode_block(block);
-        let decoded_rgba = block_to_rgba(decoded_block.as_ref().ok());
+        let decoded_rgba = decode_block_to_rgba(block);
         let mut rgba_c32 = [Color32::default(); 16];
         for i in 0..16 {
             rgba_c32[i] = Color32::from_rgba_u32(rgba[i]);
         }
-        assert_eq!(&decoded_rgba, &rgba_c32, "\n{:?}\n{:?}\n{:?}", decoded_block, decoded_rgba, rgba_c32);
+        assert_eq!(&decoded_rgba, &rgba_c32, "\n{:?}\n{:?}", decoded_rgba, rgba_c32);
     }
 }
 
