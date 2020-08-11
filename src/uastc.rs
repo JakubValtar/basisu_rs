@@ -309,7 +309,7 @@ fn block_to_astc(block: Option<&DecodedBlock>, bytes: &mut [u8]) {
         ModeData::Mode8 { r, g, b, a, .. } => {
             // 0..=8: void-extent signature
             // 9: 0 means endpoints are UNORM16, 1 means FP16
-            // 10..=11: reserved, must me 1
+            // 10..=11: reserved, must be 1
             writer.write_u16(12, 0b1101_1111_1100);
 
             // 4x 13 bits of void extent coordinates, we don't calculate
