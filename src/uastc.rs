@@ -21,25 +21,24 @@ mod tests_to_astc;
 
 const MAX_ENDPOINT_COUNT: usize = 18;
 
-#[derive(Debug)]
-pub struct DecodedBlock {
-    mode_index: usize,
+#[derive(Copy, Clone)]
+struct ModeEW {
+    mode: Mode,
     trans_flags: TranscodingFlags,
     pat: u8,
     compsel: u8,
-    data: ModeData,
-}
-
-#[derive(Copy, Clone)]
-struct ModeEW {
     endpoint_count: u8,
     weight_count: u8,
     data: [u8; 40],
 }
 
 impl ModeEW {
-    fn new(endpoint_count: u8, weight_count: u8) -> Self {
+    fn new(mode: Mode, trans_flags: TranscodingFlags, pat: u8, compsel: u8, endpoint_count: u8, weight_count: u8) -> Self {
         Self {
+            mode,
+            trans_flags,
+            pat,
+            compsel,
             endpoint_count,
             weight_count,
             data: [0; 40],
@@ -61,9 +60,8 @@ impl ModeEW {
 enum ModeData {
     ModeEW(ModeEW),
     Mode8 {
-        r: u8, g: u8, b: u8, a: u8,
-        etc1i: u8, etc1s: u8,
-        etc1r: u8, etc1g: u8, etc1b: u8,
+        rgba: Color32,
+        etc1_flags: Mode8Etc1Flags,
     },
 }
 
@@ -75,6 +73,16 @@ impl fmt::Debug for ModeEW {
             .field("weights", &w)
             .finish()
     }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct Mode8Etc1Flags {
+    etc1d: bool,
+    etc1i: u8,
+    etc1s: u8,
+    etc1r: u8,
+    etc1g: u8,
+    etc1b: u8,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -179,25 +187,23 @@ impl Decoder {
     }
 }
 
-fn block_to_rgba(block: Option<&DecodedBlock>) -> [Color32; 16] {
+fn block_to_rgba(block: Option<&ModeData>) -> [Color32; 16] {
     let block = match block {
         Some(block) => block,
         _ => return [INVALID_BLOCK_COLOR; 16],
     };
 
-    let (endpoints, weights): (&[u8], &[u8]) = match block.data {
-        ModeData::Mode8 { r, g, b, a, .. } => {
-            return [Color32::new(r, g, b, a); 16];
-        }
-        ModeData::ModeEW(ref data) => {
-            data.get_endpoints_weights()
-        }
+    let block = match block {
+        ModeData::Mode8 { rgba, .. } => return [*rgba; 16],
+        ModeData::ModeEW(ref data) => data,
     };
+
+    let (endpoints, weights) = block.get_endpoints_weights();
 
     let srgb = false;
     let mut output = [Color32::default(); 16];
 
-    let mode = MODES[block.mode_index];
+    let mode = block.mode;
 
     if mode.subset_count == 1 {
         let (e0, e1) = match mode.cem {
@@ -269,7 +275,7 @@ fn block_to_rgba(block: Option<&DecodedBlock>) -> [Color32; 16] {
             _ => unreachable!()
         }
 
-        let pattern = match (block.mode_index, mode.subset_count) {
+        let pattern = match (mode.id, mode.subset_count) {
             // Mode 7 has 2 subsets, but needs 2/3 patern table
             (7, _) => PATTERNS_2_3[block.pat as usize],
             (_, 2) => PATTERNS_2[block.pat as usize],
@@ -294,7 +300,7 @@ fn block_to_rgba(block: Option<&DecodedBlock>) -> [Color32; 16] {
     output
 }
 
-fn block_to_astc(block: Option<&DecodedBlock>, bytes: &mut [u8]) {
+fn block_to_astc(block: Option<&ModeData>, bytes: &mut [u8]) {
     let block = match block {
         Some(block) => block,
         _ => {
@@ -305,8 +311,8 @@ fn block_to_astc(block: Option<&DecodedBlock>, bytes: &mut [u8]) {
 
     let writer = &mut BitWriterLSB::new(bytes);
 
-    let (endpoints, weights): (&[u8], &[u8]) = match block.data {
-        ModeData::Mode8 { r, g, b, a, .. } => {
+    let block = match block {
+        ModeData::Mode8 { rgba, .. } => {
             // 0..=8: void-extent signature
             // 9: 0 means endpoints are UNORM16, 1 means FP16
             // 10..=11: reserved, must be 1
@@ -317,16 +323,16 @@ fn block_to_astc(block: Option<&DecodedBlock>, bytes: &mut [u8]) {
             writer.write_u32(20, 0x000F_FFFF);
             writer.write_u32(32, 0xFFFF_FFFF);
 
-            writer.write_u16(16, (r as u16) << 8 | r as u16);
-            writer.write_u16(16, (g as u16) << 8 | g as u16);
-            writer.write_u16(16, (b as u16) << 8 | b as u16);
-            writer.write_u16(16, (a as u16) << 8 | a as u16);
+            let (r, g, b, a) = (rgba[0] as u16, rgba[1] as u16, rgba[2] as u16, rgba[3] as u16);
+
+            writer.write_u16(16, r << 8 | r);
+            writer.write_u16(16, g << 8 | g);
+            writer.write_u16(16, b << 8 | b);
+            writer.write_u16(16, a << 8 | a);
 
             return;
         }
-        ModeData::ModeEW(ref data) => {
-            data.get_endpoints_weights()
-        }
+        ModeData::ModeEW(data) => data,
     };
 
     unimplemented!();
@@ -346,10 +352,55 @@ fn astc_interpolate(mut l: u32, mut h: u32, w: u32, srgb: bool) -> u8 {
     return (k >> 8) as u8;
 }
 
-fn decode_block(bytes: &[u8]) -> Result<DecodedBlock> {
+fn decode_block(bytes: &[u8]) -> Result<ModeData> {
 
     let reader = &mut BitReaderLSB::new(bytes);
 
+    let mode = decode_mode(reader)?;
+
+    if mode.id == 8 {
+        let rgba = decode_mode8_rgba(reader);
+        let etc1_flags = decode_mode8_etc1_flags(reader);
+
+        Ok(ModeData::Mode8 {
+            rgba,
+            etc1_flags,
+        })
+    } else {
+        let trans_flags = decode_trans_flags(reader, mode);
+
+        // Component selector for dual-plane modes
+        let compsel = decode_compsel(reader, mode);
+
+        // Pattern id for modes with multiple subsets
+        let pat = decode_pattern_index(reader, mode)?;
+
+        let endpoint_count = mode.endpoint_count;
+        let weight_count = mode.plane_count * 16;
+
+        let mut data = ModeEW::new(mode, trans_flags, pat, compsel, endpoint_count, weight_count);
+        let (endpoints, weights) = data.get_endpoints_weights_mut();
+
+        let quant_endpoints = decode_endpoints(reader, mode.endpoint_range_index, endpoints.len());
+        for (quant, unquant) in quant_endpoints.iter().zip(endpoints.iter_mut()) {
+            *unquant = unquant_endpoint(*quant, mode.endpoint_range_index);
+        }
+        let plane_count = mode.plane_count as usize;
+
+        let anchors: &[u8] = match (mode.id, mode.subset_count) {
+            (7, _) => &PATTERNS_2_3_ANCHORS[pat as usize],
+            (_, 2) => &PATTERNS_2_ANCHORS[pat as usize],
+            (_, 3) => &PATTERNS_3_ANCHORS[pat as usize],
+            _ => &[0],
+        };
+
+        decode_weights(reader, mode.weight_bits, plane_count, anchors, weights);
+        unquant_weights(weights, mode.weight_bits);
+        Ok(ModeData::ModeEW(data))
+    }
+}
+
+fn decode_mode(reader: &mut BitReaderLSB) -> Result<Mode> {
     let mode_code = reader.peek(7) as usize;
     let mode_index = MODE_LUT[mode_code] as usize;
 
@@ -361,101 +412,72 @@ fn decode_block(bytes: &[u8]) -> Result<DecodedBlock> {
 
     reader.remove(mode.code_size as usize);
 
-    let mut trans_flags = decode_trans_flags(reader, mode_index);
+    Ok(mode)
+}
 
-    // Component selector for dual-plane modes
-    let compsel = match (mode.plane_count, mode.cem) {
-        (2, CEM_RGB) | (2, CEM_RGBA) => {
-            reader.read_u8(2)
-        },
+fn decode_compsel(reader: &mut BitReaderLSB, mode: Mode) -> u8 {
+    match (mode.plane_count, mode.cem) {
         // LA modes always have component selector 3 for alpha
         (2, CEM_LA) => 3,
+        (2, _) => reader.read_u8(2),
         _ => 0,
-    };
+    }
+}
 
-    // Pattern id for modes with multiple subsets
-    let pat = match (mode_index, mode.subset_count) {
-        (7, _) => reader.read_u8(5),
-        (_, 2) => reader.read_u8(5),
-        (_, 3) => reader.read_u8(4),
-        _ => 0
+fn decode_pattern_index(reader: &mut BitReaderLSB, mode: Mode) -> Result<u8> {
+    if mode.subset_count == 1 {
+        return Ok(0);
+    }
+
+    let (pattern_index, pattern_count) = match (mode.id, mode.subset_count) {
+        (7, _) => (reader.read_u8(5), TOTAL_BC7_3_ASTC2_COMMON_PARTITIONS),
+        (_, 2) => (reader.read_u8(5), TOTAL_ASTC_BC7_COMMON_PARTITIONS2),
+        (_, 3) => (reader.read_u8(4), TOTAL_ASTC_BC7_COMMON_PARTITIONS3),
+        _ => unreachable!(),
     };
 
     // Check pattern bounds
-    let pat_valid = match (mode_index, mode.subset_count) {
-        (7, _) => (pat as usize) < TOTAL_BC7_3_ASTC2_COMMON_PARTITIONS,
-        (_, 2) => (pat as usize) < TOTAL_ASTC_BC7_COMMON_PARTITIONS2,
-        (_, 3) => (pat as usize) < TOTAL_ASTC_BC7_COMMON_PARTITIONS3,
-        _ => pat == 0,
-    };
-
-    if !pat_valid {
-        return Err("block pattern is not valid".into());
-    }
-
-    let data = if mode_index == 8 {
-        let r = reader.read_u8(8);
-        let g = reader.read_u8(8);
-        let b = reader.read_u8(8);
-        let a = reader.read_u8(8);
-        trans_flags.etc1d = reader.read_bool();
-        let etc1i = reader.read_u8(3);
-        let etc1s = reader.read_u8(2);
-        let etc1r = reader.read_u8(5);
-        let etc1g = reader.read_u8(5);
-        let etc1b = reader.read_u8(5);
-        ModeData::Mode8 {
-            r, g, b, a,
-            etc1i, etc1s,
-            etc1r, etc1g, etc1b,
-        }
+    if (pattern_index as usize) < pattern_count {
+        Ok(pattern_index)
     } else {
-        let endpoint_count = mode.endpoint_count;
-        let weight_count = mode.plane_count * 16;
-
-        let mut data = ModeEW::new(endpoint_count, weight_count);
-        let (endpoints, weights) = data.get_endpoints_weights_mut();
-
-        let quant_endpoints = decode_endpoints(reader, mode.endpoint_range_index, endpoints.len());
-        for (quant, unquant) in quant_endpoints.iter().zip(endpoints.iter_mut()) {
-            *unquant = unquant_endpoint(*quant, mode.endpoint_range_index);
-        }
-        let plane_count = mode.plane_count as usize;
-
-        let anchors: &[u8] = match (mode_index, mode.subset_count) {
-            (7, _) => &PATTERNS_2_3_ANCHORS[pat as usize],
-            (_, 2) => &PATTERNS_2_ANCHORS[pat as usize],
-            (_, 3) => &PATTERNS_3_ANCHORS[pat as usize],
-            _ => &[0],
-        };
-
-        decode_weights(reader, mode.weight_bits, plane_count, anchors, weights);
-        unquant_weights(weights, mode.weight_bits);
-        ModeData::ModeEW(data)
-    };
-
-    Ok(DecodedBlock {
-        mode_index, trans_flags, compsel, pat, data,
-    })
+        Err("block pattern is not valid".into())
+    }
 }
 
-fn decode_trans_flags(reader: &mut BitReaderLSB, mode_index: usize) -> TranscodingFlags {
-    let mut flags = TranscodingFlags::default();
-    if mode_index == 8 {
-        return flags; // Mode 8 has a different field order, flags will be read into this struct later
-    }
+fn decode_mode8_rgba(reader: &mut BitReaderLSB) -> Color32 {
+    Color32::new(
+        reader.read_u8(8), // R
+        reader.read_u8(8), // G
+        reader.read_u8(8), // B
+        reader.read_u8(8), // A
+    )
+}
 
-    let mode = MODES[mode_index];
+fn decode_mode8_etc1_flags(reader: &mut BitReaderLSB) -> Mode8Etc1Flags {
+    Mode8Etc1Flags {
+        etc1d: reader.read_bool(),
+        etc1i: reader.read_u8(3),
+        etc1s: reader.read_u8(2),
+        etc1r: reader.read_u8(5),
+        etc1g: reader.read_u8(5),
+        etc1b: reader.read_u8(5),
+    }
+}
+
+fn decode_trans_flags(reader: &mut BitReaderLSB, mode: Mode) -> TranscodingFlags {
+    assert_ne!(mode.id, 8);
+
+    let mut flags = TranscodingFlags::default();
 
     flags.bc1h0 = reader.read_bool();
-    if mode_index < 10 || mode_index > 12 {
+    if mode.id < 10 || mode.id > 12 {
         flags.bc1h1 = reader.read_bool();
     }
     flags.etc1f = reader.read_bool();
     flags.etc1d = reader.read_bool();
     flags.etc1i0 = reader.read_u8(3);
     flags.etc1i1 = reader.read_u8(3);
-    if mode_index < 10 || mode_index > 12 {
+    if mode.id < 10 || mode.id > 12 {
         flags.etc1bias = reader.read_u8(5);
     }
     if mode.cem == CEM_RGBA || mode.cem == CEM_LA {
@@ -473,6 +495,7 @@ const CEM_LA: u8 = 4;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Mode {
+    id: u8,
     code_size: u8,
     endpoint_range_index: u8,
     endpoint_count: u8,
@@ -484,35 +507,35 @@ pub struct Mode {
 
 static MODES: [Mode; 20] = [
     // CEM 8 - RGB Direct
-    Mode { code_size: 4, endpoint_range_index: 19, endpoint_count:  6, weight_bits: 4, plane_count: 1, subset_count: 1, cem: CEM_RGB }, //  0
-    Mode { code_size: 6, endpoint_range_index: 20, endpoint_count:  6, weight_bits: 2, plane_count: 1, subset_count: 1, cem: CEM_RGB }, //  1
-    Mode { code_size: 5, endpoint_range_index:  8, endpoint_count: 12, weight_bits: 3, plane_count: 1, subset_count: 2, cem: CEM_RGB }, //  2
-    Mode { code_size: 5, endpoint_range_index:  7, endpoint_count: 18, weight_bits: 2, plane_count: 1, subset_count: 3, cem: CEM_RGB }, //  3
-    Mode { code_size: 5, endpoint_range_index: 12, endpoint_count: 12, weight_bits: 2, plane_count: 1, subset_count: 2, cem: CEM_RGB }, //  4
-    Mode { code_size: 5, endpoint_range_index: 20, endpoint_count:  6, weight_bits: 3, plane_count: 1, subset_count: 1, cem: CEM_RGB }, //  5
-    Mode { code_size: 5, endpoint_range_index: 18, endpoint_count:  6, weight_bits: 2, plane_count: 2, subset_count: 1, cem: CEM_RGB }, //  6
-    Mode { code_size: 5, endpoint_range_index: 12, endpoint_count: 12, weight_bits: 2, plane_count: 1, subset_count: 2, cem: CEM_RGB }, //  7
+    Mode { id:  0, code_size: 4, endpoint_range_index: 19, endpoint_count:  6, weight_bits: 4, plane_count: 1, subset_count: 1, cem: CEM_RGB },
+    Mode { id:  1, code_size: 6, endpoint_range_index: 20, endpoint_count:  6, weight_bits: 2, plane_count: 1, subset_count: 1, cem: CEM_RGB },
+    Mode { id:  2, code_size: 5, endpoint_range_index:  8, endpoint_count: 12, weight_bits: 3, plane_count: 1, subset_count: 2, cem: CEM_RGB },
+    Mode { id:  3, code_size: 5, endpoint_range_index:  7, endpoint_count: 18, weight_bits: 2, plane_count: 1, subset_count: 3, cem: CEM_RGB },
+    Mode { id:  4, code_size: 5, endpoint_range_index: 12, endpoint_count: 12, weight_bits: 2, plane_count: 1, subset_count: 2, cem: CEM_RGB },
+    Mode { id:  5, code_size: 5, endpoint_range_index: 20, endpoint_count:  6, weight_bits: 3, plane_count: 1, subset_count: 1, cem: CEM_RGB },
+    Mode { id:  6, code_size: 5, endpoint_range_index: 18, endpoint_count:  6, weight_bits: 2, plane_count: 2, subset_count: 1, cem: CEM_RGB },
+    Mode { id:  7, code_size: 5, endpoint_range_index: 12, endpoint_count: 12, weight_bits: 2, plane_count: 1, subset_count: 2, cem: CEM_RGB },
 
     // Void-Extent
-    Mode { code_size: 5, endpoint_range_index:  0, endpoint_count:  0, weight_bits: 0, plane_count: 0, subset_count: 0, cem:  0 }, //  8
+    Mode { id:  8, code_size: 5, endpoint_range_index:  0, endpoint_count:  0, weight_bits: 0, plane_count: 0, subset_count: 0, cem:  0 },
 
     // CEM 12 - RGBA Direct
-    Mode { code_size: 5, endpoint_range_index:  8, endpoint_count: 16, weight_bits: 2, plane_count: 1, subset_count: 2, cem: CEM_RGBA }, //  9
-    Mode { code_size: 3, endpoint_range_index: 13, endpoint_count:  8, weight_bits: 4, plane_count: 1, subset_count: 1, cem: CEM_RGBA }, // 10
-    Mode { code_size: 2, endpoint_range_index: 13, endpoint_count:  8, weight_bits: 2, plane_count: 2, subset_count: 1, cem: CEM_RGBA }, // 11
-    Mode { code_size: 3, endpoint_range_index: 19, endpoint_count:  8, weight_bits: 3, plane_count: 1, subset_count: 1, cem: CEM_RGBA }, // 12
-    Mode { code_size: 5, endpoint_range_index: 20, endpoint_count:  8, weight_bits: 1, plane_count: 2, subset_count: 1, cem: CEM_RGBA }, // 13
-    Mode { code_size: 5, endpoint_range_index: 20, endpoint_count:  8, weight_bits: 2, plane_count: 1, subset_count: 1, cem: CEM_RGBA }, // 14
+    Mode { id:  9, code_size: 5, endpoint_range_index:  8, endpoint_count: 16, weight_bits: 2, plane_count: 1, subset_count: 2, cem: CEM_RGBA },
+    Mode { id: 10, code_size: 3, endpoint_range_index: 13, endpoint_count:  8, weight_bits: 4, plane_count: 1, subset_count: 1, cem: CEM_RGBA },
+    Mode { id: 11, code_size: 2, endpoint_range_index: 13, endpoint_count:  8, weight_bits: 2, plane_count: 2, subset_count: 1, cem: CEM_RGBA },
+    Mode { id: 12, code_size: 3, endpoint_range_index: 19, endpoint_count:  8, weight_bits: 3, plane_count: 1, subset_count: 1, cem: CEM_RGBA },
+    Mode { id: 13, code_size: 5, endpoint_range_index: 20, endpoint_count:  8, weight_bits: 1, plane_count: 2, subset_count: 1, cem: CEM_RGBA },
+    Mode { id: 14, code_size: 5, endpoint_range_index: 20, endpoint_count:  8, weight_bits: 2, plane_count: 1, subset_count: 1, cem: CEM_RGBA },
 
     // CEM 4 - LA Direct
-    Mode { code_size: 7, endpoint_range_index: 20, endpoint_count:  4, weight_bits: 4, plane_count: 1, subset_count: 1, cem: CEM_LA }, // 15
-    Mode { code_size: 6, endpoint_range_index: 20, endpoint_count:  8, weight_bits: 2, plane_count: 1, subset_count: 2, cem: CEM_LA }, // 16
-    Mode { code_size: 6, endpoint_range_index: 20, endpoint_count:  4, weight_bits: 2, plane_count: 2, subset_count: 1, cem: CEM_LA }, // 17
+    Mode { id: 15, code_size: 7, endpoint_range_index: 20, endpoint_count:  4, weight_bits: 4, plane_count: 1, subset_count: 1, cem: CEM_LA },
+    Mode { id: 16, code_size: 6, endpoint_range_index: 20, endpoint_count:  8, weight_bits: 2, plane_count: 1, subset_count: 2, cem: CEM_LA },
+    Mode { id: 17, code_size: 6, endpoint_range_index: 20, endpoint_count:  4, weight_bits: 2, plane_count: 2, subset_count: 1, cem: CEM_LA },
 
     // CEM 8 - RGB Direct
-    Mode { code_size: 4, endpoint_range_index: 11, endpoint_count:  6, weight_bits: 5, plane_count: 1, subset_count: 1, cem: CEM_RGB }, // 18
+    Mode { id: 18, code_size: 4, endpoint_range_index: 11, endpoint_count:  6, weight_bits: 5, plane_count: 1, subset_count: 1, cem: CEM_RGB },
 
-    Mode { code_size: 7, endpoint_range_index:  0, endpoint_count:  0, weight_bits: 0, plane_count: 0, subset_count: 0, cem: 0 }, // 19 reserved
+    Mode { id: 19, code_size: 7, endpoint_range_index:  0, endpoint_count:  0, weight_bits: 0, plane_count: 0, subset_count: 0, cem: 0 }, // reserved
 ];
 
 static MODE_LUT: [u8; 128] = [
