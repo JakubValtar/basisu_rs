@@ -328,18 +328,21 @@ fn decode_block_to_rgba_result(bytes: &[u8]) -> Result<[Color32; 16]> {
             *unquant = unquant_endpoint(*quant, mode.endpoint_range_index);
         }
         let plane_count = mode.plane_count as usize;
-
-        let anchors: &[u8] = match (mode.id, mode.subset_count) {
-            (7, _) => &PATTERNS_2_3_ANCHORS[pat as usize],
-            (_, 2) => &PATTERNS_2_ANCHORS[pat as usize],
-            (_, 3) => &PATTERNS_3_ANCHORS[pat as usize],
-            _ => &[0],
-        };
+        let anchors = get_anchor_weight_indices(mode, pat);
 
         decode_weights(reader, mode.weight_bits, plane_count, anchors, weights);
         unquant_weights(weights, mode.weight_bits);
 
         Ok(block_to_rgba(&data))
+    }
+}
+
+fn get_anchor_weight_indices(mode: Mode, pat: u8) -> &'static [u8] {
+    match (mode.id, mode.subset_count) {
+        (7, _) => &PATTERNS_2_3_ANCHORS[pat as usize],
+        (_, 2) => &PATTERNS_2_ANCHORS[pat as usize],
+        (_, 3) => &PATTERNS_3_ANCHORS[pat as usize],
+        _ => &[0],
     }
 }
 
