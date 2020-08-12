@@ -8,7 +8,7 @@ use crate::{
         SliceDesc,
     },
     bitreader::BitReaderLSB,
-    bitwriter::BitWriterLSB,
+    bitwriter::BitWriterLsb,
 };
 
 use std::fmt;
@@ -358,7 +358,7 @@ fn decode_block_to_astc_result(bytes: &[u8], output: &mut [u8]) -> Result<()> {
 
     let mode = decode_mode(reader)?;
 
-    let writer = &mut BitWriterLSB::new(output);
+    let writer = &mut BitWriterLsb::new(output);
 
     if mode.id == 8 {
         let rgba = decode_mode8_rgba(reader);

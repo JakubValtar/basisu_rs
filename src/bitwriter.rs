@@ -1,11 +1,11 @@
 use crate::mask;
 
-pub struct BitWriterLSB<'a> {
+pub struct BitWriterLsb<'a> {
     bytes: &'a mut [u8],
     bit_pos: usize,
 }
 
-impl<'a> BitWriterLSB<'a> {
+impl<'a> BitWriterLsb<'a> {
     pub fn new(bytes: &'a mut [u8]) -> Self {
         Self {
             bytes,
@@ -65,7 +65,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_bitwriter() {
+    fn test_bitwriter_lsb() {
         let pattern = 0x5555_5555_5555_5555u64;
 
         // For each of these 16 pattens
@@ -84,7 +84,7 @@ mod tests {
             for len in 0..32 {
                 for offset in 0..32 {
                     bytes = [0; 8];
-                    let mut writer = BitWriterLSB::new(&mut bytes);
+                    let mut writer = BitWriterLsb::new(&mut bytes);
 
                     let offset_val = (data & mask!(offset as u64)) as u32;
                     writer.write_u32(offset, offset_val);
