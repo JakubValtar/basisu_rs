@@ -158,11 +158,8 @@ mod tests {
                     bytes = [0; 8];
                     let mut writer = BitWriterLsb::new(&mut bytes);
 
-                    let offset_val = (data & mask!(offset as u64)) as u32;
-                    writer.write_u32(offset, offset_val);
-
-                    let value = ((data >> offset) & mask!(len as u64)) as u32;
-                    writer.write_u32(len, value);
+                    writer.write_u32(offset, data as u32);
+                    writer.write_u32(len, (data >> offset) as u32);
 
                     let expected = data & mask!((offset + len) as u64);
                     let actual = u64::from_le_bytes(bytes);
@@ -191,11 +188,8 @@ mod tests {
                     bytes = [0; 8];
                     let mut writer = BitWriterLsbReversed::new(&mut bytes);
 
-                    let offset_val = (data & mask!(offset as u64)) as u32;
-                    writer.write_u32(offset, offset_val);
-
-                    let value = ((data >> offset) & mask!(len as u64)) as u32;
-                    writer.write_u32(len, value);
+                    writer.write_u32(offset, data as u32);
+                    writer.write_u32(len, (data >> offset) as u32);
 
                     let expected = data & mask!((offset + len) as u64);
                     let actual = u64::from_le_bytes(bytes).reverse_bits();
