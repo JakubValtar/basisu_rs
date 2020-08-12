@@ -129,19 +129,26 @@ impl<'a> BitWriterLsbReversed<'a> {
 mod tests {
     use super::*;
 
+    /// Returns one of 16 test patterns.
+    /// These are runs of 64 alternating 0 and 1 bits, with the four 16-bit
+    /// segments corresponding to four least significant input bits inverted
+    fn generate_test_pattern(i: u64) -> u64 {
+        let pattern = 0x5555_5555_5555_5555u64;
+        let segment = mask!(16u64);
+        let xor_mask =
+            (segment * ((i >> 3) & 0x1)) << 48 |
+            (segment * ((i >> 2) & 0x1)) << 32 |
+            (segment * ((i >> 1) & 0x1)) << 16 |
+            (segment * (i & 0x1));
+
+        pattern ^ xor_mask
+    }
+
     #[test]
     fn test_bitwriter_lsb() {
-        let pattern = 0x5555_5555_5555_5555u64;
-
         // For each of these 16 pattens
         for i in 0..16 {
-            let segment = mask!(16u64);
-            let xor_mask =
-                (segment * ((i >> 3) & 0x1)) << 48 |
-                (segment * ((i >> 2) & 0x1)) << 32 |
-                (segment * ((i >> 1) & 0x1)) << 16 |
-                (segment * (i & 0x1));
-            let data = pattern ^ xor_mask;
+            let data = generate_test_pattern(i);
             let mut bytes;
 
             // Check that writing two numbers with all combinations of bits
@@ -172,17 +179,9 @@ mod tests {
 
     #[test]
     fn test_bitwriter_lsb_reversed() {
-        let pattern = 0x5555_5555_5555_5555u64;
-
         // For each of these 16 pattens
         for i in 0..16 {
-            let segment = mask!(16u64);
-            let xor_mask =
-                (segment * ((i >> 3) & 0x1)) << 48 |
-                (segment * ((i >> 2) & 0x1)) << 32 |
-                (segment * ((i >> 1) & 0x1)) << 16 |
-                (segment * (i & 0x1));
-            let data = pattern ^ xor_mask;
+            let data = generate_test_pattern(i);
             let mut bytes;
 
             // Check that writing two numbers with all combinations of bits
