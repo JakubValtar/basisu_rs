@@ -13,33 +13,33 @@ fn test_uastc_mode(mode: usize) {
 fn test_blocks_uastc_to_astc() {
 
     // CEM 8 - RGB Direct
-    // test_uastc_mode(0);
-    // test_uastc_mode(1);
-    // test_uastc_mode(2);
-    // test_uastc_mode(3);
-    // test_uastc_mode(4);
-    // test_uastc_mode(5);
-    // test_uastc_mode(6);
-    // test_uastc_mode(7);
+    test_uastc_mode(0);
+    test_uastc_mode(1);
+    test_uastc_mode(2);
+    test_uastc_mode(3);
+    test_uastc_mode(4);
+    test_uastc_mode(5);
+    test_uastc_mode(6);
+    test_uastc_mode(7);
 
     // Void-Extent
     test_uastc_mode(8);
 
     // CEM 12 - RGBA Direct
-    // test_uastc_mode(9);
-    // test_uastc_mode(10);
-    // test_uastc_mode(11);
-    // test_uastc_mode(12);
-    // test_uastc_mode(13);
-    // test_uastc_mode(14);
+    test_uastc_mode(9);
+    test_uastc_mode(10);
+    test_uastc_mode(11);
+    test_uastc_mode(12);
+    test_uastc_mode(13);
+    test_uastc_mode(14);
 
     // CEM 4 - LA Direct
-    // test_uastc_mode(15);
-    // test_uastc_mode(16);
-    // test_uastc_mode(17);
+    test_uastc_mode(15);
+    test_uastc_mode(16);
+    test_uastc_mode(17);
 
     // CEM 8 - RGB Direct
-    // test_uastc_mode(18);
+    test_uastc_mode(18);
 }
 
 
