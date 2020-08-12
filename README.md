@@ -26,7 +26,8 @@ Sample textures were copied from the official [basis_universal repo](https://git
 - [x] Decoding UASTC
 - [x] Test on more textures
 - [ ] Check for invalid input data
-- [ ] Transcoding UASTC into other formats
+- [x] Trancoding UASTC to ASTC
+- [ ] Transcoding UASTC to BC7
 - [ ] Cubemap support
 - [ ] Video support
 
@@ -34,9 +35,15 @@ Sample textures were copied from the official [basis_universal repo](https://git
 
 Here I'm writing a log of what I did, problems I encountered, and what I learned. Have anything to say or discuss? I'd be happy to hear from you, please send me a DM or @ me on Twitter [@JakubValtar](https://twitter.com/jakubvaltar).
 
-### 11-08-2020
+### 12-08-2020
 
+Refactoring time! Today I chopped up the UASTC code into smaller functions, which can be used to decode parts of UASTC blocks. Previously I had a big function which fully decoded the block into a kind of intermediate representation, but I realized that transcoding to different formats and to RGBA has very different needs, so I removed the intermediate structs. Now I use the smaller functions to decode only the parts of the blocks I need and directly process the data, without needing a single type to represent all the possible fields each mode can carry.
 
+With this done, implementing the remaining ASTC modes turned out to be quite easy. I copied the block mode bits from the reference blocks I collected earlier. They are constant for each mode, so no harm in a little shortcut. Next I wrote a new bit writer which fills the buffer from the last byte and can optionally reverse the bits it is writing. This was needed for writing the weights, because they are written in the reverse bit order from the end of the block.
+
+The last thing, which probably took me the most time, was repacking endpoints. ASTC has an extra step for packing trits and quints and also interleaves them with bits. The spec describes only decoding, so I implemented that and then generated inverse lookup tables. I ran the test on my texture testing set and some of the textures had one bit flipped. It turns out that there are multiple equivalent representations for some combinations of trits and quints, which means my output was correct too, it just used an alternative values. Anyway, I changed my lookup tables to get the same output as the reference transcoder, to make comparing outputs easier. With this out of the way, transcoding to ASTC is working and matching the reference transcoder!
+
+Next time I'll be looking into transcoding UASTC to BC7.
 
 ### 10-08-2020
 
