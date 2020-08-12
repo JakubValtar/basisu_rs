@@ -4,8 +4,8 @@ fn test_uastc_mode(mode: usize) {
     let test_data = TEST_DATA_UASTC_ASTC[mode];
     for (uastc, expected_astc) in test_data.iter() {
         let mut actual_astc = [0; 16];
-        let decoded_block = decode_block_to_astc(uastc, &mut actual_astc);
-        assert_eq!(&actual_astc, expected_astc, "\n{:?}", decoded_block);
+        decode_block_to_astc(uastc, &mut actual_astc);
+        assert_eq!(&actual_astc, expected_astc, "\n{:02X?}\n{:02X?}\n{:02X?}", uastc, &actual_astc, expected_astc);
     }
 }
 
