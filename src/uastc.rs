@@ -10,7 +10,7 @@ use crate::{
     bitreader::BitReaderLsb,
     bitwriter::{
         BitWriterLsb,
-        BitWriterLsbReversed,
+        BitWriterMsbRevBytes,
     },
 };
 
@@ -419,7 +419,7 @@ fn decode_block_to_astc_result(bytes: &[u8], output: &mut [u8]) -> Result<()> {
 
     writer.write_u8(4, mode.cem);
 
-    let writer_rev = &mut BitWriterLsbReversed::new(output);
+    let writer_rev = &mut BitWriterMsbRevBytes::new(output);
 
     let plane_count = mode.plane_count as usize;
     let anchors = get_anchor_weight_indices(mode, pat);
@@ -427,12 +427,12 @@ fn decode_block_to_astc_result(bytes: &[u8], output: &mut [u8]) -> Result<()> {
     if mode.subset_count == 1 {
         if invert_subset_weights[0] {
             let weight_consumer = |_, weight: u8| {
-                writer_rev.write_u8(mode.weight_bits as usize, !weight);
+                writer_rev.write_u8_rev_bits(mode.weight_bits as usize, !weight);
             };
             decode_weights(reader, mode.weight_bits, plane_count, anchors, weight_consumer);
         } else {
             let weight_consumer = |_, weight: u8| {
-                writer_rev.write_u8(mode.weight_bits as usize, weight);
+                writer_rev.write_u8_rev_bits(mode.weight_bits as usize, weight);
             };
             decode_weights(reader, mode.weight_bits, plane_count, anchors, weight_consumer);
         };
@@ -443,9 +443,9 @@ fn decode_block_to_astc_result(bytes: &[u8], output: &mut [u8]) -> Result<()> {
             let texel_id = i / mode.plane_count as usize;
             let subset = pattern[texel_id] as usize;
             if invert_subset_weights[subset] {
-                writer_rev.write_u8(mode.weight_bits as usize, !weight);
+                writer_rev.write_u8_rev_bits(mode.weight_bits as usize, !weight);
             } else {
-                writer_rev.write_u8(mode.weight_bits as usize, weight);
+                writer_rev.write_u8_rev_bits(mode.weight_bits as usize, weight);
             }
         };
         decode_weights(reader, mode.weight_bits, plane_count, anchors, weight_consumer);

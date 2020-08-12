@@ -60,15 +60,14 @@ impl<'a> BitWriterLsb<'a> {
     // TODO: check on close/drop that the buffer did not overflow
 }
 
-/// LSB bit writer which fill the output from the last bit of the last byte.
-/// The output is the same as from the normal LSB bit writer, but the bits in
-/// the whole output buffer are reversed.
-pub struct BitWriterLsbReversed<'a> {
+/// MSB bit writer which fills the output buffer from the end
+/// (last byte to first byte). Optionally it can also reverse written bits.
+pub struct BitWriterMsbRevBytes<'a> {
     bytes: &'a mut [u8],
     bit_pos: usize,
 }
 
-impl<'a> BitWriterLsbReversed<'a> {
+impl<'a> BitWriterMsbRevBytes<'a> {
     pub fn new(bytes: &'a mut [u8]) -> Self {
         let bit_pos = bytes.len() * 8;
         Self {
@@ -77,8 +76,14 @@ impl<'a> BitWriterLsbReversed<'a> {
         }
     }
 
-    pub fn write_bool(&mut self, v: bool) {
-        self.write_u32(1, v as u32)
+    pub fn write_u8_rev_bits(&mut self, count: usize, v: u8) {
+        assert!(count <= 8);
+        self.write_u32_rev_bits(count, v as u32)
+    }
+
+    pub fn write_u32_rev_bits(&mut self, count: usize, v: u32) {
+        let v = v.reverse_bits().wrapping_shr(32 - count as u32);
+        self.write_u32(count, v);
     }
 
     pub fn write_u8(&mut self, count: usize, v: u8) {
@@ -86,15 +91,10 @@ impl<'a> BitWriterLsbReversed<'a> {
         self.write_u32(count, v as u32)
     }
 
-    pub fn write_u16(&mut self, count: usize, v: u16) {
-        assert!(count <= 16);
-        self.write_u32(count, v as u32)
-    }
-
     pub fn write_u32(&mut self, count: usize, v: u32) {
         assert!(count <= 32);
 
-        let v = (v & mask!(count as u32)).reverse_bits().wrapping_shr(32 - count as u32);
+        let v = v & mask!(count as u32);
 
         self.bit_pos = self.bit_pos.wrapping_sub(count);
 
@@ -175,7 +175,7 @@ mod tests {
     }
 
     #[test]
-    fn test_bitwriter_lsb_reversed() {
+    fn test_bitwriter_msb_rev_bytes_rev_bits() {
         // For each of these 16 pattens
         for i in 0..16 {
             let data = generate_test_pattern(i);
@@ -186,13 +186,43 @@ mod tests {
             for len in 0..32 {
                 for offset in 0..32 {
                     bytes = [0; 8];
-                    let mut writer = BitWriterLsbReversed::new(&mut bytes);
+                    let mut writer = BitWriterMsbRevBytes::new(&mut bytes);
 
-                    writer.write_u32(offset, data as u32);
-                    writer.write_u32(len, (data >> offset) as u32);
+                    writer.write_u32_rev_bits(offset, data as u32);
+                    writer.write_u32_rev_bits(len, (data >> offset) as u32);
 
                     let expected = data & mask!((offset + len) as u64);
                     let actual = u64::from_le_bytes(bytes).reverse_bits();
+
+                    assert_eq!(
+                        actual, expected,
+                        "value mismatch, left: {:b}, right: {:b}, off: {}, len: {}, data: {:b}",
+                        actual, expected, offset, len, data
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_bitwriter_msb_rev_bytes() {
+        // For each of these 16 pattens
+        for i in 0..16 {
+            let data = generate_test_pattern(i);
+            let mut bytes;
+
+            // Check that writing two numbers with all combinations of bits
+            // writes the right bits into the output byte buffer
+            for len in 0..32 {
+                for offset in 0..32 {
+                    bytes = [0; 8];
+                    let mut writer = BitWriterMsbRevBytes::new(&mut bytes);
+
+                    writer.write_u32(offset, data.wrapping_shr((64 - offset) as u32) as u32);
+                    writer.write_u32(len, data.wrapping_shr((64 - offset - len) as u32) as u32);
+
+                    let expected = data & !mask!((64 - offset - len) as u64);
+                    let actual = u64::from_le_bytes(bytes);
 
                     assert_eq!(
                         actual, expected,
