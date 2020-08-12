@@ -13,7 +13,7 @@ fn test_uastc_mode(mode: usize) {
 }
 
 #[test]
-fn test_uastc() {
+fn test_blocks_uastc_to_rgba() {
 
     // CEM 8 - RGB Direct
     test_uastc_mode(0);
