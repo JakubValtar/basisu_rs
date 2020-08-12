@@ -307,34 +307,34 @@ fn decode_block_to_rgba_result(bytes: &[u8]) -> Result<[Color32; 16]> {
     let mode = decode_mode(reader)?;
 
     if mode.id == 8 {
-        Ok([decode_mode8_rgba(reader); 16])
-    } else {
-        skip_trans_flags(reader, mode);
-
-        // Component selector for dual-plane modes
-        let compsel = decode_compsel(reader, mode);
-
-        // Pattern id for modes with multiple subsets
-        let pat = decode_pattern_index(reader, mode)?;
-
-        let endpoint_count = mode.endpoint_count;
-        let weight_count = mode.plane_count * 16;
-
-        let mut data = BlockData::new(mode, pat, compsel, endpoint_count, weight_count);
-        let (endpoints, weights) = data.get_endpoints_weights_mut();
-
-        let quant_endpoints = decode_endpoints(reader, mode.endpoint_range_index, endpoints.len());
-        for (quant, unquant) in quant_endpoints.iter().zip(endpoints.iter_mut()) {
-            *unquant = unquant_endpoint(*quant, mode.endpoint_range_index);
-        }
-        let plane_count = mode.plane_count as usize;
-        let anchors = get_anchor_weight_indices(mode, pat);
-
-        decode_weights(reader, mode.weight_bits, plane_count, anchors, weights);
-        unquant_weights(weights, mode.weight_bits);
-
-        Ok(block_to_rgba(&data))
+        return Ok([decode_mode8_rgba(reader); 16]);
     }
+
+    skip_trans_flags(reader, mode);
+
+    // Component selector for dual-plane modes
+    let compsel = decode_compsel(reader, mode);
+
+    // Pattern id for modes with multiple subsets
+    let pat = decode_pattern_index(reader, mode)?;
+
+    let endpoint_count = mode.endpoint_count;
+    let weight_count = mode.plane_count * 16;
+
+    let mut data = BlockData::new(mode, pat, compsel, endpoint_count, weight_count);
+    let (endpoints, weights) = data.get_endpoints_weights_mut();
+
+    let quant_endpoints = decode_endpoints(reader, mode.endpoint_range_index, endpoints.len());
+    for (quant, unquant) in quant_endpoints.iter().zip(endpoints.iter_mut()) {
+        *unquant = unquant_endpoint(*quant, mode.endpoint_range_index);
+    }
+    let plane_count = mode.plane_count as usize;
+    let anchors = get_anchor_weight_indices(mode, pat);
+
+    decode_weights(reader, mode.weight_bits, plane_count, anchors, weights);
+    unquant_weights(weights, mode.weight_bits);
+
+    Ok(block_to_rgba(&data))
 }
 
 fn get_anchor_weight_indices(mode: Mode, pat: u8) -> &'static [u8] {
