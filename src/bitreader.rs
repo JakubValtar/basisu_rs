@@ -1,11 +1,11 @@
 use crate::mask;
 
-pub struct BitReaderLSB<'a> {
+pub struct BitReaderLsb<'a> {
     bytes: &'a [u8],
     bit_pos: usize,
 }
 
-impl<'a> BitReaderLSB<'a> {
+impl<'a> BitReaderLsb<'a> {
     pub fn new(bytes: &'a [u8]) -> Self {
         Self {
             bytes,
@@ -68,7 +68,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_bitreader() {
+    fn test_bitreader_lsb() {
         let pattern = 0x5555_5555_5555_5555u64;
         for i in 0..16 {
             let segment = mask!(16u64);
@@ -81,7 +81,7 @@ mod tests {
             let bytes = data.to_le_bytes();
             for len in 0..32 {
                 for offset in 0..32 {
-                    let mut reader = BitReaderLSB::new(&bytes);
+                    let mut reader = BitReaderLsb::new(&bytes);
                     let actual = reader.read(offset);
                     let expected = (data & mask!(offset as u64)) as u32;
                     assert_eq!(

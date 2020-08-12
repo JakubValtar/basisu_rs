@@ -7,7 +7,7 @@ use crate::{
         Header,
         SliceDesc,
     },
-    bitreader::BitReaderLSB,
+    bitreader::BitReaderLsb,
     bitwriter::BitWriterLsb,
 };
 
@@ -302,7 +302,7 @@ fn decode_block_to_rgba(bytes: &[u8]) -> [Color32; 16] {
 
 fn decode_block_to_rgba_result(bytes: &[u8]) -> Result<[Color32; 16]> {
 
-    let reader = &mut BitReaderLSB::new(bytes);
+    let reader = &mut BitReaderLsb::new(bytes);
 
     let mode = decode_mode(reader)?;
 
@@ -354,7 +354,7 @@ fn decode_block_to_astc(bytes: &[u8], output: &mut [u8]) {
 }
 
 fn decode_block_to_astc_result(bytes: &[u8], output: &mut [u8]) -> Result<()> {
-    let reader = &mut BitReaderLSB::new(bytes);
+    let reader = &mut BitReaderLsb::new(bytes);
 
     let mode = decode_mode(reader)?;
 
@@ -386,7 +386,7 @@ fn decode_block_to_astc_result(bytes: &[u8], output: &mut [u8]) -> Result<()> {
     }
 }
 
-fn decode_mode(reader: &mut BitReaderLSB) -> Result<Mode> {
+fn decode_mode(reader: &mut BitReaderLsb) -> Result<Mode> {
     let mode_code = reader.peek(7) as usize;
     let mode_index = MODE_LUT[mode_code] as usize;
 
@@ -401,7 +401,7 @@ fn decode_mode(reader: &mut BitReaderLSB) -> Result<Mode> {
     Ok(mode)
 }
 
-fn decode_compsel(reader: &mut BitReaderLSB, mode: Mode) -> u8 {
+fn decode_compsel(reader: &mut BitReaderLsb, mode: Mode) -> u8 {
     match (mode.plane_count, mode.cem) {
         // LA modes always have component selector 3 for alpha
         (2, CEM_LA) => 3,
@@ -410,7 +410,7 @@ fn decode_compsel(reader: &mut BitReaderLSB, mode: Mode) -> u8 {
     }
 }
 
-fn decode_pattern_index(reader: &mut BitReaderLSB, mode: Mode) -> Result<u8> {
+fn decode_pattern_index(reader: &mut BitReaderLsb, mode: Mode) -> Result<u8> {
     if mode.subset_count == 1 {
         return Ok(0);
     }
@@ -430,7 +430,7 @@ fn decode_pattern_index(reader: &mut BitReaderLSB, mode: Mode) -> Result<u8> {
     }
 }
 
-fn decode_mode8_rgba(reader: &mut BitReaderLSB) -> Color32 {
+fn decode_mode8_rgba(reader: &mut BitReaderLsb) -> Color32 {
     Color32::new(
         reader.read_u8(8), // R
         reader.read_u8(8), // G
@@ -439,7 +439,7 @@ fn decode_mode8_rgba(reader: &mut BitReaderLSB) -> Color32 {
     )
 }
 
-fn decode_mode8_etc1_flags(reader: &mut BitReaderLSB) -> Mode8Etc1Flags {
+fn decode_mode8_etc1_flags(reader: &mut BitReaderLsb) -> Mode8Etc1Flags {
     Mode8Etc1Flags {
         etc1d: reader.read_bool(),
         etc1i: reader.read_u8(3),
@@ -450,7 +450,7 @@ fn decode_mode8_etc1_flags(reader: &mut BitReaderLSB) -> Mode8Etc1Flags {
     }
 }
 
-fn decode_trans_flags(reader: &mut BitReaderLSB, mode: Mode) -> TranscodingFlags {
+fn decode_trans_flags(reader: &mut BitReaderLsb, mode: Mode) -> TranscodingFlags {
     assert_ne!(mode.id, 8);
 
     let mut flags = TranscodingFlags::default();
@@ -473,7 +473,7 @@ fn decode_trans_flags(reader: &mut BitReaderLSB, mode: Mode) -> TranscodingFlags
     flags
 }
 
-fn skip_trans_flags(reader: &mut BitReaderLSB, mode: Mode) {
+fn skip_trans_flags(reader: &mut BitReaderLsb, mode: Mode) {
     assert_ne!(mode.id, 8);
     reader.remove(mode.trans_flags_bits as usize);
 }
@@ -586,7 +586,7 @@ fn unquant_endpoint(quant: QuantEndpoint, range_index: u8) -> u8 {
     }
 }
 
-fn decode_endpoints(reader: &mut BitReaderLSB, range_index: u8, value_count: usize) -> [QuantEndpoint; MAX_ENDPOINT_COUNT] {
+fn decode_endpoints(reader: &mut BitReaderLsb, range_index: u8, value_count: usize) -> [QuantEndpoint; MAX_ENDPOINT_COUNT] {
     assert!(value_count <= MAX_ENDPOINT_COUNT);
 
     let mut output = [QuantEndpoint::default(); MAX_ENDPOINT_COUNT];
@@ -684,7 +684,7 @@ fn unquant_weights(weights: &mut [u8], weight_bits: u8) {
     }
 }
 
-fn decode_weights(reader: &mut BitReaderLSB, weight_bits: u8, plane_count: usize, anchors: &[u8], output: &mut [u8]) {
+fn decode_weights(reader: &mut BitReaderLsb, weight_bits: u8, plane_count: usize, anchors: &[u8], output: &mut [u8]) {
     let mut bits = [weight_bits; 16];
     for &anchor in anchors {
         bits[anchor as usize] = weight_bits - 1;

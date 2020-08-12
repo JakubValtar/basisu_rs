@@ -1,6 +1,6 @@
 #![allow(non_upper_case_globals)]
 
-use crate::bitreader::BitReaderLSB;
+use crate::bitreader::BitReaderLsb;
 
 use crate::Result;
 
@@ -40,7 +40,7 @@ const BigZeroRunCode: usize = 18;
 const SmallRepeatCode: usize = 19;
 const BigRepeatCode: usize = 20;
 
-pub fn read_huffman_table(reader: &mut BitReaderLSB) -> Result<HuffmanDecodingTable> {
+pub fn read_huffman_table(reader: &mut BitReaderLsb) -> Result<HuffmanDecodingTable> {
 
     // TODO: sanity & overflow checks
 
@@ -173,7 +173,7 @@ impl HuffmanDecodingTable {
         })
     }
 
-    pub fn decode_symbol(&self, reader: &mut BitReaderLSB) -> Result<u16> {
+    pub fn decode_symbol(&self, reader: &mut BitReaderLsb) -> Result<u16> {
         let bits = reader.peek(self.max_code_size) as usize;
         let entry = self.lookup[bits];
         if entry.code_size > 0 {

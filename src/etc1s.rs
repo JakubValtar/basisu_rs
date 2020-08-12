@@ -13,7 +13,7 @@ use crate::{
         SliceDesc,
         TextureType,
     },
-    bitreader::BitReaderLSB,
+    bitreader::BitReaderLsb,
     huffman::{
         self,
         HuffmanDecodingTable,
@@ -102,7 +102,7 @@ impl Decoder {
         let start = header.tables_file_ofs as usize;
         let len = header.tables_file_size as usize;
 
-        let reader = &mut BitReaderLSB::new(&bytes[start..start + len]);
+        let reader = &mut BitReaderLsb::new(&bytes[start..start + len]);
 
         let endpoint_pred_model = huffman::read_huffman_table(reader)?;
         let delta_endpoint_model = huffman::read_huffman_table(reader)?;
@@ -237,7 +237,7 @@ impl Decoder {
         let reader = {
             let start = slice_desc.file_ofs as usize;
             let len = slice_desc.file_size as usize;
-            &mut BitReaderLSB::new(&bytes[start..start+len])
+            &mut BitReaderLsb::new(&bytes[start..start+len])
         };
 
         let num_endpoints = self.endpoints.len() as u16;
@@ -467,7 +467,7 @@ impl Decoder {
 }
 
 fn decode_endpoints(num_endpoints: usize, bytes: &[u8]) -> Result<Vec<Endpoint>> {
-    let reader = &mut BitReaderLSB::new(bytes);
+    let reader = &mut BitReaderLsb::new(bytes);
 
     let color5_delta_model0 = huffman::read_huffman_table(reader)?;
     let color5_delta_model1 = huffman::read_huffman_table(reader)?;
@@ -580,7 +580,7 @@ impl Selector {
 }
 
 fn decode_selectors(num_selectors: usize, bytes: &[u8]) -> Result<Vec<Selector>> {
-    let reader = &mut BitReaderLSB::new(bytes);
+    let reader = &mut BitReaderLsb::new(bytes);
 
     let global = reader.read_bool();
     let hybrid = reader.read_bool();
@@ -641,7 +641,7 @@ fn decode_selectors(num_selectors: usize, bytes: &[u8]) -> Result<Vec<Selector>>
 }
 
 
-fn decode_vlc(reader: &mut BitReaderLSB, chunk_bits: u32) -> u32 {
+fn decode_vlc(reader: &mut BitReaderLsb, chunk_bits: u32) -> u32 {
     assert!(chunk_bits > 0);
     let chunk_size = 1 << chunk_bits;
     let chunk_mask = mask!(chunk_bits);
