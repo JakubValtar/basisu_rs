@@ -257,13 +257,7 @@ fn block_to_rgba(block: &BlockData) -> [Color32; 16] {
             _ => unreachable!()
         }
 
-        let pattern = match (mode.id, mode.subset_count) {
-            // Mode 7 has 2 subsets, but needs 2/3 patern table
-            (7, _) => PATTERNS_2_3[block.pat as usize],
-            (_, 2) => PATTERNS_2[block.pat as usize],
-            (_, 3) => PATTERNS_3[block.pat as usize],
-            _ => unreachable!(),
-        };
+        let pattern = get_pattern(mode, block.pat);
 
         for id in 0..16 {
             let subset = pattern[id] as usize;
@@ -343,15 +337,6 @@ fn decode_block_to_rgba_result(bytes: &[u8]) -> Result<[Color32; 16]> {
     Ok(block_to_rgba(&data))
 }
 
-fn get_anchor_weight_indices(mode: Mode, pat: u8) -> &'static [u8] {
-    match (mode.id, mode.subset_count) {
-        (7, _) => &PATTERNS_2_3_ANCHORS[pat as usize],
-        (_, 2) => &PATTERNS_2_ANCHORS[pat as usize],
-        (_, 3) => &PATTERNS_3_ANCHORS[pat as usize],
-        _ => &[0],
-    }
-}
-
 fn decode_block_to_astc(bytes: &[u8], output: &mut [u8]) {
     match decode_block_to_astc_result(bytes, output) {
         Ok(_) => (),
@@ -397,20 +382,62 @@ fn decode_block_to_astc_result(bytes: &[u8], output: &mut [u8]) -> Result<()> {
     let endpoint_count = mode.endpoint_count;
     let weight_count = mode.plane_count * 16;
 
-    let quant_endpoints = decode_endpoints(reader, mode.endpoint_range_index, endpoint_count as usize);
+    let mut quant_endpoints = decode_endpoints(reader, mode.endpoint_range_index, endpoint_count as usize);
+
+    let mut invert_subset_weights = [false, false, false];
+
+    // Invert endpoints if they would trigger blue contraction
+    if mode.cem == CEM_RGB || mode.cem == CEM_RGBA {
+        let endpoints_per_subset = (endpoint_count / mode.subset_count) as usize;
+        let quant_subset_endpoints = quant_endpoints.chunks_exact_mut(endpoints_per_subset);
+        for (subset, quant_endpoints) in (0..mode.subset_count).zip(quant_subset_endpoints) {
+            let mut endpoints = [0u8; 6];
+            for (unquant, quant) in endpoints.iter_mut().zip(quant_endpoints.iter()) {
+                *unquant = unquant_endpoint(*quant, mode.endpoint_range_index);
+            }
+            let s0 = endpoints[0] as u32 + endpoints[2] as u32 + endpoints[4] as u32;
+            let s1 = endpoints[1] as u32 + endpoints[3] as u32 + endpoints[5] as u32;
+            if s0 > s1 {
+                invert_subset_weights[subset as usize] = true;
+                for pair in quant_endpoints.chunks_exact_mut(2) {
+                    pair.swap(0, 1);
+                }
+            }
+        }
+    }
+
 
     let writer_rev = &mut BitWriterLsbReversed::new(output);
 
     let plane_count = mode.plane_count as usize;
     let anchors = get_anchor_weight_indices(mode, pat);
 
-    // TODO: if the endpoints would trigger blue contraction,
-    //       they need to be swapped and weights inverted
+    if mode.subset_count == 1 {
+        if invert_subset_weights[0] {
+            let weight_consumer = |_, weight: u8| {
+                writer_rev.write_u8(mode.weight_bits as usize, !weight);
+            };
+            decode_weights(reader, mode.weight_bits, plane_count, anchors, weight_consumer);
+        } else {
+            let weight_consumer = |_, weight: u8| {
+                writer_rev.write_u8(mode.weight_bits as usize, weight);
+            };
+            decode_weights(reader, mode.weight_bits, plane_count, anchors, weight_consumer);
+        };
+    } else {
+        let pattern = get_pattern(mode, pat);
 
-    let weight_consumer = |_, weight| {
-        writer_rev.write_u8(mode.weight_bits as usize, weight);
-    };
-    decode_weights(reader, mode.weight_bits, plane_count, anchors, weight_consumer);
+        let weight_consumer = |i, weight: u8| {
+            let texel_id = i / mode.plane_count as usize;
+            let subset = pattern[texel_id] as usize;
+            if invert_subset_weights[subset] {
+                writer_rev.write_u8(mode.weight_bits as usize, !weight);
+            } else {
+                writer_rev.write_u8(mode.weight_bits as usize, weight);
+            }
+        };
+        decode_weights(reader, mode.weight_bits, plane_count, anchors, weight_consumer);
+    }
 
     Ok(())
 }
@@ -456,6 +483,25 @@ fn decode_pattern_index(reader: &mut BitReaderLsb, mode: Mode) -> Result<u8> {
         Ok(pattern_index)
     } else {
         Err("block pattern is not valid".into())
+    }
+}
+
+fn get_pattern(mode: Mode, pat: u8) -> &'static [u8] {
+    match (mode.id, mode.subset_count) {
+        // Mode 7 has 2 subsets, but needs 2/3 patern table
+        (7, _) => &PATTERNS_2_3[pat as usize],
+        (_, 2) => &PATTERNS_2[pat as usize],
+        (_, 3) => &PATTERNS_3[pat as usize],
+        _ => unreachable!(),
+    }
+}
+
+fn get_anchor_weight_indices(mode: Mode, pat: u8) -> &'static [u8] {
+    match (mode.id, mode.subset_count) {
+        (7, _) => &PATTERNS_2_3_ANCHORS[pat as usize],
+        (_, 2) => &PATTERNS_2_ANCHORS[pat as usize],
+        (_, 3) => &PATTERNS_3_ANCHORS[pat as usize],
+        _ => &[0],
     }
 }
 
