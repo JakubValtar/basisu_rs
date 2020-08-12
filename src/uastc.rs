@@ -411,6 +411,11 @@ fn decode_block_to_astc_result(bytes: &[u8], output: &mut [u8]) -> Result<()> {
 
     writer.write_u16(13, mode.astc_block_mode_13);
 
+    if mode.subset_count > 1 {
+        let pattern_astc_index_10 = get_pattern_astc_index_10(mode, pat);
+        writer.write_u16(10, pattern_astc_index_10);
+    }
+
     let writer_rev = &mut BitWriterLsbReversed::new(output);
 
     let plane_count = mode.plane_count as usize;
@@ -506,6 +511,16 @@ fn get_anchor_weight_indices(mode: Mode, pat: u8) -> &'static [u8] {
         (_, 2) => &PATTERNS_2_ANCHORS[pat as usize],
         (_, 3) => &PATTERNS_3_ANCHORS[pat as usize],
         _ => &[0],
+    }
+}
+
+fn get_pattern_astc_index_10(mode: Mode, pat: u8) -> u16 {
+    match (mode.id, mode.subset_count) {
+        // Mode 7 has 2 subsets, but needs 2/3 patern table
+        (7, _) => PATTERNS_2_3_ASTC_INDEX_10[pat as usize],
+        (_, 2) => PATTERNS_2_ASTC_INDEX_10[pat as usize],
+        (_, 3) => PATTERNS_3_ASTC_INDEX_10[pat as usize],
+        _ => unreachable!(),
     }
 }
 
@@ -878,4 +893,22 @@ static PATTERNS_2_3_ANCHORS: [[u8; 2]; TOTAL_BC7_3_ASTC2_COMMON_PARTITIONS] = [
     [ 0, 4 ], [ 0, 2 ], [ 2, 0 ], [ 0, 7 ], [ 8, 0 ], [ 0, 1 ], [ 0, 3 ],
     [ 0, 1 ], [ 2, 0 ], [ 0, 1 ], [ 0, 8 ], [ 2, 0 ], [ 0, 1 ], [ 0, 7 ],
     [ 12, 0 ], [ 2, 0 ], [ 9, 0 ], [ 0, 2 ], [ 4, 0 ]
+];
+
+static PATTERNS_2_ASTC_INDEX_10: [u16; TOTAL_ASTC_BC7_COMMON_PARTITIONS2] = [
+    28, 20, 16, 29, 91, 9, 107, 72,
+    149, 204, 50, 114, 496, 17, 78, 39,
+    252, 828, 43, 156, 116, 210, 476, 273,
+    684, 359, 246, 195, 694, 524,
+];
+
+static PATTERNS_3_ASTC_INDEX_10: [u16;  TOTAL_ASTC_BC7_COMMON_PARTITIONS3] = [
+    260, 74, 32, 156, 183, 15, 745, 0,
+    335, 902, 254,
+];
+
+static PATTERNS_2_3_ASTC_INDEX_10: [u16; TOTAL_BC7_3_ASTC2_COMMON_PARTITIONS] = [
+    36, 48, 61, 137, 161, 183, 226, 281,
+    302, 307, 479, 495, 593, 594, 605, 799,
+    812, 988, 993,
 ];
