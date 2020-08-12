@@ -451,6 +451,11 @@ fn decode_block_to_astc_result(bytes: &[u8], output: &mut [u8]) -> Result<()> {
         decode_weights(reader, mode.weight_bits, plane_count, anchors, weight_consumer);
     }
 
+    if mode.plane_count > 1 {
+        // Weights have bits reversed, but not CCS
+        writer_rev.write_u8(2, compsel);
+    }
+
     Ok(())
 }
 
