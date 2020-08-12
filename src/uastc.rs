@@ -414,7 +414,10 @@ fn decode_block_to_astc_result(bytes: &[u8], output: &mut [u8]) -> Result<()> {
     if mode.subset_count > 1 {
         let pattern_astc_index_10 = get_pattern_astc_index_10(mode, pat);
         writer.write_u16(10, pattern_astc_index_10);
+        writer.write_u8(2, 0b00); // To specify that all endpoints use the same CEM
     }
+
+    writer.write_u8(4, mode.cem);
 
     let writer_rev = &mut BitWriterLsbReversed::new(output);
 
