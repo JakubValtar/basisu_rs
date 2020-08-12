@@ -652,7 +652,7 @@ static MODE_LUT: [u8; 128] = [
     11, 18, 10, 6, 11,  2, 12, 13,
 ];
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 struct QuantEndpoint {
     trit_quint: u8,
     bits: u8,
@@ -804,7 +804,7 @@ fn decode_weights<F>(reader: &mut BitReaderLsb, weight_bits: u8, plane_count: us
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct BiseCounts {
     bits: u8,
     trits: u8,
