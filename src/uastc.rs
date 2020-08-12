@@ -61,6 +61,9 @@ impl fmt::Debug for BlockData {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let (e, w) = self.get_endpoints_weights();
         f.debug_struct("ModeEW")
+            .field("mode", &self.mode)
+            .field("pat", &self.pat)
+            .field("compsel", &self.compsel)
             .field("endpoints", &e)
             .field("weights", &w)
             .finish()
