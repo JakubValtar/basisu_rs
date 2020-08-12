@@ -8,7 +8,10 @@ use crate::{
         SliceDesc,
     },
     bitreader::BitReaderLsb,
-    bitwriter::BitWriterLsb,
+    bitwriter::{
+        BitWriterLsb,
+        BitWriterLsbReversed,
+    },
 };
 
 use std::fmt;
@@ -383,10 +386,33 @@ fn decode_block_to_astc_result(bytes: &[u8], output: &mut [u8]) -> Result<()> {
         writer.write_u16(16, b << 8 | b);
         writer.write_u16(16, a << 8 | a);
 
-        Ok(())
-    } else {
-        unimplemented!();
+        return Ok(());
     }
+
+    skip_trans_flags(reader, mode);
+
+    let compsel = decode_compsel(reader, mode);
+    let pat = decode_pattern_index(reader, mode)?;
+
+    let endpoint_count = mode.endpoint_count;
+    let weight_count = mode.plane_count * 16;
+
+    let quant_endpoints = decode_endpoints(reader, mode.endpoint_range_index, endpoint_count as usize);
+
+    let writer_rev = &mut BitWriterLsbReversed::new(output);
+
+    let plane_count = mode.plane_count as usize;
+    let anchors = get_anchor_weight_indices(mode, pat);
+
+    // TODO: if the endpoints would trigger blue contraction,
+    //       they need to be swapped and weights inverted
+
+    let weight_consumer = |_, weight| {
+        writer_rev.write_u8(mode.weight_bits as usize, weight);
+    };
+    decode_weights(reader, mode.weight_bits, plane_count, anchors, weight_consumer);
+
+    Ok(())
 }
 
 fn decode_mode(reader: &mut BitReaderLsb) -> Result<Mode> {
