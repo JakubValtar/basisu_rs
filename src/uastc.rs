@@ -331,7 +331,10 @@ fn decode_block_to_rgba_result(bytes: &[u8]) -> Result<[Color32; 16]> {
     let plane_count = mode.plane_count as usize;
     let anchors = get_anchor_weight_indices(mode, pat);
 
-    decode_weights(reader, mode.weight_bits, plane_count, anchors, weights);
+    let weight_consumer = |i, weight| {
+        weights[i] = weight;
+    };
+    decode_weights(reader, mode.weight_bits, plane_count, anchors, weight_consumer);
     unquant_weights(weights, mode.weight_bits);
 
     Ok(block_to_rgba(&data))
@@ -684,17 +687,19 @@ fn unquant_weights(weights: &mut [u8], weight_bits: u8) {
     }
 }
 
-fn decode_weights(reader: &mut BitReaderLsb, weight_bits: u8, plane_count: usize, anchors: &[u8], output: &mut [u8]) {
+fn decode_weights<F>(reader: &mut BitReaderLsb, weight_bits: u8, plane_count: usize, anchors: &[u8], mut f: F)
+    where F: FnMut(usize, u8)
+{
+    // One anchor weight in each subset is encoded with one less bit (MSB = 0)
     let mut bits = [weight_bits; 16];
     for &anchor in anchors {
         bits[anchor as usize] = weight_bits - 1;
     }
 
-    // First weight of each subset is encoded with one less bit (MSB = 0)
     for i in 0..16 {
         let bits = bits[i] as usize;
         for plane in 0..plane_count {
-            output[plane_count * i as usize + plane] = reader.read_u8(bits);
+            f(plane_count * i as usize + plane, reader.read_u8(bits));
         }
     }
 }
