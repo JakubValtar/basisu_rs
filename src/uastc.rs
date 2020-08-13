@@ -150,6 +150,28 @@ impl Decoder {
         Ok(image)
     }
 
+    pub(crate) fn transcode_to_bc7(&self, slice_desc: &SliceDesc, bytes: &[u8]) -> Result<Image<u8>> {
+
+        const BC7_BLOCK_SIZE: usize = 16;
+
+        let mut image = Image {
+            w: slice_desc.orig_width as u32,
+            h: slice_desc.orig_height as u32,
+            stride: BC7_BLOCK_SIZE as u32 * slice_desc.num_blocks_x as u32,
+            y_flipped: self.y_flipped,
+            data: vec![0u8; slice_desc.num_blocks_x as usize * slice_desc.num_blocks_y as usize * BC7_BLOCK_SIZE],
+        };
+
+        let block_to_bc7 = |_block_x: u32, _block_y: u32, block_offset: usize, block_bytes: &[u8]| {
+            let output = &mut image.data[block_offset..block_offset + BC7_BLOCK_SIZE];
+            decode_block_to_bc7(&block_bytes, output);
+        };
+
+        self.iterate_blocks(slice_desc, bytes, block_to_bc7)?;
+
+        Ok(image)
+    }
+
     pub(crate) fn iterate_blocks<F>(&self, slice_desc: &SliceDesc, bytes: &[u8], mut f: F) -> Result<()>
         where F: FnMut(u32, u32, usize, &[u8])
     {
@@ -514,6 +536,17 @@ fn decode_block_to_astc_result(bytes: &[u8], output: &mut [u8]) -> Result<()> {
     Ok(())
 }
 
+fn decode_block_to_bc7(bytes: &[u8], output: &mut [u8]) {
+    match decode_block_to_bc7_result(bytes, output) {
+        Ok(_) => (),
+        _ => output.copy_from_slice(&[0; 16]),
+    }
+}
+
+fn decode_block_to_bc7_result(bytes: &[u8], output: &mut [u8]) -> Result<()> {
+    unimplemented!()
+}
+
 fn decode_mode(reader: &mut BitReaderLsb) -> Result<Mode> {
     let mode_code = reader.peek(7) as usize;
     let mode_index = MODE_LUT[mode_code] as usize;
@@ -653,39 +686,40 @@ pub struct Mode {
     trans_flags_bits: u8,
     astc_block_mode_13: u16,
     cem: u8,
+    bc7_mode: u8,
 }
 
 static MODES: [Mode; 20] = [
     // CEM 8 - RGB Direct
-    Mode { id:  0, code_size: 4, endpoint_range_index: 19, endpoint_count:  6, weight_bits: 4, plane_count: 1, subset_count: 1, trans_flags_bits: 15, astc_block_mode_13: 0x0242, cem: CEM_RGB },
-    Mode { id:  1, code_size: 6, endpoint_range_index: 20, endpoint_count:  6, weight_bits: 2, plane_count: 1, subset_count: 1, trans_flags_bits: 15, astc_block_mode_13: 0x0042, cem: CEM_RGB },
-    Mode { id:  2, code_size: 5, endpoint_range_index:  8, endpoint_count: 12, weight_bits: 3, plane_count: 1, subset_count: 2, trans_flags_bits: 15, astc_block_mode_13: 0x0853, cem: CEM_RGB },
-    Mode { id:  3, code_size: 5, endpoint_range_index:  7, endpoint_count: 18, weight_bits: 2, plane_count: 1, subset_count: 3, trans_flags_bits: 15, astc_block_mode_13: 0x1042, cem: CEM_RGB },
-    Mode { id:  4, code_size: 5, endpoint_range_index: 12, endpoint_count: 12, weight_bits: 2, plane_count: 1, subset_count: 2, trans_flags_bits: 15, astc_block_mode_13: 0x0842, cem: CEM_RGB },
-    Mode { id:  5, code_size: 5, endpoint_range_index: 20, endpoint_count:  6, weight_bits: 3, plane_count: 1, subset_count: 1, trans_flags_bits: 15, astc_block_mode_13: 0x0053, cem: CEM_RGB },
-    Mode { id:  6, code_size: 5, endpoint_range_index: 18, endpoint_count:  6, weight_bits: 2, plane_count: 2, subset_count: 1, trans_flags_bits: 15, astc_block_mode_13: 0x0442, cem: CEM_RGB },
-    Mode { id:  7, code_size: 5, endpoint_range_index: 12, endpoint_count: 12, weight_bits: 2, plane_count: 1, subset_count: 2, trans_flags_bits: 15, astc_block_mode_13: 0x0842, cem: CEM_RGB },
+    Mode { id:  0, code_size: 4, endpoint_range_index: 19, endpoint_count:  6, weight_bits: 4, plane_count: 1, subset_count: 1, trans_flags_bits: 15, astc_block_mode_13: 0x0242, cem:  CEM_RGB, bc7_mode: 6 },
+    Mode { id:  1, code_size: 6, endpoint_range_index: 20, endpoint_count:  6, weight_bits: 2, plane_count: 1, subset_count: 1, trans_flags_bits: 15, astc_block_mode_13: 0x0042, cem:  CEM_RGB, bc7_mode: 3 },
+    Mode { id:  2, code_size: 5, endpoint_range_index:  8, endpoint_count: 12, weight_bits: 3, plane_count: 1, subset_count: 2, trans_flags_bits: 15, astc_block_mode_13: 0x0853, cem:  CEM_RGB, bc7_mode: 1 },
+    Mode { id:  3, code_size: 5, endpoint_range_index:  7, endpoint_count: 18, weight_bits: 2, plane_count: 1, subset_count: 3, trans_flags_bits: 15, astc_block_mode_13: 0x1042, cem:  CEM_RGB, bc7_mode: 2 },
+    Mode { id:  4, code_size: 5, endpoint_range_index: 12, endpoint_count: 12, weight_bits: 2, plane_count: 1, subset_count: 2, trans_flags_bits: 15, astc_block_mode_13: 0x0842, cem:  CEM_RGB, bc7_mode: 3 },
+    Mode { id:  5, code_size: 5, endpoint_range_index: 20, endpoint_count:  6, weight_bits: 3, plane_count: 1, subset_count: 1, trans_flags_bits: 15, astc_block_mode_13: 0x0053, cem:  CEM_RGB, bc7_mode: 6 },
+    Mode { id:  6, code_size: 5, endpoint_range_index: 18, endpoint_count:  6, weight_bits: 2, plane_count: 2, subset_count: 1, trans_flags_bits: 15, astc_block_mode_13: 0x0442, cem:  CEM_RGB, bc7_mode: 5 },
+    Mode { id:  7, code_size: 5, endpoint_range_index: 12, endpoint_count: 12, weight_bits: 2, plane_count: 1, subset_count: 2, trans_flags_bits: 15, astc_block_mode_13: 0x0842, cem:  CEM_RGB, bc7_mode: 2 },
 
     // Void-Extent
-    Mode { id:  8, code_size: 5, endpoint_range_index:  0, endpoint_count:  0, weight_bits: 0, plane_count: 0, subset_count: 0, trans_flags_bits:  0, astc_block_mode_13: 0, cem:  0 },
+    Mode { id:  8, code_size: 5, endpoint_range_index:  0, endpoint_count:  0, weight_bits: 0, plane_count: 0, subset_count: 0, trans_flags_bits:  0, astc_block_mode_13:      0, cem:        0, bc7_mode: 0 },
 
     // CEM 12 - RGBA Direct
-    Mode { id:  9, code_size: 5, endpoint_range_index:  8, endpoint_count: 16, weight_bits: 2, plane_count: 1, subset_count: 2, trans_flags_bits: 23, astc_block_mode_13: 0x0842, cem: CEM_RGBA },
-    Mode { id: 10, code_size: 3, endpoint_range_index: 13, endpoint_count:  8, weight_bits: 4, plane_count: 1, subset_count: 1, trans_flags_bits: 17, astc_block_mode_13: 0x0242, cem: CEM_RGBA },
-    Mode { id: 11, code_size: 2, endpoint_range_index: 13, endpoint_count:  8, weight_bits: 2, plane_count: 2, subset_count: 1, trans_flags_bits: 17, astc_block_mode_13: 0x0442, cem: CEM_RGBA },
-    Mode { id: 12, code_size: 3, endpoint_range_index: 19, endpoint_count:  8, weight_bits: 3, plane_count: 1, subset_count: 1, trans_flags_bits: 17, astc_block_mode_13: 0x0053, cem: CEM_RGBA },
-    Mode { id: 13, code_size: 5, endpoint_range_index: 20, endpoint_count:  8, weight_bits: 1, plane_count: 2, subset_count: 1, trans_flags_bits: 23, astc_block_mode_13: 0x0441, cem: CEM_RGBA },
-    Mode { id: 14, code_size: 5, endpoint_range_index: 20, endpoint_count:  8, weight_bits: 2, plane_count: 1, subset_count: 1, trans_flags_bits: 23, astc_block_mode_13: 0x0042, cem: CEM_RGBA },
+    Mode { id:  9, code_size: 5, endpoint_range_index:  8, endpoint_count: 16, weight_bits: 2, plane_count: 1, subset_count: 2, trans_flags_bits: 23, astc_block_mode_13: 0x0842, cem: CEM_RGBA, bc7_mode: 7 },
+    Mode { id: 10, code_size: 3, endpoint_range_index: 13, endpoint_count:  8, weight_bits: 4, plane_count: 1, subset_count: 1, trans_flags_bits: 17, astc_block_mode_13: 0x0242, cem: CEM_RGBA, bc7_mode: 6 },
+    Mode { id: 11, code_size: 2, endpoint_range_index: 13, endpoint_count:  8, weight_bits: 2, plane_count: 2, subset_count: 1, trans_flags_bits: 17, astc_block_mode_13: 0x0442, cem: CEM_RGBA, bc7_mode: 5 },
+    Mode { id: 12, code_size: 3, endpoint_range_index: 19, endpoint_count:  8, weight_bits: 3, plane_count: 1, subset_count: 1, trans_flags_bits: 17, astc_block_mode_13: 0x0053, cem: CEM_RGBA, bc7_mode: 6 },
+    Mode { id: 13, code_size: 5, endpoint_range_index: 20, endpoint_count:  8, weight_bits: 1, plane_count: 2, subset_count: 1, trans_flags_bits: 23, astc_block_mode_13: 0x0441, cem: CEM_RGBA, bc7_mode: 5 },
+    Mode { id: 14, code_size: 5, endpoint_range_index: 20, endpoint_count:  8, weight_bits: 2, plane_count: 1, subset_count: 1, trans_flags_bits: 23, astc_block_mode_13: 0x0042, cem: CEM_RGBA, bc7_mode: 6 },
 
     // CEM 4 - LA Direct
-    Mode { id: 15, code_size: 7, endpoint_range_index: 20, endpoint_count:  4, weight_bits: 4, plane_count: 1, subset_count: 1, trans_flags_bits: 23, astc_block_mode_13: 0x0242, cem: CEM_LA },
-    Mode { id: 16, code_size: 6, endpoint_range_index: 20, endpoint_count:  8, weight_bits: 2, plane_count: 1, subset_count: 2, trans_flags_bits: 23, astc_block_mode_13: 0x0842, cem: CEM_LA },
-    Mode { id: 17, code_size: 6, endpoint_range_index: 20, endpoint_count:  4, weight_bits: 2, plane_count: 2, subset_count: 1, trans_flags_bits: 23, astc_block_mode_13: 0x0442, cem: CEM_LA },
+    Mode { id: 15, code_size: 7, endpoint_range_index: 20, endpoint_count:  4, weight_bits: 4, plane_count: 1, subset_count: 1, trans_flags_bits: 23, astc_block_mode_13: 0x0242, cem:   CEM_LA, bc7_mode: 6 },
+    Mode { id: 16, code_size: 6, endpoint_range_index: 20, endpoint_count:  8, weight_bits: 2, plane_count: 1, subset_count: 2, trans_flags_bits: 23, astc_block_mode_13: 0x0842, cem:   CEM_LA, bc7_mode: 7 },
+    Mode { id: 17, code_size: 6, endpoint_range_index: 20, endpoint_count:  4, weight_bits: 2, plane_count: 2, subset_count: 1, trans_flags_bits: 23, astc_block_mode_13: 0x0442, cem:   CEM_LA, bc7_mode: 5 },
 
     // CEM 8 - RGB Direct
-    Mode { id: 18, code_size: 4, endpoint_range_index: 11, endpoint_count:  6, weight_bits: 5, plane_count: 1, subset_count: 1, trans_flags_bits: 15, astc_block_mode_13: 0x0253, cem: CEM_RGB },
+    Mode { id: 18, code_size: 4, endpoint_range_index: 11, endpoint_count:  6, weight_bits: 5, plane_count: 1, subset_count: 1, trans_flags_bits: 15, astc_block_mode_13: 0x0253, cem:  CEM_RGB, bc7_mode: 6 },
 
-    Mode { id: 19, code_size: 7, endpoint_range_index:  0, endpoint_count:  0, weight_bits: 0, plane_count: 0, subset_count: 0, trans_flags_bits:  0, astc_block_mode_13: 0, cem: 0 }, // reserved
+    Mode { id: 19, code_size: 7, endpoint_range_index:  0, endpoint_count:  0, weight_bits: 0, plane_count: 0, subset_count: 0, trans_flags_bits:  0, astc_block_mode_13:      0, cem:        0, bc7_mode: 0 }, // reserved
 ];
 
 static MODE_LUT: [u8; 128] = [
