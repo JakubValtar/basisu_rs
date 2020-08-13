@@ -374,13 +374,11 @@ fn decode_block_to_rgba_result(bytes: &[u8]) -> Result<[Color32; 16]> {
     for (quant, unquant) in quant_endpoints.iter().zip(endpoints.iter_mut()) {
         *unquant = unquant_endpoint(*quant, mode.endpoint_range_index);
     }
-    let plane_count = mode.plane_count as usize;
-    let anchors = get_anchor_weight_indices(mode, pat);
 
     let weight_consumer = |i, weight| {
         weights[i] = weight;
     };
-    decode_weights(reader, mode.weight_bits, plane_count, anchors, weight_consumer);
+    decode_weights(reader, mode, pat, weight_consumer);
     unquant_weights(weights, mode.weight_bits);
 
     Ok(block_to_rgba(&data))
@@ -517,20 +515,17 @@ fn decode_block_to_astc_result(bytes: &[u8], output: &mut [u8]) -> Result<()> {
     {   // Write the weights and CCS which is filled from the end
         let writer_rev = &mut BitWriterMsbRevBytes::new(output);
 
-        let plane_count = mode.plane_count as usize;
-        let anchors = get_anchor_weight_indices(mode, pat);
-
         if mode.subset_count == 1 {
             if invert_subset_weights[0] {
                 let weight_consumer = |_, weight: u8| {
                     writer_rev.write_u8_rev_bits(mode.weight_bits as usize, !weight);
                 };
-                decode_weights(reader, mode.weight_bits, plane_count, anchors, weight_consumer);
+                decode_weights(reader, mode, pat, weight_consumer);
             } else {
                 let weight_consumer = |_, weight: u8| {
                     writer_rev.write_u8_rev_bits(mode.weight_bits as usize, weight);
                 };
-                decode_weights(reader, mode.weight_bits, plane_count, anchors, weight_consumer);
+                decode_weights(reader, mode, pat, weight_consumer);
             };
         } else {
             let pattern = get_pattern(mode, pat);
@@ -544,7 +539,7 @@ fn decode_block_to_astc_result(bytes: &[u8], output: &mut [u8]) -> Result<()> {
                     writer_rev.write_u8_rev_bits(mode.weight_bits as usize, weight);
                 }
             };
-            decode_weights(reader, mode.weight_bits, plane_count, anchors, weight_consumer);
+            decode_weights(reader, mode, pat, weight_consumer);
         }
 
         if mode.plane_count > 1 {
@@ -896,13 +891,16 @@ fn unquant_weights(weights: &mut [u8], weight_bits: u8) {
     }
 }
 
-fn decode_weights<F>(reader: &mut BitReaderLsb, weight_bits: u8, plane_count: usize, anchors: &[u8], mut f: F)
+fn decode_weights<F>(reader: &mut BitReaderLsb, mode: Mode, pat: u8, mut f: F)
     where F: FnMut(usize, u8)
 {
+    let plane_count = mode.plane_count as usize;
+    let anchors = get_anchor_weight_indices(mode, pat);
+
     // One anchor weight in each subset is encoded with one less bit (MSB = 0)
-    let mut bits = [weight_bits; 16];
+    let mut bits = [mode.weight_bits; 16];
     for &anchor in anchors {
-        bits[anchor as usize] = weight_bits - 1;
+        bits[anchor as usize] = mode.weight_bits - 1;
     }
 
     for i in 0..16 {
@@ -1126,7 +1124,7 @@ static PATTERNS_2_ASTC_INDEX_10: [u16; TOTAL_ASTC_BC7_COMMON_PARTITIONS2] = [
     684, 359, 246, 195, 694, 524,
 ];
 
-static PATTERNS_3_ASTC_INDEX_10: [u16;  TOTAL_ASTC_BC7_COMMON_PARTITIONS3] = [
+static PATTERNS_3_ASTC_INDEX_10: [u16; TOTAL_ASTC_BC7_COMMON_PARTITIONS3] = [
     260, 74, 32, 156, 183, 15, 745, 0,
     335, 902, 254,
 ];
