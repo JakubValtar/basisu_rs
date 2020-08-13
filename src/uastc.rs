@@ -104,6 +104,27 @@ impl Decoder {
         })
     }
 
+    pub(crate) fn read_to_uastc(&self, slice_desc: &SliceDesc, bytes: &[u8]) -> Result<Image<u8>> {
+
+        const UASTC_BLOCK_SIZE: usize = 16;
+
+        let block_bytes = {
+            let start = slice_desc.file_ofs as usize;
+            let len = slice_desc.file_size as usize;
+            &bytes[start..start+len]
+        };
+
+        let image = Image {
+            w: slice_desc.orig_width as u32,
+            h: slice_desc.orig_height as u32,
+            stride: UASTC_BLOCK_SIZE as u32 * slice_desc.num_blocks_x as u32,
+            y_flipped: self.y_flipped,
+            data: block_bytes.to_vec(),
+        };
+
+        Ok(image)
+    }
+
     pub(crate) fn decode_to_rgba(&self, slice_desc: &SliceDesc, bytes: &[u8]) -> Result<Image<Color32>> {
 
         let mut image = Image {
