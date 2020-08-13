@@ -437,8 +437,10 @@ fn decode_block_to_astc_result(bytes: &[u8], output: &mut [u8]) -> Result<()> {
     // Invert endpoints if they would trigger blue contraction
     if mode.cem == CEM_RGB || mode.cem == CEM_RGBA {
         let endpoints_per_subset = (endpoint_count / mode.subset_count) as usize;
-        let quant_subset_endpoints = quant_endpoints.chunks_exact_mut(endpoints_per_subset);
-        for (subset, quant_endpoints) in (0..mode.subset_count).zip(quant_subset_endpoints) {
+        let quant_subset_endpoints = quant_endpoints.chunks_exact_mut(endpoints_per_subset)
+            .take(mode.subset_count as usize)
+            .enumerate();
+        for (subset, quant_endpoints) in quant_subset_endpoints {
             let mut endpoints = [0u8; 6];
             for (unquant, quant) in endpoints.iter_mut().zip(quant_endpoints.iter()) {
                 *unquant = unquant_endpoint(*quant, mode.endpoint_range_index);
