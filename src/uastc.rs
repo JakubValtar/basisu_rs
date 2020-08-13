@@ -504,12 +504,6 @@ fn decode_block_to_astc_result(bytes: &[u8], output: &mut [u8]) -> Result<()> {
                 writer.write_u8(bit_count, chunk.get(4).map(|qe| qe.bits).unwrap_or(0));
                 writer.write_u8(1, t >> 7);
             }
-
-            // 0 00 011111  0 011000 11 010101 1 100000 11 100111 11 010000
-            // 0 00 011111  0 011000 10 010101 1 100000 11 100111 11 010000
-            //                        .
-            // 0 2 2 2 0 2
-
         } else {
             let bit_count = bise_range.bits as usize;
             for qe in &quant_endpoints {
