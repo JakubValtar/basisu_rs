@@ -96,11 +96,22 @@ pub fn list_textures<P: AsRef<Path>>(dir: P) -> Result<Vec<String>> {
     Ok(result)
 }
 
-pub fn compare_png<P: AsRef<Path>>(path: P, image: &basisu::Image<u8>) -> Result<()> {
+pub fn open_ktx<P: AsRef<Path>>(path: P) -> Result<ktx::Decoder<BufReader<File>>> {
     let file = File::open(path)?;
-    let mut r = BufReader::new(file);
+    let r = BufReader::new(file);
+    let decoder = ktx::Decoder::new(r)?;
+    Ok(decoder)
+}
 
-    let decoder = png::Decoder::new(&mut r);
+pub fn open_png<P: AsRef<Path>>(path: P) -> Result<png::Decoder<BufReader<File>>> {
+    let file = File::open(path)?;
+    let r = BufReader::new(file);
+    let decoder = png::Decoder::new(r);
+    Ok(decoder)
+}
+
+pub fn compare_png<P: AsRef<Path>>(path: P, image: &basisu::Image<u8>) -> Result<()> {
+    let decoder = open_png(path)?;
 
     let (info, mut reader) = decoder.read_info()?;
 
@@ -150,10 +161,7 @@ pub fn compare_png<P: AsRef<Path>>(path: P, image: &basisu::Image<u8>) -> Result
 }
 
 pub fn compare_png_rgb<P: AsRef<Path>>(path: P, image: &basisu::Image<u8>) -> Result<()> {
-    let file = File::open(path)?;
-    let mut r = BufReader::new(file);
-
-    let decoder = png::Decoder::new(&mut r);
+    let decoder = open_png(path)?;
 
     let (info, mut reader) = decoder.read_info()?;
 
@@ -186,10 +194,7 @@ pub fn compare_png_rgb<P: AsRef<Path>>(path: P, image: &basisu::Image<u8>) -> Re
 }
 
 pub fn compare_png_alpha<P: AsRef<Path>>(path: P, image: &basisu::Image<u8>) -> Result<()> {
-    let file = File::open(path)?;
-    let mut r = BufReader::new(file);
-
-    let decoder = png::Decoder::new(&mut r);
+    let decoder = open_png(path)?;
 
     let (info, mut reader) = decoder.read_info()?;
 
@@ -213,10 +218,7 @@ pub fn compare_png_alpha<P: AsRef<Path>>(path: P, image: &basisu::Image<u8>) -> 
 }
 
 pub fn compare_ktx<P: AsRef<Path>>(path: P, image: &basisu::Image<u8>) -> Result<()> {
-    let file = File::open(&path)?;
-    let mut r = BufReader::new(file);
-
-    let decoder = ktx::Decoder::new(&mut r)?;
+    let decoder = open_ktx(&path)?;
 
     assert_eq!(decoder.pixel_width(), image.w);
     assert_eq!(decoder.pixel_height(), image.h);
