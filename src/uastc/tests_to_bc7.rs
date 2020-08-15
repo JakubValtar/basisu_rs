@@ -1,11 +1,24 @@
 use super::*;
 
+struct U8ArrayBinPrint<'a>(&'a [u8]);
+
+impl<'a> fmt::Display for U8ArrayBinPrint<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "[")?;
+        write!(f, "{:08b}", self.0[0].reverse_bits())?;
+        for b in self.0.iter().skip(1) {
+            write!(f, " {:08b}", b.reverse_bits())?;
+        }
+        write!(f, "]")
+    }
+}
+
 fn test_uastc_mode(mode: usize) {
     let test_data = TEST_DATA_UASTC_BC7[mode];
     for (uastc, expected_bc7) in test_data.iter() {
         let mut actual_bc7 = [0; 16];
         decode_block_to_bc7(uastc, &mut actual_bc7);
-        assert_eq!(&actual_bc7, expected_bc7, "\n{:02X?}\n{:02X?}\n{:02X?}", uastc, &actual_bc7, expected_bc7);
+        assert_eq!(&actual_bc7, expected_bc7, "\nUASTC Mode: {}\n{:02X?}\n{}\n{}", mode, uastc, U8ArrayBinPrint(&actual_bc7), U8ArrayBinPrint(expected_bc7));
     }
 }
 
