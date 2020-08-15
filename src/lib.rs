@@ -1,4 +1,5 @@
 
+use std::fmt;
 use std::ops::{Index, IndexMut};
 use std::path::Path;
 
@@ -200,7 +201,7 @@ impl Image<Color32> {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Default, PartialEq)]
 struct Color32([u8; 4]);
 
 impl Color32 {
@@ -224,6 +225,12 @@ impl Color32 {
 
     pub fn from_rgba_u32(rgba: u32) -> Self {
         Color32(rgba.to_le_bytes())
+    }
+}
+
+impl fmt::Debug for Color32 {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "#{:08X}", self.to_rgba_u32())
     }
 }
 
