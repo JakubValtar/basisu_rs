@@ -237,24 +237,7 @@ fn block_to_rgba(block: &BlockData) -> [Color32; 16] {
     let mode = block.mode;
 
     if mode.subset_count == 1 {
-        let (e0, e1) = match mode.cem {
-            // CEM 8 - RGB Direct
-            CEM_RGB => (
-                Color32::new(endpoints[0], endpoints[2], endpoints[4], 0xFF),
-                Color32::new(endpoints[1], endpoints[3], endpoints[5], 0xFF),
-            ),
-            // CEM 12 - RGBA Direct
-            CEM_RGBA => (
-                Color32::new(endpoints[0], endpoints[2], endpoints[4], endpoints[6]),
-                Color32::new(endpoints[1], endpoints[3], endpoints[5], endpoints[7]),
-            ),
-            // CEM 4 - LA Direct
-            CEM_LA => (
-                Color32::new(endpoints[0], endpoints[0], endpoints[0], endpoints[2]),
-                Color32::new(endpoints[1], endpoints[1], endpoints[1], endpoints[3]),
-            ),
-            _ => unreachable!()
-        };
+        let [e0, e1] = assemble_endpoint_pairs(mode, endpoints)[0];
 
         let mut w_plane_id = [0; 4];
         let ws_per_texel = mode.plane_count as usize;
@@ -276,41 +259,13 @@ fn block_to_rgba(block: &BlockData) -> [Color32; 16] {
             );
         }
     } else {
-        let mut e = [(Color32::default(), Color32::default()); 3];
-
-        match mode.cem {
-            // CEM 8 - RGB Direct
-            CEM_RGB => for subset in 0..mode.subset_count as usize {
-                let i = 6 * subset;
-                e[subset] = (
-                    Color32::new(endpoints[i+0], endpoints[i+2], endpoints[i+4], 0xFF),
-                    Color32::new(endpoints[i+1], endpoints[i+3], endpoints[i+5], 0xFF),
-                );
-            }
-            // CEM 12 - RGBA Direct
-            CEM_RGBA => for subset in 0..mode.subset_count as usize {
-                let i = 8 * subset;
-                e[subset] = (
-                    Color32::new(endpoints[i+0], endpoints[i+2], endpoints[i+4], endpoints[i+6]),
-                    Color32::new(endpoints[i+1], endpoints[i+3], endpoints[i+5], endpoints[i+7]),
-                );
-            }
-            // CEM 4 - LA Direct
-            CEM_LA => for subset in 0..mode.subset_count as usize {
-                let i = 4 * subset;
-                e[subset] = (
-                    Color32::new(endpoints[i+0], endpoints[i+0], endpoints[i+0], endpoints[i+2]),
-                    Color32::new(endpoints[i+1], endpoints[i+1], endpoints[i+1], endpoints[i+3]),
-                );
-            }
-            _ => unreachable!()
-        }
+        let e = assemble_endpoint_pairs(mode, endpoints);
 
         let pattern = get_pattern(mode, block.pat);
 
         for id in 0..16 {
             let subset = pattern[id] as usize;
-            let (e0, e1) = e[subset];
+            let [e0, e1] = e[subset];
             let w = weights[id] as u32;
 
             output[id] = Color32::new(
@@ -323,6 +278,43 @@ fn block_to_rgba(block: &BlockData) -> [Color32; 16] {
     }
 
     output
+}
+
+fn assemble_endpoint_pairs(mode: Mode, endpoint_bytes: &[u8]) -> [[Color32; 2]; 3] {
+    let mut endpoint_pairs = [[Color32::default(); 2]; 3];
+
+    match mode.cem {
+        // CEM 8 - RGB Direct
+        CEM_RGB => {
+            for (pair, bytes) in endpoint_pairs.iter_mut().zip(endpoint_bytes.chunks_exact(6)) {
+                *pair = [
+                    Color32::new(bytes[0], bytes[2], bytes[4], 0xFF),
+                    Color32::new(bytes[1], bytes[3], bytes[5], 0xFF),
+                ];
+            }
+        }
+        // CEM 12 - RGBA Direct
+        CEM_RGBA => {
+            for (pair, bytes) in endpoint_pairs.iter_mut().zip(endpoint_bytes.chunks_exact(8)) {
+                *pair = [
+                    Color32::new(bytes[0], bytes[2], bytes[4], bytes[6]),
+                    Color32::new(bytes[1], bytes[3], bytes[5], bytes[7]),
+                ];
+            }
+        }
+        // CEM 4 - LA Direct
+        CEM_LA => {
+            for (pair, bytes) in endpoint_pairs.iter_mut().zip(endpoint_bytes.chunks_exact(4)) {
+                *pair = [
+                    Color32::new(bytes[0], bytes[0], bytes[0], bytes[2]),
+                    Color32::new(bytes[1], bytes[1], bytes[1], bytes[3]),
+                ];
+            }
+        }
+        _ => unreachable!()
+    }
+
+    endpoint_pairs
 }
 
 fn astc_interpolate(mut l: u32, mut h: u32, w: u32, srgb: bool) -> u8 {
