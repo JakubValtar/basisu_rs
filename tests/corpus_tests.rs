@@ -20,6 +20,15 @@ fn test_uastc_to_astc() {
 }
 
 #[test]
+fn test_uastc_to_bc7() {
+    iterate_textures_uastc(|case| {
+        let decoded = basisu::read_to_bc7(&case.basis).unwrap();
+        assert_eq!(decoded.len(), 1);
+        compare_ktx(&case.bc7_rgba, &decoded[0]).unwrap();
+    });
+}
+
+#[test]
 fn test_etc1s_to_rgba() {
     iterate_textures_etc1s(|case| {
         let decoded = basisu::read_to_rgba(&case.basis).unwrap();
