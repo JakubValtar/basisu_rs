@@ -25,15 +25,31 @@ Sample textures were copied from the official [basis_universal repo](https://git
 - [x] Lookup tables for faster Huffman decoding
 - [x] Decoding UASTC
 - [x] Test on more textures
-- [ ] Check for invalid input data
 - [x] Trancoding UASTC to ASTC
-- [ ] Transcoding UASTC to BC7
+- [x] Transcoding UASTC to BC7
+- [ ] Transcoding UASTC to ETC1
+- [ ] Crate API
+- [ ] Check for invalid input data (see Illegal Encodings chapter)
 - [ ] Cubemap support
 - [ ] Video support
 
 ## Log
 
 Here I'm writing a log of what I did, problems I encountered, and what I learned. Have anything to say or discuss? I'd be happy to hear from you, please send me a DM or @ me on Twitter [@JakubValtar](https://twitter.com/jakubvaltar).
+
+### 16-08-2020
+
+I collected BC7 test blocks and with the help of the test output implemented BC7 transcoding. The most challenging part was interleaving. Weight index planes are interlaved in UASTC and sequential in BC7. Endpoints are stored as e[subset][channel][lo/hi] in UASTC and e[channel][subset][lo/hi] in BC7. Figuring out in what stage of transcoding to deal with this took some.
+
+I started with a plain array of unquantized endpoint bytes, but processing the endpoints in this form led to some ugly end error-prone code. I ended up decoding and processing the endpoints in UASTC representation (`[[Color32; 2]; subset]`), then handled the interleaving at the very end. Doing it like this made working with endpoints much easier.
+
+I forgot that I have to deinterleave the weight indices. This tripped me up, because anchor indices had different values and sometimes caused inversion of their subset (swapped endpoints and inverted weights). This was not easy to diagnose, because the weight indices in output BC7 blocks would not only have a wrong order, some of them would be inverted as well.
+
+I tested all the currently implemented formats on a test set of ~200 textures encoded and decoded with the reference `basisu` transcoder and the output is bitwise identical.
+
+To summarize all currently implemented functionality:
+- ETC1S to RGBA and ETC1
+- UASTC to RGBA, ASTC and BC7
 
 ### 12-08-2020
 
