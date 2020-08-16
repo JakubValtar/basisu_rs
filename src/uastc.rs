@@ -16,6 +16,7 @@ use crate::{
 };
 
 use std::fmt;
+use std::sync::Once;
 
 #[cfg(test)]
 mod tests_to_rgba;
@@ -559,7 +560,40 @@ fn decode_block_to_bc7_result(bytes: &[u8], output: &mut [u8]) -> Result<()> {
     let writer = &mut BitWriterLsb::new(output);
 
     if mode.id == 8 {
-        todo!();
+        let rgba = decode_mode8_rgba(reader);
+
+        let (mode, endpoint, p_bits, weights) = convert_mode_8_to_bc7_mode_endpoint_p_bits_weights(rgba);
+
+        let bc7_mode = BC7_MODES[mode as usize];
+
+        let weights = &weights[0..bc7_mode.plane_count as usize];
+
+        writer.write_u8(mode as usize + 1, 1 << mode);
+
+        if mode == 5 {
+            writer.write_u8(2, 0);
+        }
+
+        for channel in 0..4 {
+            let bit_count = if channel != ALPHA_CHANNEL { bc7_mode.color_bits } else { bc7_mode.alpha_bits } as usize;
+            writer.write_u8(bit_count, endpoint[0][channel]);
+            writer.write_u8(bit_count, endpoint[1][channel]);
+        }
+
+        if mode == 6 {
+            writer.write_u8(2, (p_bits[1] << 1) | p_bits[0]);
+        }
+
+        {   // Write weights
+            let bit_count = bc7_mode.weight_bits as usize;
+            for &weight in weights.iter() {
+                writer.write_u8(bit_count - 1, weight);
+                for _ in 0..15 {
+                    writer.write_u8(bit_count as usize, weight);
+                }
+            }
+        }
+        return Ok(())
     }
 
     let bc7_mode = BC7_MODES[mode.bc7_mode as usize];
@@ -777,6 +811,166 @@ fn decode_block_to_bc7_result(bytes: &[u8], output: &mut [u8]) -> Result<()> {
     }
 
     Ok(())
+}
+
+#[derive(Clone, Copy, Default)]
+struct OptimalEndpoint {
+    lo: u8,
+    hi: u8,
+    err: u16,
+}
+
+impl OptimalEndpoint {
+    const fn const_default() -> Self {
+        OptimalEndpoint { err: 0, lo: 0, hi: 0 }
+    }
+}
+
+static MODE_8_BC7_TABLES: Once = Once::new();
+
+const BC7ENC_MODE_5_OPTIMAL_INDEX: u8 = 1;
+const BC7ENC_MODE_6_OPTIMAL_INDEX: u8 = 5;
+
+static mut BC7_MODE_5_OPTIMAL_ENDPOINTS: [OptimalEndpoint; 256] = [OptimalEndpoint::const_default(); 256];
+static mut BC7_MODE_6_OPTIMAL_ENDPOINTS: [[OptimalEndpoint; 2]; 256] = [[OptimalEndpoint::const_default(); 2]; 256];
+
+fn get_mode_8_bc7_tables() -> (&'static [OptimalEndpoint; 256], &'static [[OptimalEndpoint; 2]; 256]) {
+
+    MODE_8_BC7_TABLES.call_once(|| {
+        calculate_mode_8_bc7_tables();
+    });
+
+    fn calculate_mode_8_bc7_tables() {
+
+        let weights2: [u8; 4] = [ 0, 21, 43, 64 ];
+        let weights4: [u8; 16] = [ 0, 4, 9, 13, 17, 21, 26, 30, 34, 38, 43, 47, 51, 55, 60, 64 ];
+
+        // TODO: Precompute?
+        // BC7 777.1
+        for c in 0..256i32 {
+            for lp in 0..2 {
+                let mut best = OptimalEndpoint::default();
+                best.err = u16::MAX;
+
+                for l in 0..128i32 {
+                    let low = (l << 1) | lp;
+
+                    for h in 0..128i32 {
+                        let high = (h << 1) | lp;
+
+                        let k = (low * (64 - weights4[BC7ENC_MODE_6_OPTIMAL_INDEX as usize] as i32) + high * weights4[BC7ENC_MODE_6_OPTIMAL_INDEX as usize] as i32 + 32) >> 6;
+
+                        let err = ((k - c) * (k - c)) as u16;
+                        if err < best.err {
+                            best.err = err;
+                            best.lo = l as u8;
+                            best.hi = h as u8;
+                        }
+                    } // h
+                } // l
+
+                unsafe {
+                    BC7_MODE_6_OPTIMAL_ENDPOINTS[c as usize][lp as usize] = best;
+                }
+            } // lp
+
+        } // c
+
+        // BC7 777
+        for c in 0..256 {
+            let mut best = OptimalEndpoint::default();
+            best.err = u16::MAX;
+
+            for l in 0..128 {
+                let low = (l << 1) | (l >> 6);
+
+                for h in 0..128 {
+                    let high = (h << 1) | (h >> 6);
+
+                    let k = (
+                        low * (64 - weights2[BC7ENC_MODE_5_OPTIMAL_INDEX as usize] as i32)
+                        + high * weights2[BC7ENC_MODE_5_OPTIMAL_INDEX as usize] as i32
+                        + 32
+                    ) >> 6;
+
+                    let err = ((k - c) * (k - c)) as u16;
+                    if err < best.err {
+                        best.err = err;
+                        best.lo = l as u8;
+                        best.hi = h as u8;
+                    }
+                } // h
+            } // l
+
+            unsafe {
+                BC7_MODE_5_OPTIMAL_ENDPOINTS[c as usize] = best;
+            }
+
+        } // c
+    }
+
+    unsafe {
+        (&BC7_MODE_5_OPTIMAL_ENDPOINTS, &BC7_MODE_6_OPTIMAL_ENDPOINTS)
+    }
+}
+
+fn convert_mode_8_to_bc7_mode_endpoint_p_bits_weights(solid_color: Color32) -> (u8, [Color32; 2], [u8; 2], [u8; 2]) {
+
+    let (mode_5_optimal_endpoints, mode_6_optimal_endpoints) = get_mode_8_bc7_tables();
+
+    // Compute the error from BC7 mode 6 p-bit 0
+    let best_err0: u32 = solid_color.0.iter().map(|&c| mode_6_optimal_endpoints[c as usize][0].err as u32).sum();
+
+    // Compute the error from BC7 mode 6 p-bit 1
+    let best_err1: u32 = solid_color.0.iter().map(|&c| mode_6_optimal_endpoints[c as usize][1].err as u32).sum();
+
+    let mut mode = 0;
+    let mut endpoint = [Color32::default(); 2];
+    let mut p_bits = [0u8; 2];
+    let mut weights = [0u8; 2];
+
+    // Is BC7 mode 6 not lossless? If so, use mode 5 instead.
+    if best_err0 > 0 && best_err1 > 0
+    {
+        // Output BC7 mode 5
+        mode = 5;
+
+        // Convert the endpoints
+        for c in 0..3 {
+            endpoint[0][c] = mode_5_optimal_endpoints[solid_color[c] as usize].lo;
+            endpoint[1][c] = mode_5_optimal_endpoints[solid_color[c] as usize].hi;
+        }
+        // Set the output alpha
+        endpoint[0][3] = solid_color[3];
+        endpoint[1][3] = solid_color[3];
+
+        // Set the output BC7 selectors/weights to all 1's
+        weights[0] = BC7ENC_MODE_5_OPTIMAL_INDEX;
+
+        // Set the output BC7 alpha selectors/weights to all 0's
+        weights[1] = 0;
+    } else {
+        // Output BC7 mode 6
+        mode = 6;
+
+        // Choose the p-bit with minimal error
+        let best_p = if best_err1 < best_err0 { 1 } else { 0 };
+
+        // Convert the components
+        for c in 0..4 {
+            endpoint[0][c] = mode_6_optimal_endpoints[solid_color[c] as usize][best_p as usize].lo;
+            endpoint[1][c] = mode_6_optimal_endpoints[solid_color[c] as usize][best_p as usize].hi;
+        }
+
+        // Set the output p-bits
+        p_bits[0] = best_p;
+        p_bits[1] = best_p;
+
+        // Set the output BC7 selectors/weights to all 5's
+        weights = [BC7ENC_MODE_6_OPTIMAL_INDEX, BC7ENC_MODE_6_OPTIMAL_INDEX];
+    }
+
+    (mode, endpoint, p_bits, weights)
 }
 
 // Determines the best shared pbits to use to encode xl/xh
