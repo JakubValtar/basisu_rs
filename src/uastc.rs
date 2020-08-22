@@ -853,7 +853,7 @@ fn decode_block_to_etc1_result(bytes: &[u8], output: &mut [u8]) -> Result<()> {
     let writer = &mut BitWriterLsb::new(output);
 
     if mode.id == 8 {
-        let rgba = decode_mode8_rgba(reader);
+        skip_mode8_rgba(reader);
 
         let trans_flags = decode_mode8_etc1_flags(reader);
 
@@ -1254,6 +1254,10 @@ fn decode_mode8_rgba(reader: &mut BitReaderLsb) -> Color32 {
         reader.read_u8(8), // B
         reader.read_u8(8), // A
     )
+}
+
+fn skip_mode8_rgba(reader: &mut BitReaderLsb) {
+    reader.remove(32);
 }
 
 fn decode_mode8_etc1_flags(reader: &mut BitReaderLsb) -> Mode8Etc1Flags {
