@@ -27,6 +27,9 @@ mod tests_to_astc;
 #[cfg(test)]
 mod tests_to_bc7;
 
+#[cfg(test)]
+mod tests_to_etc1;
+
 const MAX_ENDPOINT_COUNT: usize = 18;
 
 #[derive(Copy, Clone)]
