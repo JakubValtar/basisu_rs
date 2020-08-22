@@ -857,7 +857,26 @@ fn decode_block_to_etc1_result(bytes: &[u8], output: &mut [u8]) -> Result<()> {
 
         let trans_flags = decode_mode8_etc1_flags(reader);
 
-        todo!();
+        if !trans_flags.etc1d {
+            writer.write_u8(8, trans_flags.etc1r << 4 | trans_flags.etc1r);
+            writer.write_u8(8, trans_flags.etc1g << 4 | trans_flags.etc1g);
+            writer.write_u8(8, trans_flags.etc1b << 4 | trans_flags.etc1b);
+        } else {
+            writer.write_u8(8, trans_flags.etc1r << 3);
+            writer.write_u8(8, trans_flags.etc1g << 3);
+            writer.write_u8(8, trans_flags.etc1b << 3);
+        }
+        // codeword1 (3), codeword2 (3), diff bit, flip bit
+        writer.write_u8(8, trans_flags.etc1i << 5 | trans_flags.etc1i << 2 | (trans_flags.etc1d as u8) << 1);
+
+        let selector = [0b11, 0b10, 0b00, 0b01][trans_flags.etc1s as usize];
+        let s_lo = selector & 1;
+        let s_hi = selector >> 1;
+
+        writer.write_u16(16, 0u16.wrapping_sub(s_hi as u16));
+        writer.write_u16(16, 0u16.wrapping_sub(s_lo as u16));
+
+        return Ok(());
     }
 
     let trans_flags = decode_trans_flags(reader, mode);
