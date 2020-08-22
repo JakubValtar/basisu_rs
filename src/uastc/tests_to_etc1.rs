@@ -5,9 +5,9 @@ struct U8ArrayBinPrint<'a>(&'a [u8]);
 impl<'a> fmt::Display for U8ArrayBinPrint<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "[")?;
-        write!(f, "{:08b}", self.0[0].reverse_bits())?;
+        write!(f, "{:08b}", self.0[0])?;
         for b in self.0.iter().skip(1) {
-            write!(f, " {:08b}", b.reverse_bits())?;
+            write!(f, " {:08b}", b)?;
         }
         write!(f, "]")
     }
