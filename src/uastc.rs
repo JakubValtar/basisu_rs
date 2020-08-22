@@ -198,6 +198,28 @@ impl Decoder {
         Ok(image)
     }
 
+    pub(crate) fn transcode_to_etc1(&self, slice_desc: &SliceDesc, bytes: &[u8]) -> Result<Image<u8>> {
+
+        const ETC1_BLOCK_SIZE: usize = 8;
+
+        let mut image = Image {
+            w: slice_desc.orig_width as u32,
+            h: slice_desc.orig_height as u32,
+            stride: ETC1_BLOCK_SIZE as u32 * slice_desc.num_blocks_x as u32,
+            y_flipped: self.y_flipped,
+            data: vec![0u8; slice_desc.num_blocks_x as usize * slice_desc.num_blocks_y as usize * ETC1_BLOCK_SIZE],
+        };
+
+        let block_to_etc1 = |_block_x: u32, _block_y: u32, block_offset: usize, block_bytes: &[u8]| {
+            let output = &mut image.data[block_offset..block_offset + ETC1_BLOCK_SIZE];
+            decode_block_to_etc1(&block_bytes, output);
+        };
+
+        self.iterate_blocks(slice_desc, bytes, block_to_etc1)?;
+
+        Ok(image)
+    }
+
     pub(crate) fn iterate_blocks<F>(&self, slice_desc: &SliceDesc, bytes: &[u8], mut f: F) -> Result<()>
         where F: FnMut(u32, u32, usize, &[u8])
     {
@@ -811,6 +833,36 @@ fn decode_block_to_bc7_result(bytes: &[u8], output: &mut [u8]) -> Result<()> {
     }
 
     Ok(())
+}
+
+fn decode_block_to_etc1(bytes: &[u8], output: &mut [u8]) {
+    match decode_block_to_etc1_result(bytes, output) {
+        Ok(_) => (),
+        _ => output.copy_from_slice(&[0; 8]), // TODO: purple or black?
+    }
+}
+
+fn decode_block_to_etc1_result(bytes: &[u8], output: &mut [u8]) -> Result<()> {
+    let reader = &mut BitReaderLsb::new(bytes);
+
+    let mode = decode_mode(reader)?;
+
+    let writer = &mut BitWriterLsb::new(output);
+
+    if mode.id == 8 {
+        let rgba = decode_mode8_rgba(reader);
+
+        let trans_flags = decode_mode8_etc1_flags(reader);
+
+        todo!();
+    }
+
+    let trans_flags = decode_trans_flags(reader, mode);
+
+    let compsel = decode_compsel(reader, mode);
+    let uastc_pat = decode_pattern_index(reader, mode)?;
+
+    todo!();
 }
 
 #[derive(Clone, Copy, Default)]

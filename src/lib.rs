@@ -76,12 +76,22 @@ pub fn read_to_etc1<P: AsRef<Path>>(path: P) -> Result<Vec<Image<u8>>> {
 
     let slice_descs = basis::read_slice_descs(&buf, &header)?;
 
-    if header.texture_format()? == TexFormat::ETC1S {
+    let format = header.texture_format()?;
+    if format == TexFormat::ETC1S {
         if header.has_alpha() && (header.total_slices % 2) != 0 {
             return Err("File has alpha, but slice count is odd".into());
         }
 
         let decoder = etc1s::Decoder::from_file_bytes(&header, &buf)?;
+
+        let mut images = Vec::with_capacity(header.total_slices as usize);
+        for slice_desc in &slice_descs {
+            let image = decoder.transcode_to_etc1(slice_desc, &buf)?;
+            images.push(image);
+        }
+        Ok(images)
+    } else if format == TexFormat::UASTC4x4 {
+        let decoder = uastc::Decoder::from_file_bytes(&header, &buf)?;
 
         let mut images = Vec::with_capacity(header.total_slices as usize);
         for slice_desc in &slice_descs {
