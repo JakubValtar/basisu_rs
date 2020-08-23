@@ -145,21 +145,7 @@ impl Decoder {
             let endpoint: Endpoint = self.endpoints[block.endpoint_index as usize];
             let selector: Selector = self.selectors[block.selector_index as usize];
 
-            let modifiers = INTENS[endpoint.inten5 as usize];
-
-            let mut colors: [Color32; 4] = [endpoint.color5; 4];
-
-            fn extend_5_to_8(x: u8) -> u8 {
-                (x << 3) | (x >> 2)
-            }
-
-            for i in 0..4 {
-                let modifier = modifiers[i];
-                for c in 0..3 {
-                    let val = extend_5_to_8(colors[i].0[c]) as i16 + modifier;
-                    colors[i].0[c] = i16::max(0, i16::min(val, 255)) as u8;
-                }
-            }
+            let colors: [Color32; 4] = apply_mod_to_base_color(color_5_to_8(endpoint.color5), endpoint.inten5);
 
             let block_pos_x = (block.block_x * 4) as usize;
             let block_pos_y = (block.block_y * 4) as usize;
@@ -466,6 +452,43 @@ impl Decoder {
     }
 }
 
+pub(crate) fn apply_mod_to_base_color(base: Color32, inten: u8) -> [Color32; 4] {
+    let mut colors = [Color32::default(); 4];
+    for (color, &modifier) in colors.iter_mut().zip(INTENS[inten as usize].iter()) {
+        *color = Color32::new(
+            i16::max(0, i16::min(base[0] as i16 + modifier, 255)) as u8,
+            i16::max(0, i16::min(base[1] as i16 + modifier, 255)) as u8,
+            i16::max(0, i16::min(base[2] as i16 + modifier, 255)) as u8,
+            255
+        );
+    }
+    colors
+}
+
+pub(crate) fn color_5_to_8(color5: Color32)-> Color32 {
+    fn extend_5_to_8(x: u8) -> u8 {
+        (x << 3) | (x >> 2)
+    }
+    Color32::new(
+        extend_5_to_8(color5[0]),
+        extend_5_to_8(color5[1]),
+        extend_5_to_8(color5[2]),
+        255
+    )
+}
+
+pub(crate) fn color_4_to_8(color5: Color32)-> Color32 {
+    fn extend_4_to_8(x: u8) -> u8 {
+        (x << 4) | x
+    }
+    Color32::new(
+        extend_4_to_8(color5[0]),
+        extend_4_to_8(color5[1]),
+        extend_4_to_8(color5[2]),
+        255
+    )
+}
+
 fn decode_endpoints(num_endpoints: usize, bytes: &[u8]) -> Result<Vec<Endpoint>> {
     let reader = &mut BitReaderLsb::new(bytes);
 
@@ -526,18 +549,18 @@ struct Endpoint {
 }
 
 #[derive(Clone, Copy, Debug,  Default)]
-struct Selector {
+pub struct Selector {
     // Plain selectors (2-bits per value), one byte for each row
     selectors: [u8; 4],
 
     // Selectors in ETC1 format, ready to be written to an ETC1 texture
-    etc1_bytes: [u8; 4],
+    pub etc1_bytes: [u8; 4],
 }
 
 impl Selector {
 
     // Returned selector value ranges from 0-3 and is a direct index into g_etc1_inten_tables.
-    fn get_selector(&self, x: usize, y: usize) -> usize {
+    pub fn get_selector(&self, x: usize, y: usize) -> usize {
         assert!(x < 4);
         assert!(y < 4);
 
@@ -546,7 +569,7 @@ impl Selector {
         val as usize
     }
 
-    fn set_selector(&mut self, x: usize, y: usize, val: u8) {
+    pub fn set_selector(&mut self, x: usize, y: usize, val: u8) {
         assert!(x < 4);
         assert!(y < 4);
         assert!(val < 4);
