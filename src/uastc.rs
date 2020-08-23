@@ -12,7 +12,7 @@ use crate::{
         BitWriterLsb,
         BitWriterMsbRevBytes,
     },
-    mask,
+    mask, etc1s,
 };
 
 use std::fmt;
@@ -882,10 +882,172 @@ fn decode_block_to_etc1_result(bytes: &[u8], output: &mut [u8]) -> Result<()> {
 
     let trans_flags = decode_trans_flags(reader, mode);
 
-    let compsel = decode_compsel(reader, mode);
-    let uastc_pat = decode_pattern_index(reader, mode)?;
+    let mut rgba = decode_block_to_rgba(bytes);
 
-    todo!();
+    // Transpose to match ETC1 pixel order
+    if !trans_flags.etc1f {
+        for y in 0..3 {
+            for x in (y+1)..4 {
+                let a = y * 4 + x;
+                let b = x * 4 + y;
+                rgba.swap(a, b);
+            }
+        }
+    }
+
+    let color_bits = if !trans_flags.etc1d { 4 } else { 5 };
+    let limit = mask!(color_bits as u32);
+
+    let mut avg_colors = [Color32::default(); 2];
+    for (subblock, avg) in rgba.chunks_exact(8).zip(avg_colors.iter_mut()) {
+        let sum = subblock.iter().fold([0u16; 4], |mut acc, c| {
+            for (acc, &c) in acc.iter_mut().zip(c.0.iter()) {
+                *acc += c as u16;
+            }
+            acc
+        });
+        for (&sum, avg) in sum.iter().zip(avg.0.iter_mut()) {
+            *avg = ((sum as u32 * limit + 1020) / (8*255)) as u8;
+        }
+    }
+
+    let block_colors: [[Color32; 4]; 2];
+
+    let c0 = apply_etc1_bias(avg_colors[0], trans_flags.etc1bias, limit, 0);
+    let c1 = apply_etc1_bias(avg_colors[1], trans_flags.etc1bias, limit, 1);
+
+    if !trans_flags.etc1d {
+        writer.write_u8(8, c0[0] << 4 | c1[0]);
+        writer.write_u8(8, c0[1] << 4 | c1[1]);
+        writer.write_u8(8, c0[2] << 4 | c1[2]);
+        block_colors = [
+            etc1s::apply_mod_to_base_color(etc1s::color_4_to_8(c0), trans_flags.etc1i0),
+            etc1s::apply_mod_to_base_color(etc1s::color_4_to_8(c1), trans_flags.etc1i1),
+        ];
+    } else {
+        let d = [
+            (c1[0] as i16 - c0[0] as i16).max(-4).min(3),
+            (c1[1] as i16 - c0[1] as i16).max(-4).min(3),
+            (c1[2] as i16 - c0[2] as i16).max(-4).min(3),
+        ];
+        writer.write_u8(8, c0[0] << 3 | (d[0] & 0b111) as u8);
+        writer.write_u8(8, c0[1] << 3 | (d[1] & 0b111) as u8);
+        writer.write_u8(8, c0[2] << 3 | (d[2] & 0b111) as u8);
+        let c1 = Color32::new(
+            (c0[0] as i16 + d[0]) as u8,
+            (c0[1] as i16 + d[1]) as u8,
+            (c0[2] as i16 + d[2]) as u8,
+            255,
+        );
+        block_colors = [
+            etc1s::apply_mod_to_base_color(etc1s::color_5_to_8(c0), trans_flags.etc1i0),
+            etc1s::apply_mod_to_base_color(etc1s::color_5_to_8(c1), trans_flags.etc1i1),
+        ];
+    }
+
+    {   // Write codebooks, diff and flip bits
+        let val =
+            trans_flags.etc1i0 << 5 |
+            trans_flags.etc1i1 << 2 |
+            (trans_flags.etc1d as u8) << 1 |
+            trans_flags.etc1f as u8;
+        writer.write_u8(8, val);
+    }
+
+    let mut selector = etc1s::Selector::default();
+
+    for (subblock, (rgba, block_colors)) in rgba.chunks_exact(8).zip(block_colors.iter()).enumerate() {
+
+        const LUM_FACTORS: [i32; 3] = [108, 366, 38];
+        let mut block_lums = [0; 4];
+        for (block_lum, block_color) in block_lums.iter_mut().zip(block_colors.iter()) {
+            *block_lum = block_color.0.iter().zip(LUM_FACTORS.iter())
+                .map(|(&col, &f)| col as i32 * f)
+                .sum();
+        }
+        let block_lum_01 = (block_lums[0] + block_lums[1]) / 2;
+        let block_lum_12 = (block_lums[1] + block_lums[2]) / 2;
+        let block_lum_23 = (block_lums[2] + block_lums[3]) / 2;
+
+        for (i, c) in rgba.iter().enumerate() {
+            let lum: i32 = c.0.iter().zip(LUM_FACTORS.iter())
+                .map(|(&col, &f)| col as i32 * f)
+                .sum();
+            let sel = (lum >= block_lum_01) as u8 + (lum >= block_lum_12) as u8 + (lum >= block_lum_23) as u8;
+            let x = i & 0b11;
+            let y = 2 * subblock + (i >> 2);
+            if trans_flags.etc1f {
+                selector.set_selector(x, y, sel);
+            } else {
+                selector.set_selector(y, x, sel);
+            }
+        }
+    }
+
+    writer.write_u32(32, u32::from_le_bytes(selector.etc1_bytes));
+
+    Ok(())
+}
+
+fn apply_etc1_bias(mut block_color: Color32, bias: u8, limit: u32, subblock: u32) -> Color32 {
+    if bias == ETC1BIAS_NONE {
+        return block_color;
+    }
+
+    const S_DIVS: [u8; 3] = [ 1, 3, 9 ];
+
+    for c in 0..3 {
+        let delta: i32 = match bias {
+            2 => if subblock == 1 { 0 } else if c == 0 { -1 } else { 0 },
+            5 => if subblock == 1 { 0 } else if c == 1 { -1 } else { 0 },
+            6 => if subblock == 1 { 0 } else if c == 2 { -1 } else { 0 },
+
+             7 => if subblock == 1 { 0 } else if c == 0 { 1 } else { 0 },
+            11 => if subblock == 1 { 0 } else if c == 1 { 1 } else { 0 },
+            15 => if subblock == 1 { 0 } else if c == 2 { 1 } else { 0 },
+
+            18 => if subblock == 1 { if c == 0 { -1 } else { 0 } } else { 0 },
+            19 => if subblock == 1 { if c == 1 { -1 } else { 0 } } else { 0 },
+            20 => if subblock == 1 { if c == 2 { -1 } else { 0 } } else { 0 },
+
+            21 => if subblock == 1 { if c == 0 { 1 } else { 0 } } else { 0 },
+            24 => if subblock == 1 { if c == 1 { 1 } else { 0 } } else { 0 },
+             8 => if subblock == 1 { if c == 2 { 1 } else { 0 } } else { 0 },
+
+            10 => -2,
+
+            27 => if subblock == 1 {  0 } else { -1 },
+            28 => if subblock == 1 { -1 } else {  1 },
+            29 => if subblock == 1 {  1 } else {  0 },
+            30 => if subblock == 1 { -1 } else {  0 },
+            31 => if subblock == 1 {  0 } else {  1 },
+
+            _ => ((bias / S_DIVS[c]) % 3) as i32 - 1,
+        };
+
+        let mut v = block_color[c] as i32;
+        if v == 0 {
+            if delta == -2 {
+                v += 3;
+            } else {
+                v += delta + 1;
+            }
+        } else if v == limit as i32 {
+            v += delta - 1;
+        } else {
+            v += delta;
+            if (v < 0) || (v > limit as i32) {
+                v = (v - delta) - delta;
+            }
+        }
+
+        assert!(v >= 0);
+        assert!(v <= limit as i32);
+
+        block_color[c] = v as u8;
+    }
+
+    block_color
 }
 
 #[derive(Clone, Copy, Default)]
