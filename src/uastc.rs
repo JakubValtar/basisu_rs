@@ -215,7 +215,7 @@ impl Decoder {
         };
 
         let block_to_etc1 = |_block_x: u32, _block_y: u32, block_offset: usize, block_bytes: &[u8]| {
-            let output = &mut image.data[block_offset..block_offset + ETC1_BLOCK_SIZE];
+            let output = &mut image.data[block_offset/2..block_offset/2 + ETC1_BLOCK_SIZE];
             decode_block_to_etc1(&block_bytes, output);
         };
 
