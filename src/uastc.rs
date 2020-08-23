@@ -88,6 +88,7 @@ struct Mode8Etc1Flags {
     etc1b: u8,
 }
 
+const ETC1BIAS_NONE: u8 = 0xFF;
 #[derive(Clone, Copy, Debug, Default)]
 pub struct TranscodingFlags {
     bc1h0: bool,
@@ -1303,9 +1304,11 @@ fn decode_trans_flags(reader: &mut BitReaderLsb, mode: Mode) -> TranscodingFlags
     flags.etc1d = reader.read_bool();
     flags.etc1i0 = reader.read_u8(3);
     flags.etc1i1 = reader.read_u8(3);
-    if mode.id < 10 || mode.id > 12 {
-        flags.etc1bias = reader.read_u8(5);
-    }
+    flags.etc1bias = if mode.id < 10 || mode.id > 12 {
+        reader.read_u8(5)
+    } else {
+        ETC1BIAS_NONE
+    };
     if mode.cem == CEM_RGBA || mode.cem == CEM_LA {
         // Only for modes with alpha
         flags.etc2tm = reader.read_u8(8);
