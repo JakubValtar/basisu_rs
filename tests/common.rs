@@ -223,8 +223,11 @@ pub fn compare_ktx<P: AsRef<Path>>(path: P, image: &basisu::Image<u8>) -> Result
     assert_eq!(decoder.pixel_width(), image.w);
     assert_eq!(decoder.pixel_height(), image.h);
 
-    if let Some(texture) = decoder.read_textures().next() {
+    let mut textures = decoder.read_textures();
+
+    if let Some(texture) = textures.next() {
         assert_slices_eq(&texture, &image.data);
+        assert_eq!(textures.next(), None);
         Ok(())
     } else {
         Err(format!("Found no texture in the KTX file: {:?}", path.as_ref()).into())
