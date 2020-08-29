@@ -857,7 +857,12 @@ fn decode_block_to_etc_result(bytes: &[u8], output: &mut [u8], alpha: bool) -> R
     let writer = &mut BitWriterLsb::new(output);
 
     if mode.id == 8 {
-        skip_mode8_rgba(reader);
+        if alpha {
+            let rgba = decode_mode8_rgba(reader);
+            write_solid_etc2_alpha_block(writer, rgba[3]);
+        } else {
+            skip_mode8_rgba(reader);
+        }
 
         let trans_flags = decode_mode8_etc1_flags(reader);
 
@@ -1051,6 +1056,22 @@ fn apply_etc1_bias(mut block_color: Color32, bias: u8, limit: u32, subblock: u32
     }
 
     block_color
+}
+
+fn write_solid_etc2_alpha_block(writer: &mut BitWriterLsb, value: u8) {
+    writer.write_u8(8, value);
+
+    // Multiplier, doesn't matter, but has to be non-zero, so choosing 1
+    // Modifier table index: choosing 13 (only one with 0 in it)
+    writer.write_u8(8, (1 << 4) | 13);
+
+    // Weight indices, 16x 3 bits, value 4 (0b100)
+    writer.write_u8(8, 0b10010010);
+    writer.write_u8(8, 0b01001001);
+    writer.write_u8(8, 0b00100100);
+    writer.write_u8(8, 0b10010010);
+    writer.write_u8(8, 0b01001001);
+    writer.write_u8(8, 0b00100100);
 }
 
 #[derive(Clone, Copy, Default)]
