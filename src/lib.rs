@@ -104,6 +104,32 @@ pub fn read_to_etc1<P: AsRef<Path>>(path: P) -> Result<Vec<Image<u8>>> {
     }
 }
 
+pub fn read_to_etc2<P: AsRef<Path>>(path: P) -> Result<Vec<Image<u8>>> {
+    let buf = std::fs::read(path)?;
+
+    let header = basis::read_header(&buf)?;
+
+    if !basis::check_file_checksum(&buf, &header) {
+        return Err("Data CRC16 failed".into());
+    }
+
+    let slice_descs = basis::read_slice_descs(&buf, &header)?;
+
+    let format = header.texture_format()?;
+    if format == TexFormat::UASTC4x4 {
+        let decoder = uastc::Decoder::from_file_bytes(&header, &buf)?;
+
+        let mut images = Vec::with_capacity(header.total_slices as usize);
+        for slice_desc in &slice_descs {
+            let image = decoder.transcode_to_etc2(slice_desc, &buf)?;
+            images.push(image);
+        }
+        Ok(images)
+    } else {
+        unimplemented!();
+    }
+}
+
 pub fn read_to_uastc<P: AsRef<Path>>(path: P) -> Result<Vec<Image<u8>>> {
     let buf = std::fs::read(path)?;
 

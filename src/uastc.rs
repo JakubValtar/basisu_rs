@@ -227,6 +227,28 @@ impl Decoder {
         Ok(image)
     }
 
+    pub(crate) fn transcode_to_etc2(&self, slice_desc: &SliceDesc, bytes: &[u8]) -> Result<Image<u8>> {
+
+        const ETC2_BLOCK_SIZE: usize = 16;
+
+        let mut image = Image {
+            w: slice_desc.orig_width as u32,
+            h: slice_desc.orig_height as u32,
+            stride: ETC2_BLOCK_SIZE as u32 * slice_desc.num_blocks_x as u32,
+            y_flipped: self.y_flipped,
+            data: vec![0u8; slice_desc.num_blocks_x as usize * slice_desc.num_blocks_y as usize * ETC2_BLOCK_SIZE],
+        };
+
+        let block_to_etc1 = |_block_x: u32, _block_y: u32, block_offset: usize, block_bytes: &[u8]| {
+            let output = &mut image.data[block_offset..block_offset + ETC2_BLOCK_SIZE];
+            decode_block_to_etc(&block_bytes, output, true);
+        };
+
+        self.iterate_blocks(slice_desc, bytes, block_to_etc1)?;
+
+        Ok(image)
+    }
+
     pub(crate) fn iterate_blocks<F>(&self, slice_desc: &SliceDesc, bytes: &[u8], mut f: F) -> Result<()>
         where F: FnMut(u32, u32, usize, &[u8])
     {
