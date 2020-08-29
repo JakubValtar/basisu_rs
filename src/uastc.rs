@@ -893,11 +893,7 @@ fn decode_block_to_etc_result(bytes: &[u8], output: &mut [u8], alpha: bool) -> R
     let mut rgba = decode_block_to_rgba(bytes);
 
     if alpha {
-        if mode.cem == CEM_RGB {
-            write_solid_etc2_alpha_block(writer, 255);
-        } else {
-            todo!();
-        }
+        write_etc2_alpha_block(writer, trans_flags.etc2tm, &rgba);
     }
 
     // Transpose to match ETC1 pixel order
@@ -1081,6 +1077,95 @@ fn write_solid_etc2_alpha_block(writer: &mut BitWriterLsb, value: u8) {
     writer.write_u8(8, 0b01001001);
     writer.write_u8(8, 0b00100100);
 }
+
+fn write_etc2_alpha_block(writer: &mut BitWriterLsb, etc2tm: u8, rgba: &[Color32; 16]) {
+    if etc2tm == 0 {
+        write_solid_etc2_alpha_block(writer, 255);
+    } else {
+        let mut min_alpha = 255;
+        let mut max_alpha = 0;
+
+        for c in rgba.iter() {
+            min_alpha = min_alpha.min(c[3]);
+            max_alpha = max_alpha.max(c[3]);
+        }
+
+        if min_alpha == max_alpha {
+            write_solid_etc2_alpha_block(writer, min_alpha);
+        } else {
+            let table_index = (etc2tm & mask!(4u8)) as usize;
+            let multiplier = (etc2tm >> 4) as u32;
+
+            let mod_table = ETC2_ALPHA_MODIFIERS[table_index];
+
+            let mod_min = mod_table[ETC2_ALPHA_MODIFIERS_MIN_INDEX];
+            let mod_max = mod_table[ETC2_ALPHA_MODIFIERS_MAX_INDEX];
+            let range = mod_max as i32 - mod_min as i32;
+
+            fn lerp(a: f32, b: f32, amt: f32) -> f32 {
+                a * (1.0 - amt) + b * amt
+            }
+
+            let mod_0_at_range_fraction = -(mod_min as f32) / range as f32;
+            let center = (lerp(min_alpha as f32, max_alpha as f32, mod_0_at_range_fraction)).round() as i32;
+
+            let mut values = [0u8; 8];
+            for (val, &modifier) in values.iter_mut().zip(mod_table.iter()) {
+                *val = (center + (modifier as i32 * multiplier as i32)).max(0).min(255) as u8;
+            }
+
+            let mut selectors = 0u64;
+            for (i, c) in rgba.iter().enumerate() {
+                let a = c[3];
+                let best_selector = values.iter().enumerate()
+                    .min_by_key(|(_, &val)| {
+                        (val as i32 - a as i32).abs()
+                    })
+                    .map(|(i, _)| i)
+                    .unwrap() as u64;
+
+                // Transpose to match ETC2 pixel order
+                let x = i / 4;
+                let y = i % 4;
+                let id = y * 4 + x;
+
+                selectors |= best_selector << (45 - id * 3);
+            }
+
+            writer.write_u8(8, center as u8);
+            // Multiplier, doesn't matter, but has to be non-zero, so choosing 1
+            // Modifier table index: choosing 13 (only one with 0 in it)
+            writer.write_u8(8, etc2tm);
+
+            // Weight indices, 16x 3 bits, value 4 (0b100)
+            for &byte in selectors.to_be_bytes().iter().skip(2) {
+                writer.write_u8(8, byte);
+            }
+        }
+    }
+}
+
+const ETC2_ALPHA_MODIFIERS_MIN_INDEX: usize = 3;
+const ETC2_ALPHA_MODIFIERS_MAX_INDEX: usize = 7;
+
+static ETC2_ALPHA_MODIFIERS: [[i8; 8]; 16] = [
+    [ -3, -6,  -9, -15, 2, 5, 8, 14 ],
+    [ -3, -7, -10, -13, 2, 6, 9, 12 ],
+    [ -2, -5,  -8, -13, 1, 4, 7, 12 ],
+    [ -2, -4,  -6, -13, 1, 3, 5, 12 ],
+    [ -3, -6,  -8, -12, 2, 5, 7, 11 ],
+    [ -3, -7,  -9, -11, 2, 6, 8, 10 ],
+    [ -4, -7,  -8, -11, 3, 6, 7, 10 ],
+    [ -3, -5,  -8, -11, 2, 4, 7, 10 ],
+    [ -2, -6,  -8, -10, 1, 5, 7,  9 ],
+    [ -2, -5,  -8, -10, 1, 4, 7,  9 ],
+    [ -2, -4,  -8, -10, 1, 3, 7,  9 ],
+    [ -2, -5,  -7, -10, 1, 4, 6,  9 ],
+    [ -3, -4,  -7, -10, 2, 3, 6,  9 ],
+    [ -1, -2,  -3, -10, 0, 1, 2,  9 ], // entry 13
+    [ -4, -6,  -8,  -9, 3, 5, 7,  8 ],
+    [ -3, -5,  -7,  -9, 2, 4, 6,  8 ],
+];
 
 #[derive(Clone, Copy, Default)]
 struct OptimalEndpoint {
