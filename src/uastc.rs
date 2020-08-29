@@ -918,8 +918,8 @@ fn decode_block_to_etc_result(bytes: &[u8], output: &mut [u8], alpha: bool) -> R
         write_etc2_alpha_block(writer, trans_flags.etc2tm, &rgba);
     }
 
-    // Transpose to match ETC1 pixel order
     if !trans_flags.etc1f {
+        // Transpose to have the two subblocks in 0..8 and 8..16
         for y in 0..3 {
             for x in (y+1)..4 {
                 let a = y * 4 + x;
