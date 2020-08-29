@@ -25,9 +25,10 @@ Sample textures were copied from the official [basis_universal repo](https://git
 - [x] Lookup tables for faster Huffman decoding
 - [x] Decoding UASTC
 - [x] Test on more textures
-- [x] Trancoding UASTC to ASTC
+- [x] Transcoding UASTC to ASTC
 - [x] Transcoding UASTC to BC7
-- [ ] Transcoding UASTC to ETC1
+- [x] Transcoding UASTC to ETC1
+- [ ] Transcoding UASTC to ETC2
 - [ ] Crate API
 - [ ] Check for invalid input data (see Illegal Encodings chapter)
 - [ ] Cubemap support
@@ -36,6 +37,10 @@ Sample textures were copied from the official [basis_universal repo](https://git
 ## Log
 
 Here I'm writing a log of what I did, problems I encountered, and what I learned. Have anything to say or discuss? I'd be happy to hear from you, please send me a DM or @ me on Twitter [@JakubValtar](https://twitter.com/jakubvaltar).
+
+### 23-08-2020
+
+I implemented UASTC to ETC1 transcoding. My results were slightly different from the reference, so I had a look at the refrence transcoder source code to figure out how it calculates subblock averages and weight indices.
 
 ### 16-08-2020
 
