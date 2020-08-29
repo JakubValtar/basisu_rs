@@ -14,6 +14,7 @@ struct TestBlock {
     astc: [u8; 16],
     bc7: [u8; 16],
     etc1: [u8; 8],
+    etc2: [u8; 16],
     rgba: [u32; 16],
 }
 
@@ -93,6 +94,23 @@ fn uastc_block_export() {
         fs::create_dir_all(target).unwrap();
         fs::write(target.join("collected_uastc_etc1.txt"), output).unwrap();
     }
+
+    {
+        let mut output = String::new();
+        writeln!(output, "static TEST_DATA_UASTC_ETC2: [[([u8; 16], [u8; 16]); {}]; 19] = [", TARGET_BLOCKS_PER_MODE).unwrap();
+        for (mode, mode_blocks) in collected_blocks.iter().enumerate() {
+            writeln!(output, "    [   // {}", mode).unwrap();
+            for block in mode_blocks {
+                writeln!(output, "        ({}, {}),", U8ArrayHexPrint(&block.uastc), U8ArrayHexPrint(&block.etc2)).unwrap();
+            }
+            writeln!(output, "    ],").unwrap();
+        }
+        writeln!(output, "];").unwrap();
+
+        let target = Path::new("target");
+        fs::create_dir_all(target).unwrap();
+        fs::write(target.join("collected_uastc_etc2.txt"), output).unwrap();
+    }
 }
 
 fn collect_blocks(case: &TestCase, collected_blocks: &mut [Vec<TestBlock>]) -> Result<()> {
@@ -100,6 +118,7 @@ fn collect_blocks(case: &TestCase, collected_blocks: &mut [Vec<TestBlock>]) -> R
     let astc_data = open_ktx(&case.astc_rgba)?.read_textures().next().unwrap();
     let bc7_data = open_ktx(&case.bc7_rgba)?.read_textures().next().unwrap();
     let etc1_data = open_ktx(&case.etc1_rgb)?.read_textures().next().unwrap();
+    let etc2_data = open_ktx(&case.etc2_rgba)?.read_textures().next().unwrap();
     let rgba_data = {
         let (info, mut reader) = open_png(&case.uastc_rgba32)?.read_info()?;
         let stride = ((info.width + 3) / 4 * 4) * 4;
@@ -175,6 +194,7 @@ fn collect_blocks(case: &TestCase, collected_blocks: &mut [Vec<TestBlock>]) -> R
             let uastc = &uastc_data.data[block_offset..block_offset + 16];
             let astc = &astc_data[block_offset..block_offset + 16];
             let bc7 = &bc7_data[block_offset..block_offset + 16];
+            let etc2 = &etc2_data[block_offset..block_offset + 16];
 
             let etc1_block_offset = y * etc1_block_stride + x * 8;
             let etc1 = &etc1_data[etc1_block_offset..etc1_block_offset + 8];
@@ -202,6 +222,7 @@ fn collect_blocks(case: &TestCase, collected_blocks: &mut [Vec<TestBlock>]) -> R
                     test_block.astc.copy_from_slice(astc);
                     test_block.bc7.copy_from_slice(bc7);
                     test_block.etc1.copy_from_slice(etc1);
+                    test_block.etc2.copy_from_slice(etc2);
                     test_block.rgba.iter_mut()
                         .zip(rgba.chunks_exact(4)
                             .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]])))
