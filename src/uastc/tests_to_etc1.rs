@@ -17,7 +17,7 @@ fn test_uastc_mode(mode: usize) {
     let test_data = TEST_DATA_UASTC_ETC1[mode];
     for (uastc, expected_etc1) in test_data.iter() {
         let mut actual_etc1 = [0; 8];
-        decode_block_to_etc1(uastc, &mut actual_etc1);
+        decode_block_to_etc(uastc, &mut actual_etc1, false);
         assert_eq!(&actual_etc1, expected_etc1, "\nUASTC Mode: {}\n{:02X?}\n{}\n{}", mode, uastc, U8ArrayBinPrint(&actual_etc1), U8ArrayBinPrint(expected_etc1));
     }
 }

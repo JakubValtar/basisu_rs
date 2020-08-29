@@ -216,7 +216,7 @@ impl Decoder {
 
         let block_to_etc1 = |_block_x: u32, _block_y: u32, block_offset: usize, block_bytes: &[u8]| {
             let output = &mut image.data[block_offset/2..block_offset/2 + ETC1_BLOCK_SIZE];
-            decode_block_to_etc1(&block_bytes, output);
+            decode_block_to_etc(&block_bytes, output, false);
         };
 
         self.iterate_blocks(slice_desc, bytes, block_to_etc1)?;
@@ -839,14 +839,14 @@ fn decode_block_to_bc7_result(bytes: &[u8], output: &mut [u8]) -> Result<()> {
     Ok(())
 }
 
-fn decode_block_to_etc1(bytes: &[u8], output: &mut [u8]) {
-    match decode_block_to_etc1_result(bytes, output) {
+fn decode_block_to_etc(bytes: &[u8], output: &mut [u8], alpha: bool) {
+    match decode_block_to_etc_result(bytes, output, alpha) {
         Ok(_) => (),
         _ => output.copy_from_slice(&[0; 8]), // TODO: purple or black?
     }
 }
 
-fn decode_block_to_etc1_result(bytes: &[u8], output: &mut [u8]) -> Result<()> {
+fn decode_block_to_etc_result(bytes: &[u8], output: &mut [u8], alpha: bool) -> Result<()> {
     let reader = &mut BitReaderLsb::new(bytes);
 
     let mode = decode_mode(reader)?;
