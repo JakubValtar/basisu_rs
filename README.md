@@ -28,7 +28,7 @@ Sample textures were copied from the official [basis_universal repo](https://git
 - [x] Transcoding UASTC to ASTC
 - [x] Transcoding UASTC to BC7
 - [x] Transcoding UASTC to ETC1
-- [ ] Transcoding UASTC to ETC2
+- [x] Transcoding UASTC to ETC2
 - [ ] Crate API
 - [ ] Check for invalid input data (see Illegal Encodings chapter)
 - [ ] Cubemap support
@@ -37,6 +37,10 @@ Sample textures were copied from the official [basis_universal repo](https://git
 ## Log
 
 Here I'm writing a log of what I did, problems I encountered, and what I learned. Have anything to say or discuss? I'd be happy to hear from you, please send me a DM or @ me on Twitter [@JakubValtar](https://twitter.com/jakubvaltar).
+
+### 29-08-2020
+
+I added UASTC to ETC2 transcoding. Since ETC2 is a superset of ETC1, this only meant adding an alpha block after each ETC1 RGB block. The transcoding procedure is not mentioned in the spec, so I had to look into the reference transcoder source code. Otherwise everything went smoothly.
 
 ### 23-08-2020
 
