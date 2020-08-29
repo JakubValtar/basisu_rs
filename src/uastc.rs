@@ -892,6 +892,14 @@ fn decode_block_to_etc_result(bytes: &[u8], output: &mut [u8], alpha: bool) -> R
 
     let mut rgba = decode_block_to_rgba(bytes);
 
+    if alpha {
+        if mode.cem == CEM_RGB {
+            write_solid_etc2_alpha_block(writer, 255);
+        } else {
+            todo!();
+        }
+    }
+
     // Transpose to match ETC1 pixel order
     if !trans_flags.etc1f {
         for y in 0..3 {
@@ -914,7 +922,7 @@ fn decode_block_to_etc_result(bytes: &[u8], output: &mut [u8], alpha: bool) -> R
             }
             acc
         });
-        for (&sum, avg) in sum.iter().zip(avg.0.iter_mut()) {
+        for (&sum, avg) in sum.iter().zip(avg.0.iter_mut()).take(3) {
             *avg = ((sum as u32 * limit + 1020) / (8*255)) as u8;
         }
     }
