@@ -38,6 +38,10 @@ Sample textures were copied from the official [basis_universal repo](https://git
 
 Here I'm writing a log of what I did, problems I encountered, and what I learned. Have anything to say or discuss? I'd be happy to hear from you, please send me a DM or @ me on Twitter [@JakubValtar](https://twitter.com/jakubvaltar).
 
+### 30-08-2020
+
+I moved BC7, ASTC and ETC code to separate modules and did some minor refactoring. I removed an intermediate struct in UASTC to RGBA transcoding and reduced memory usage of ETC1S to RGBA transcoding.
+
 ### 29-08-2020
 
 I added UASTC to ETC2 transcoding. Since ETC2 is a superset of ETC1, this only meant adding an alpha block after each ETC1 RGB block. The transcoding procedure is not mentioned in the spec, so I had to look into the reference transcoder source code. Otherwise everything went smoothly.
