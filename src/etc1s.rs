@@ -152,7 +152,7 @@ impl Decoder {
     }
 
     fn decode_to_rgba_internal(&self, slice_desc: &SliceDesc, bytes: &[u8], pixels: &mut [Color32], alpha: bool) -> Result<()> {
-        let block_to_rgb = |block: DecodedBlock| {
+        let block_to_rgba = |block: DecodedBlock| {
             let endpoint: Endpoint = self.endpoints[block.endpoint_index as usize];
             let selector: Selector = self.selectors[block.selector_index as usize];
 
@@ -177,7 +177,7 @@ impl Decoder {
             }
         };
 
-        self.decode_blocks(slice_desc, bytes, block_to_rgb)?;
+        self.decode_blocks(slice_desc, bytes, block_to_rgba)?;
 
         Ok(())
     }
