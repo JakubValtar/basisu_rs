@@ -12,6 +12,7 @@ mod uastc;
 mod basis;
 mod bc7;
 mod astc;
+mod etc;
 
 use basis::{
     TexFormat,
