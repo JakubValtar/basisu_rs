@@ -223,7 +223,7 @@ impl Decoder {
         })
     }
 
-    pub(crate) fn decode_blocks<F>(&self, slice_desc: &SliceDesc, bytes: &[u8], mut f: F) -> Result<()>
+    fn decode_blocks<F>(&self, slice_desc: &SliceDesc, bytes: &[u8], mut f: F) -> Result<()>
         where F: FnMut(DecodedBlock)
     {
 

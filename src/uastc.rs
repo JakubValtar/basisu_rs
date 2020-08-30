@@ -203,7 +203,7 @@ impl Decoder {
         Ok(image)
     }
 
-    pub(crate) fn iterate_blocks<F>(&self, slice_desc: &SliceDesc, bytes: &[u8], mut f: F) -> Result<()>
+    fn iterate_blocks<F>(&self, slice_desc: &SliceDesc, bytes: &[u8], mut f: F) -> Result<()>
         where F: FnMut(u32, u32, usize, &[u8])
     {
         let num_blocks_x = slice_desc.num_blocks_x as u32;
