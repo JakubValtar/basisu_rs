@@ -456,9 +456,9 @@ pub(crate) fn apply_mod_to_base_color(base: Color32, inten: u8) -> [Color32; 4] 
     let mut colors = [Color32::default(); 4];
     for (color, &modifier) in colors.iter_mut().zip(INTENS[inten as usize].iter()) {
         *color = Color32::new(
-            i16::max(0, i16::min(base[0] as i16 + modifier, 255)) as u8,
-            i16::max(0, i16::min(base[1] as i16 + modifier, 255)) as u8,
-            i16::max(0, i16::min(base[2] as i16 + modifier, 255)) as u8,
+            (base[0] as i16 + modifier).max(0).min(255) as u8,
+            (base[1] as i16 + modifier).max(0).min(255) as u8,
+            (base[2] as i16 + modifier).max(0).min(255) as u8,
             255
         );
     }
