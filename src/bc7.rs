@@ -59,7 +59,8 @@ fn convert_block_from_uastc_result(bytes: &[u8], output: &mut [u8]) -> Result<()
         return Ok(())
     }
 
-    let bc7_mode = BC7_MODES[mode.bc7_mode as usize];
+    let bc7_mode_index = UASTC_TO_BC7_MODES[mode.id as usize];
+    let bc7_mode = BC7_MODES[bc7_mode_index as usize];
 
     uastc::skip_trans_flags(reader, mode);
 
@@ -72,7 +73,7 @@ fn convert_block_from_uastc_result(bytes: &[u8], output: &mut [u8]) -> Result<()
     let bc7_channel_count = bc7_mode.endpoint_count as usize / bc7_endpoints_per_channel;
 
     let mut endpoints = {
-        let endpoint_count = mode.endpoint_count as usize;
+        let endpoint_count = mode.endpoint_count();
         let quant_endpoints = uastc::decode_endpoints(reader, mode.endpoint_range_index, endpoint_count);
         let mut unquant_endpoints = [0; 18];
         for (quant, unquant) in quant_endpoints.iter().zip(unquant_endpoints.iter_mut()).take(endpoint_count) {
@@ -103,7 +104,7 @@ fn convert_block_from_uastc_result(bytes: &[u8], output: &mut [u8]) -> Result<()
     let weights = &mut weights[0..bc7_plane_count];
 
     // Write block mode
-    writer.write_u8(mode.bc7_mode as usize + 1, 1 << mode.bc7_mode);
+    writer.write_u8(bc7_mode_index as usize + 1, 1 << bc7_mode_index);
 
     let mut bc7_anchors: &[u8] = &[0];
 
@@ -523,6 +524,15 @@ static BC7_MODES: [Bc7Mode; 8] = [
     Bc7Mode { id: 5, endpoint_count:  8, color_bits: 7, alpha_bits: 8, weight_bits: 2, plane_count: 2, subset_count: 1, pat_bits: 0, p_bits: 0, sp_bits: 0 },
     Bc7Mode { id: 6, endpoint_count:  8, color_bits: 7, alpha_bits: 7, weight_bits: 4, plane_count: 1, subset_count: 1, pat_bits: 0, p_bits: 1, sp_bits: 0 },
     Bc7Mode { id: 7, endpoint_count: 16, color_bits: 5, alpha_bits: 5, weight_bits: 2, plane_count: 1, subset_count: 2, pat_bits: 6, p_bits: 1, sp_bits: 0 },
+];
+
+static UASTC_TO_BC7_MODES: [u8; 20] = [
+    6, 3, 1, 2, 3, 6, 5, 2, // 0..=7 RGB
+    0,                      // 8 Void extent
+    7, 6, 5, 6, 5, 6,       // 9..=14 RGBA
+    6, 7, 5,                // 15..=17 LA
+    6,                      // 18 RGB
+    0,                      // 19 Reserved
 ];
 
 static PATTERNS_2_BC7_INDEX_INV: [(u8, bool); uastc::TOTAL_ASTC_BC7_COMMON_PARTITIONS2] = [

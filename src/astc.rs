@@ -50,15 +50,15 @@ fn convert_block_from_uastc_result(bytes: &[u8], output: &mut [u8]) -> Result<()
     let compsel = uastc::decode_compsel(reader, mode);
     let pat = uastc::decode_pattern_index(reader, mode)?;
 
-    let endpoint_count = mode.endpoint_count;
+    let endpoint_count = mode.endpoint_count();
 
-    let mut quant_endpoints = uastc::decode_endpoints(reader, mode.endpoint_range_index, endpoint_count as usize);
+    let mut quant_endpoints = uastc::decode_endpoints(reader, mode.endpoint_range_index, endpoint_count);
 
     let mut invert_subset_weights = [false, false, false];
 
     // Invert endpoints if they would trigger blue contraction
-    if mode.cem == CEM_RGB || mode.cem == CEM_RGBA {
-        let endpoints_per_subset = (endpoint_count / mode.subset_count) as usize;
+    if mode.has_blue() {
+        let endpoints_per_subset = endpoint_count / mode.subset_count as usize;
         let quant_subset_endpoints = quant_endpoints.chunks_exact_mut(endpoints_per_subset)
             .take(mode.subset_count as usize)
             .enumerate();
@@ -79,7 +79,7 @@ fn convert_block_from_uastc_result(bytes: &[u8], output: &mut [u8]) -> Result<()
     }
 
     {   // Write block mode and config bits
-        writer.write_u16(13, mode.astc_block_mode_13);
+        writer.write_u16(13, UASTC_TO_ASTC_BLOCK_MODE_13[mode.id as usize]);
 
         if mode.subset_count > 1 {
             let pattern_astc_index_10 = get_pattern_astc_index_10(mode, pat);
@@ -87,7 +87,13 @@ fn convert_block_from_uastc_result(bytes: &[u8], output: &mut [u8]) -> Result<()
             writer.write_u8(2, 0b00); // To specify that all endpoints use the same CEM
         }
 
-        writer.write_u8(4, mode.cem);
+        let cem = match mode.format {
+            uastc::Format::Rgb => 8,
+            uastc::Format::Rgba => 12,
+            uastc::Format::La => 4,
+        };
+
+        writer.write_u8(4, cem);
     }
 
     {   // Write endpoints
@@ -174,10 +180,6 @@ fn convert_block_from_uastc_result(bytes: &[u8], output: &mut [u8]) -> Result<()
 
     Ok(())
 }
-
-pub const CEM_RGB: u8 = 8;
-pub const CEM_RGBA: u8 = 12;
-pub const CEM_LA: u8 = 4;
 
 static PATTERNS_2_ASTC_INDEX_10: [u16; uastc::TOTAL_ASTC_BC7_COMMON_PARTITIONS2] = [
     28, 20, 16, 29, 91, 9, 107, 72,
@@ -345,4 +347,32 @@ pub static BISE_RANGES: [BiseCounts; 21] = [
     BiseCounts { bits: 5, trits: 0, quints: 1, deq_b: b"edcb0000e", deq_c:   6 }, // 18
     BiseCounts { bits: 6, trits: 1, quints: 0, deq_b: b"fedcb000f", deq_c:   5 }, // 19
     BiseCounts { bits: 8, trits: 0, quints: 0, deq_b: b"         ", deq_c:   0 }, // 20
+];
+
+static UASTC_TO_ASTC_BLOCK_MODE_13: [u16; 20] = [
+    0x0242, //  0
+    0x0042, //  1
+    0x0853, //  2
+    0x1042, //  3
+    0x0842, //  4
+    0x0053, //  5
+    0x0442, //  6
+    0x0842, //  7
+
+         0, //  8
+
+    0x0842, //  9
+    0x0242, // 10
+    0x0442, // 11
+    0x0053, // 12
+    0x0441, // 13
+    0x0042, // 14
+
+    0x0242, // 15
+    0x0842, // 16
+    0x0442, // 17
+
+    0x0253, // 18
+
+         0, // 19
 ];
