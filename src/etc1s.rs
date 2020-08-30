@@ -123,24 +123,35 @@ impl Decoder {
         })
     }
 
-    pub(crate) fn decode_to_rgba(&self, rgb_desc: &SliceDesc, alpha_desc: &SliceDesc, bytes: &[u8]) -> Result<Image<Color32>> {
-        if !alpha_desc.has_alpha() {
-            return Err("Expected slice with alpha".into());
+    pub(crate) fn decode_to_rgba(&self, rgb_desc: &SliceDesc, alpha_desc: Option<&SliceDesc>, bytes: &[u8]) -> Result<Image<Color32>> {
+        if let Some(alpha_desc) = alpha_desc {
+            if !alpha_desc.has_alpha() {
+                return Err("Expected slice with alpha".into());
+            }
+            if alpha_desc.num_blocks_x != rgb_desc.num_blocks_x || alpha_desc.num_blocks_y != rgb_desc.num_blocks_y {
+                return Err("RGB slice and Alpha slice have different dimensions".into());
+            }
         }
-        let mut rgb = self.decode_to_rgb(rgb_desc, bytes)?;
-        let alpha = self.decode_to_rgb(alpha_desc, bytes)?;
-        for (rgb, alpha) in rgb.data.iter_mut().zip(alpha.data.iter()) {
-            rgb.0[3] = alpha.0[1];
+
+        let num_blocks_x = rgb_desc.num_blocks_x as u32;
+        let num_blocks_y = rgb_desc.num_blocks_y as u32;
+        let mut rgba = vec![Color32::default(); (num_blocks_x * num_blocks_y) as usize * 16];
+
+        self.decode_to_rgba_internal(rgb_desc, bytes, &mut rgba, false)?;
+        if let Some(alpha_desc) = alpha_desc {
+            self.decode_to_rgba_internal(alpha_desc, bytes, &mut rgba, true)?;
         }
-        Ok(rgb)
+
+        Ok(Image {
+            w: rgb_desc.orig_width as u32,
+            h: rgb_desc.orig_height as u32,
+            stride: rgb_desc.num_blocks_x as u32 * 4,
+            y_flipped: self.y_flipped,
+            data: rgba,
+        })
     }
 
-    pub(crate) fn decode_to_rgb(&self, slice_desc: &SliceDesc, bytes: &[u8]) -> Result<Image<Color32>> {
-        let num_blocks_x = slice_desc.num_blocks_x as u32;
-        let num_blocks_y = slice_desc.num_blocks_y as u32;
-
-        let mut pixels = vec![Color32::default(); (num_blocks_x * num_blocks_y) as usize * 16];
-
+    fn decode_to_rgba_internal(&self, slice_desc: &SliceDesc, bytes: &[u8], pixels: &mut [Color32], alpha: bool) -> Result<()> {
         let block_to_rgb = |block: DecodedBlock| {
             let endpoint: Endpoint = self.endpoints[block.endpoint_index as usize];
             let selector: Selector = self.selectors[block.selector_index as usize];
@@ -149,30 +160,26 @@ impl Decoder {
 
             let block_pos_x = (block.block_x * 4) as usize;
             let block_pos_y = (block.block_y * 4) as usize;
-            let stride = (num_blocks_x * 4) as usize;
+            let stride = (slice_desc.num_blocks_x as u32 * 4) as usize;
 
             for y in 0..4 {
                 for x in 0..4 {
                     let sel = selector.get_selector(x, y);
-                    let mut col = colors[sel];
-                    col.0[3] = 0xFF;
                     let gx = block_pos_x + x;
                     let gy = block_pos_y + y;
                     let gid = gx + gy * stride;
-                    pixels[gid] = col;
+                    if !alpha {
+                        pixels[gid] = colors[sel];
+                    } else {
+                        pixels[gid][3] = colors[sel][1];
+                    }
                 }
             }
         };
 
         self.decode_blocks(slice_desc, bytes, block_to_rgb)?;
 
-        Ok(Image {
-            w: slice_desc.orig_width as u32,
-            h: slice_desc.orig_height as u32,
-            stride: slice_desc.num_blocks_x as u32 * 4,
-            y_flipped: self.y_flipped,
-            data: pixels,
-        })
+        Ok(())
     }
 
     pub(crate) fn transcode_to_etc1(&self, slice_desc: &SliceDesc, bytes: &[u8]) -> Result<Image<u8>> {
