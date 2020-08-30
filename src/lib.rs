@@ -10,6 +10,7 @@ mod bytereader;
 mod etc1s;
 mod uastc;
 mod basis;
+mod bc7;
 
 use basis::{
     TexFormat,
