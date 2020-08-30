@@ -3,7 +3,7 @@ use crate::{
     Result,
     bitreader::BitReaderLsb,
     bitwriter::BitWriterLsb,
-    mask, etc1s, uastc,
+    mask, uastc,
 };
 
 pub fn convert_block_from_uastc(bytes: &[u8], output: &mut [u8], alpha: bool) {
@@ -97,8 +97,8 @@ fn convert_block_from_uastc_result(bytes: &[u8], output: &mut [u8], alpha: bool)
         writer.write_u8(8, c0[1] << 4 | c1[1]);
         writer.write_u8(8, c0[2] << 4 | c1[2]);
         block_colors = [
-            etc1s::apply_mod_to_base_color(etc1s::color_4_to_8(c0), trans_flags.etc1i0),
-            etc1s::apply_mod_to_base_color(etc1s::color_4_to_8(c1), trans_flags.etc1i1),
+            apply_mod_to_base_color(color_4_to_8(c0), trans_flags.etc1i0),
+            apply_mod_to_base_color(color_4_to_8(c1), trans_flags.etc1i1),
         ];
     } else {
         let d = [
@@ -116,8 +116,8 @@ fn convert_block_from_uastc_result(bytes: &[u8], output: &mut [u8], alpha: bool)
             255,
         );
         block_colors = [
-            etc1s::apply_mod_to_base_color(etc1s::color_5_to_8(c0), trans_flags.etc1i0),
-            etc1s::apply_mod_to_base_color(etc1s::color_5_to_8(c1), trans_flags.etc1i1),
+            apply_mod_to_base_color(color_5_to_8(c0), trans_flags.etc1i0),
+            apply_mod_to_base_color(color_5_to_8(c1), trans_flags.etc1i1),
         ];
     }
 
@@ -130,7 +130,7 @@ fn convert_block_from_uastc_result(bytes: &[u8], output: &mut [u8], alpha: bool)
         writer.write_u8(8, val);
     }
 
-    let mut selector = etc1s::Selector::default();
+    let mut selector = Selector::default();
 
     for (subblock, (rgba, block_colors)) in rgba.chunks_exact(8).zip(block_colors.iter()).enumerate() {
 
@@ -308,6 +308,112 @@ fn write_etc2_alpha_block(writer: &mut BitWriterLsb, etc2tm: u8, rgba: &[Color32
         }
     }
 }
+
+#[derive(Clone, Copy, Debug,  Default)]
+pub struct Selector {
+    // Plain selectors (2-bits per value), one byte for each row
+    selectors: [u8; 4],
+
+    // Selectors in ETC1 format, ready to be written to an ETC1 texture
+    pub etc1_bytes: [u8; 4],
+}
+
+impl Selector {
+
+    // Returned selector value ranges from 0-3 and is a direct index into g_etc1_inten_tables.
+    pub fn get_selector(&self, x: usize, y: usize) -> usize {
+        assert!(x < 4);
+        assert!(y < 4);
+
+        let shift = 2 * x;
+        let val = (self.selectors[y] >> shift) & 0b11;
+        val as usize
+    }
+
+    pub fn set_selector(&mut self, x: usize, y: usize, val: u8) {
+        assert!(x < 4);
+        assert!(y < 4);
+        assert!(val < 4);
+
+        // Pack the two-bit value into the byte for the appropriate row
+        let shift = 2 * x;
+        self.selectors[y] &= !(0b11 << shift);
+        self.selectors[y] |= (val as u8) << shift;
+
+        // Convert to ETC1 format according to the spec
+        let mod_id: u8 = SELECTOR_ID_TO_ETC1[val as usize];
+
+        // ETC1 indexes pixels from top to bottom within each column
+        let pixel_id = x * 4 + y;
+
+        // MS bit of pixel 0..8 goes to byte 1
+        // MS bit of pixel 8..16 goes to byte 0
+        let ms_byte_id = 1 - (pixel_id / 8);
+
+        // LS bit of pixel 0..8 goes to byte 3
+        // LS bit of pixel 8..16 goes to byte 2
+        let ls_byte_id = ms_byte_id + 2;
+
+        let bit_id = pixel_id % 8;
+
+        self.etc1_bytes[ls_byte_id] &= !(1 << bit_id);
+        self.etc1_bytes[ls_byte_id] |= (mod_id % 2) << bit_id;
+        self.etc1_bytes[ms_byte_id] &= !(1 << bit_id);
+        self.etc1_bytes[ms_byte_id] |= (mod_id / 2) << bit_id;
+    }
+}
+
+pub(crate) fn color_5_to_8(color5: Color32)-> Color32 {
+    fn extend_5_to_8(x: u8) -> u8 {
+        (x << 3) | (x >> 2)
+    }
+    Color32::new(
+        extend_5_to_8(color5[0]),
+        extend_5_to_8(color5[1]),
+        extend_5_to_8(color5[2]),
+        255
+    )
+}
+
+pub(crate) fn color_4_to_8(color5: Color32)-> Color32 {
+    fn extend_4_to_8(x: u8) -> u8 {
+        (x << 4) | x
+    }
+    Color32::new(
+        extend_4_to_8(color5[0]),
+        extend_4_to_8(color5[1]),
+        extend_4_to_8(color5[2]),
+        255
+    )
+}
+
+pub(crate) fn apply_mod_to_base_color(base: Color32, inten: u8) -> [Color32; 4] {
+    let mut colors = [Color32::default(); 4];
+    for (color, &modifier) in colors.iter_mut().zip(ETC1_MODIFIERS[inten as usize].iter()) {
+        *color = Color32::new(
+            (base[0] as i16 + modifier).max(0).min(255) as u8,
+            (base[1] as i16 + modifier).max(0).min(255) as u8,
+            (base[2] as i16 + modifier).max(0).min(255) as u8,
+            255
+        );
+    }
+    colors
+}
+
+static SELECTOR_ID_TO_ETC1: [u8; 4] = [
+    0b11, 0b10, 0b00, 0b01,
+];
+
+static ETC1_MODIFIERS: [[i16; 4]; 8] = [
+    [   -8,  -2,  2,   8 ],
+    [  -17,  -5,  5,  17 ],
+    [  -29,  -9,  9,  29 ],
+    [  -42, -13, 13,  42 ],
+    [  -60, -18, 18,  60 ],
+    [  -80, -24, 24,  80 ],
+    [ -106, -33, 33, 106 ],
+    [ -183, -47, 47, 183 ],
+];
 
 const ETC2_ALPHA_MODIFIERS_MIN_INDEX: usize = 3;
 const ETC2_ALPHA_MODIFIERS_MAX_INDEX: usize = 7;

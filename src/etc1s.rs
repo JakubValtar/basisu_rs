@@ -5,6 +5,7 @@ use std::ops::{
 };
 use crate::{
     Color32,
+    etc::{self, Selector},
     Image,
     mask,
     Result,
@@ -50,17 +51,6 @@ const COLOR5_PAL2_PREV_LO: u8 = 22;
 const COLOR5_PAL2_PREV_HI: u8 = 31;
 const COLOR5_PAL2_DELTA_LO: i32 = -31;
 const COLOR5_PAL2_DELTA_HI: i32 = 9;
-
-const INTENS: [[i16; 4]; 8] = [
-    [-8, -2, 2, 8],
-    [-17, -5, 5, 17],
-    [-29, -9, 9, 29],
-    [-42, -13, 13, 42],
-    [-60, -18, 18, 60],
-    [-80, -24, 24, 80],
-    [-106, -33, 33, 106],
-    [-183, -47, 47, 183],
-];
 
 pub struct DecodedBlock {
     block_x: u32,
@@ -156,7 +146,7 @@ impl Decoder {
             let endpoint: Endpoint = self.endpoints[block.endpoint_index as usize];
             let selector: Selector = self.selectors[block.selector_index as usize];
 
-            let colors: [Color32; 4] = apply_mod_to_base_color(color_5_to_8(endpoint.color5), endpoint.inten5);
+            let colors: [Color32; 4] = etc::apply_mod_to_base_color(etc::color_5_to_8(endpoint.color5), endpoint.inten5);
 
             let block_pos_x = (block.block_x * 4) as usize;
             let block_pos_y = (block.block_y * 4) as usize;
@@ -459,43 +449,6 @@ impl Decoder {
     }
 }
 
-pub(crate) fn apply_mod_to_base_color(base: Color32, inten: u8) -> [Color32; 4] {
-    let mut colors = [Color32::default(); 4];
-    for (color, &modifier) in colors.iter_mut().zip(INTENS[inten as usize].iter()) {
-        *color = Color32::new(
-            (base[0] as i16 + modifier).max(0).min(255) as u8,
-            (base[1] as i16 + modifier).max(0).min(255) as u8,
-            (base[2] as i16 + modifier).max(0).min(255) as u8,
-            255
-        );
-    }
-    colors
-}
-
-pub(crate) fn color_5_to_8(color5: Color32)-> Color32 {
-    fn extend_5_to_8(x: u8) -> u8 {
-        (x << 3) | (x >> 2)
-    }
-    Color32::new(
-        extend_5_to_8(color5[0]),
-        extend_5_to_8(color5[1]),
-        extend_5_to_8(color5[2]),
-        255
-    )
-}
-
-pub(crate) fn color_4_to_8(color5: Color32)-> Color32 {
-    fn extend_4_to_8(x: u8) -> u8 {
-        (x << 4) | x
-    }
-    Color32::new(
-        extend_4_to_8(color5[0]),
-        extend_4_to_8(color5[1]),
-        extend_4_to_8(color5[2]),
-        255
-    )
-}
-
 fn decode_endpoints(num_endpoints: usize, bytes: &[u8]) -> Result<Vec<Endpoint>> {
     let reader = &mut BitReaderLsb::new(bytes);
 
@@ -553,60 +506,6 @@ fn decode_endpoints(num_endpoints: usize, bytes: &[u8]) -> Result<Vec<Endpoint>>
 struct Endpoint {
     inten5: u8,
     color5: Color32,
-}
-
-#[derive(Clone, Copy, Debug,  Default)]
-pub struct Selector {
-    // Plain selectors (2-bits per value), one byte for each row
-    selectors: [u8; 4],
-
-    // Selectors in ETC1 format, ready to be written to an ETC1 texture
-    pub etc1_bytes: [u8; 4],
-}
-
-impl Selector {
-
-    // Returned selector value ranges from 0-3 and is a direct index into g_etc1_inten_tables.
-    pub fn get_selector(&self, x: usize, y: usize) -> usize {
-        assert!(x < 4);
-        assert!(y < 4);
-
-        let shift = 2 * x;
-        let val = (self.selectors[y] >> shift) & 0b11;
-        val as usize
-    }
-
-    pub fn set_selector(&mut self, x: usize, y: usize, val: u8) {
-        assert!(x < 4);
-        assert!(y < 4);
-        assert!(val < 4);
-
-        // Pack the two-bit value into the byte for the appropriate row
-        let shift = 2 * x;
-        self.selectors[y] &= !(0b11 << shift);
-        self.selectors[y] |= (val as u8) << shift;
-
-        // Convert to ETC1 format according to the spec
-        let mod_id: u8 = [0b11, 0b10, 0b00, 0b01][val as usize];
-
-        // ETC1 indexes pixels from top to bottom within each column
-        let pixel_id = x * 4 + y;
-
-        // MS bit of pixel 0..8 goes to byte 1
-        // MS bit of pixel 8..16 goes to byte 0
-        let ms_byte_id = 1 - (pixel_id / 8);
-
-        // LS bit of pixel 0..8 goes to byte 3
-        // LS bit of pixel 8..16 goes to byte 2
-        let ls_byte_id = ms_byte_id + 2;
-
-        let bit_id = pixel_id % 8;
-
-        self.etc1_bytes[ls_byte_id] &= !(1 << bit_id);
-        self.etc1_bytes[ls_byte_id] |= (mod_id % 2) << bit_id;
-        self.etc1_bytes[ms_byte_id] &= !(1 << bit_id);
-        self.etc1_bytes[ms_byte_id] |= (mod_id / 2) << bit_id;
-    }
 }
 
 fn decode_selectors(num_selectors: usize, bytes: &[u8]) -> Result<Vec<Selector>> {
