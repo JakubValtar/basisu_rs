@@ -15,7 +15,6 @@ use crate::{
     mask, etc1s,
 };
 
-use std::fmt;
 use std::sync::Once;
 
 #[cfg(test)]
@@ -34,52 +33,7 @@ mod tests_to_etc1;
 mod tests_to_etc2;
 
 const MAX_ENDPOINT_COUNT: usize = 18;
-
-#[derive(Copy, Clone)]
-struct BlockData {
-    mode: Mode,
-    pat: u8,
-    compsel: u8,
-    endpoint_count: u8,
-    weight_count: u8,
-    data: [u8; 40],
-}
-
-impl BlockData {
-    fn new(mode: Mode, pat: u8, compsel: u8, endpoint_count: u8, weight_count: u8) -> Self {
-        Self {
-            mode,
-            pat,
-            compsel,
-            endpoint_count,
-            weight_count,
-            data: [0; 40],
-        }
-    }
-
-    fn get_endpoints_weights(&self) -> (&[u8], &[u8]) {
-        let combined_count = (self.endpoint_count + self.weight_count) as usize;
-        self.data[..combined_count].split_at(self.endpoint_count as usize)
-    }
-
-    fn get_endpoints_weights_mut(&mut self) -> (&mut [u8], &mut [u8]) {
-        let combined_count = (self.endpoint_count + self.weight_count) as usize;
-        self.data[..combined_count].split_at_mut(self.endpoint_count as usize)
-    }
-}
-
-impl fmt::Debug for BlockData {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let (e, w) = self.get_endpoints_weights();
-        f.debug_struct("ModeEW")
-            .field("mode", &self.mode)
-            .field("pat", &self.pat)
-            .field("compsel", &self.compsel)
-            .field("endpoints", &e)
-            .field("weights", &w)
-            .finish()
-    }
-}
+const MAX_WEIGHT_COUNT: usize = 32;
 
 #[derive(Clone, Copy, Debug)]
 struct Mode8Etc1Flags {
@@ -280,59 +234,6 @@ impl Decoder {
     }
 }
 
-fn block_to_rgba(block: &BlockData) -> [Color32; 16] {
-
-    let (endpoints, weights) = block.get_endpoints_weights();
-
-    let srgb = false;
-    let mut output = [Color32::default(); 16];
-
-    let mode = block.mode;
-
-    if mode.subset_count == 1 {
-        let [e0, e1] = assemble_endpoint_pairs(mode, endpoints)[0];
-
-        let mut w_plane_id = [0; 4];
-        let ws_per_texel = mode.plane_count as usize;
-        if ws_per_texel > 1 {
-            w_plane_id[block.compsel as usize] = 1;
-        }
-
-        for id in 0..16 {
-            let wr = weights[ws_per_texel*id + w_plane_id[0]] as u32;
-            let wg = weights[ws_per_texel*id + w_plane_id[1]] as u32;
-            let wb = weights[ws_per_texel*id + w_plane_id[2]] as u32;
-            let wa = weights[ws_per_texel*id + w_plane_id[3]] as u32;
-
-            output[id] = Color32::new(
-                astc_interpolate(e0[0] as u32, e1[0] as u32, wr, srgb),
-                astc_interpolate(e0[1] as u32, e1[1] as u32, wg, srgb),
-                astc_interpolate(e0[2] as u32, e1[2] as u32, wb, srgb),
-                astc_interpolate(e0[3] as u32, e1[3] as u32, wa, false),
-            );
-        }
-    } else {
-        let e = assemble_endpoint_pairs(mode, endpoints);
-
-        let pattern = get_pattern(mode, block.pat);
-
-        for id in 0..16 {
-            let subset = pattern[id] as usize;
-            let [e0, e1] = e[subset];
-            let w = weights[id] as u32;
-
-            output[id] = Color32::new(
-                astc_interpolate(e0[0] as u32, e1[0] as u32, w, srgb),
-                astc_interpolate(e0[1] as u32, e1[1] as u32, w, srgb),
-                astc_interpolate(e0[2] as u32, e1[2] as u32, w, srgb),
-                astc_interpolate(e0[3] as u32, e1[3] as u32, w, false),
-            );
-        }
-    }
-
-    output
-}
-
 fn assemble_endpoint_pairs(mode: Mode, endpoint_bytes: &[u8]) -> [[Color32; 2]; 3] {
     let mut endpoint_pairs = [[Color32::default(); 2]; 3];
 
@@ -381,7 +282,7 @@ fn astc_interpolate(mut l: u32, mut h: u32, w: u32, srgb: bool) -> u8 {
 
     let k = (l * (64 - w) + h * w + 32) >> 6;
 
-    return (k >> 8) as u8;
+    (k >> 8) as u8
 }
 
 fn decode_block_to_rgba(bytes: &[u8]) -> [Color32; 16] {
@@ -412,8 +313,8 @@ fn decode_block_to_rgba_result(bytes: &[u8]) -> Result<[Color32; 16]> {
     let endpoint_count = mode.endpoint_count;
     let weight_count = mode.plane_count * 16;
 
-    let mut data = BlockData::new(mode, pat, compsel, endpoint_count, weight_count);
-    let (endpoints, weights) = data.get_endpoints_weights_mut();
+    let endpoints = &mut [0u8; MAX_ENDPOINT_COUNT][..endpoint_count as usize];
+    let weights = &mut [0u8; MAX_WEIGHT_COUNT][..weight_count as usize];
 
     let quant_endpoints = decode_endpoints(reader, mode.endpoint_range_index, endpoints.len());
     for (quant, unquant) in quant_endpoints.iter().zip(endpoints.iter_mut()) {
@@ -426,7 +327,51 @@ fn decode_block_to_rgba_result(bytes: &[u8]) -> Result<[Color32; 16]> {
     decode_weights(reader, mode, pat, weight_consumer);
     unquant_weights(weights, mode.weight_bits);
 
-    Ok(block_to_rgba(&data))
+    let srgb = false;
+    let mut output = [Color32::default(); 16];
+
+    if mode.subset_count == 1 {
+        let [e0, e1] = assemble_endpoint_pairs(mode, endpoints)[0];
+
+        let mut w_plane_id = [0; 4];
+        let ws_per_texel = mode.plane_count as usize;
+        if ws_per_texel > 1 {
+            w_plane_id[compsel as usize] = 1;
+        }
+
+        for id in 0..16 {
+            let wr = weights[ws_per_texel*id + w_plane_id[0]] as u32;
+            let wg = weights[ws_per_texel*id + w_plane_id[1]] as u32;
+            let wb = weights[ws_per_texel*id + w_plane_id[2]] as u32;
+            let wa = weights[ws_per_texel*id + w_plane_id[3]] as u32;
+
+            output[id] = Color32::new(
+                astc_interpolate(e0[0] as u32, e1[0] as u32, wr, srgb),
+                astc_interpolate(e0[1] as u32, e1[1] as u32, wg, srgb),
+                astc_interpolate(e0[2] as u32, e1[2] as u32, wb, srgb),
+                astc_interpolate(e0[3] as u32, e1[3] as u32, wa, false),
+            );
+        }
+    } else {
+        let e = assemble_endpoint_pairs(mode, endpoints);
+
+        let pattern = get_pattern(mode, pat);
+
+        for id in 0..16 {
+            let subset = pattern[id] as usize;
+            let [e0, e1] = e[subset];
+            let w = weights[id] as u32;
+
+            output[id] = Color32::new(
+                astc_interpolate(e0[0] as u32, e1[0] as u32, w, srgb),
+                astc_interpolate(e0[1] as u32, e1[1] as u32, w, srgb),
+                astc_interpolate(e0[2] as u32, e1[2] as u32, w, srgb),
+                astc_interpolate(e0[3] as u32, e1[3] as u32, w, false),
+            );
+        }
+    }
+
+    Ok(output)
 }
 
 fn decode_block_to_astc(bytes: &[u8], output: &mut [u8]) {

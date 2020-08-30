@@ -1,4 +1,5 @@
 use super::*;
+use std::fmt;
 
 struct U8ArrayBinPrint<'a>(&'a [u8]);
 
