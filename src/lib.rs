@@ -1,3 +1,4 @@
+#![forbid(unsafe_code)]
 
 use std::fmt;
 use std::ops::{Index, IndexMut};
