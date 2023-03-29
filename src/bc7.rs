@@ -6,8 +6,6 @@ use crate::{
     mask, uastc
 };
 
-use std::sync::Once;
-
 pub fn convert_block_from_uastc(bytes: &[u8], output: &mut [u8]) {
     match convert_block_from_uastc_result(bytes, output) {
         Ok(_) => (),
@@ -279,13 +277,11 @@ fn convert_block_from_uastc_result(bytes: &[u8], output: &mut [u8]) -> Result<()
 
 fn convert_mode_8_to_bc7_mode_endpoint_p_bits_weights(solid_color: Color32) -> (u8, [Color32; 2], [u8; 2], [u8; 2]) {
 
-    let (mode_5_optimal_endpoints, mode_6_optimal_endpoints) = get_mode_8_bc7_tables();
-
     // Compute the error from BC7 mode 6 p-bit 0
-    let best_err0: u32 = solid_color.0.iter().map(|&c| mode_6_optimal_endpoints[c as usize][0].err as u32).sum();
+    let best_err0: u32 = solid_color.0.iter().map(|&c| BC7_MODE_6_OPTIMAL_ENDPOINTS[c as usize][0].err as u32).sum();
 
     // Compute the error from BC7 mode 6 p-bit 1
-    let best_err1: u32 = solid_color.0.iter().map(|&c| mode_6_optimal_endpoints[c as usize][1].err as u32).sum();
+    let best_err1: u32 = solid_color.0.iter().map(|&c| BC7_MODE_6_OPTIMAL_ENDPOINTS[c as usize][1].err as u32).sum();
 
     let mode;
     let mut endpoint = [Color32::default(); 2];
@@ -299,8 +295,8 @@ fn convert_mode_8_to_bc7_mode_endpoint_p_bits_weights(solid_color: Color32) -> (
 
         // Convert the endpoints
         for c in 0..3 {
-            endpoint[0][c] = mode_5_optimal_endpoints[solid_color[c] as usize].lo;
-            endpoint[1][c] = mode_5_optimal_endpoints[solid_color[c] as usize].hi;
+            endpoint[0][c] = BC7_MODE_5_OPTIMAL_ENDPOINTS[solid_color[c] as usize].lo;
+            endpoint[1][c] = BC7_MODE_5_OPTIMAL_ENDPOINTS[solid_color[c] as usize].hi;
         }
         // Set the output alpha
         endpoint[0][3] = solid_color[3];
@@ -320,8 +316,8 @@ fn convert_mode_8_to_bc7_mode_endpoint_p_bits_weights(solid_color: Color32) -> (
 
         // Convert the components
         for c in 0..4 {
-            endpoint[0][c] = mode_6_optimal_endpoints[solid_color[c] as usize][best_p as usize].lo;
-            endpoint[1][c] = mode_6_optimal_endpoints[solid_color[c] as usize][best_p as usize].hi;
+            endpoint[0][c] = BC7_MODE_6_OPTIMAL_ENDPOINTS[solid_color[c] as usize][best_p as usize].lo;
+            endpoint[1][c] = BC7_MODE_6_OPTIMAL_ENDPOINTS[solid_color[c] as usize][best_p as usize].hi;
         }
 
         // Set the output p-bits
@@ -658,37 +654,417 @@ static PATTERNS_3_BC7_ANCHORS: [[u8; 3]; TOTAL_BC7_PATTERNS] = [
     [0,  5, 15], [0, 10, 15], [0,  8, 15], [0, 13, 15], [0, 15,  3], [0, 12, 15], [0,  3, 15], [0,  3,  8],
 ];
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]
 struct OptimalEndpoint {
     lo: u8,
     hi: u8,
     err: u16,
 }
 
-impl OptimalEndpoint {
-    const fn const_default() -> Self {
-        OptimalEndpoint { err: 0, lo: 0, hi: 0 }
-    }
-}
-
-static MODE_8_BC7_TABLES: Once = Once::new();
-
 const BC7ENC_MODE_5_OPTIMAL_INDEX: u8 = 1;
 const BC7ENC_MODE_6_OPTIMAL_INDEX: u8 = 5;
 
-static mut BC7_MODE_5_OPTIMAL_ENDPOINTS: [OptimalEndpoint; 256] = [OptimalEndpoint::const_default(); 256];
-static mut BC7_MODE_6_OPTIMAL_ENDPOINTS: [[OptimalEndpoint; 2]; 256] = [[OptimalEndpoint::const_default(); 2]; 256];
+const BC7_MODE_5_OPTIMAL_ENDPOINTS: [OptimalEndpoint; 256] = [
+    OptimalEndpoint { lo: 0, hi: 0, err: 0 }, OptimalEndpoint { lo: 0, hi: 1, err: 0 },
+    OptimalEndpoint { lo: 0, hi: 3, err: 0 }, OptimalEndpoint { lo: 0, hi: 4, err: 0 },
+    OptimalEndpoint { lo: 0, hi: 6, err: 0 }, OptimalEndpoint { lo: 0, hi: 7, err: 0 },
+    OptimalEndpoint { lo: 0, hi: 9, err: 0 }, OptimalEndpoint { lo: 0, hi: 10, err: 0 },
+    OptimalEndpoint { lo: 0, hi: 12, err: 0 }, OptimalEndpoint { lo: 0, hi: 13, err: 0 },
+    OptimalEndpoint { lo: 0, hi: 15, err: 0 }, OptimalEndpoint { lo: 0, hi: 16, err: 0 },
+    OptimalEndpoint { lo: 0, hi: 18, err: 0 }, OptimalEndpoint { lo: 0, hi: 20, err: 0 },
+    OptimalEndpoint { lo: 0, hi: 21, err: 0 }, OptimalEndpoint { lo: 0, hi: 23, err: 0 },
+    OptimalEndpoint { lo: 0, hi: 24, err: 0 }, OptimalEndpoint { lo: 0, hi: 26, err: 0 },
+    OptimalEndpoint { lo: 0, hi: 27, err: 0 }, OptimalEndpoint { lo: 0, hi: 29, err: 0 },
+    OptimalEndpoint { lo: 0, hi: 30, err: 0 }, OptimalEndpoint { lo: 0, hi: 32, err: 0 },
+    OptimalEndpoint { lo: 0, hi: 33, err: 0 }, OptimalEndpoint { lo: 0, hi: 35, err: 0 },
+    OptimalEndpoint { lo: 0, hi: 36, err: 0 }, OptimalEndpoint { lo: 0, hi: 38, err: 0 },
+    OptimalEndpoint { lo: 0, hi: 39, err: 0 }, OptimalEndpoint { lo: 0, hi: 41, err: 0 },
+    OptimalEndpoint { lo: 0, hi: 42, err: 0 }, OptimalEndpoint { lo: 0, hi: 44, err: 0 },
+    OptimalEndpoint { lo: 0, hi: 45, err: 0 }, OptimalEndpoint { lo: 0, hi: 47, err: 0 },
+    OptimalEndpoint { lo: 0, hi: 48, err: 0 }, OptimalEndpoint { lo: 0, hi: 50, err: 0 },
+    OptimalEndpoint { lo: 0, hi: 52, err: 0 }, OptimalEndpoint { lo: 0, hi: 53, err: 0 },
+    OptimalEndpoint { lo: 0, hi: 55, err: 0 }, OptimalEndpoint { lo: 0, hi: 56, err: 0 },
+    OptimalEndpoint { lo: 0, hi: 58, err: 0 }, OptimalEndpoint { lo: 0, hi: 59, err: 0 },
+    OptimalEndpoint { lo: 0, hi: 61, err: 0 }, OptimalEndpoint { lo: 0, hi: 62, err: 0 },
+    OptimalEndpoint { lo: 0, hi: 64, err: 0 }, OptimalEndpoint { lo: 0, hi: 65, err: 0 },
+    OptimalEndpoint { lo: 0, hi: 66, err: 0 }, OptimalEndpoint { lo: 0, hi: 68, err: 0 },
+    OptimalEndpoint { lo: 0, hi: 69, err: 0 }, OptimalEndpoint { lo: 0, hi: 71, err: 0 },
+    OptimalEndpoint { lo: 0, hi: 72, err: 0 }, OptimalEndpoint { lo: 0, hi: 74, err: 0 },
+    OptimalEndpoint { lo: 0, hi: 75, err: 0 }, OptimalEndpoint { lo: 0, hi: 77, err: 0 },
+    OptimalEndpoint { lo: 0, hi: 78, err: 0 }, OptimalEndpoint { lo: 0, hi: 80, err: 0 },
+    OptimalEndpoint { lo: 0, hi: 82, err: 0 }, OptimalEndpoint { lo: 0, hi: 83, err: 0 },
+    OptimalEndpoint { lo: 0, hi: 85, err: 0 }, OptimalEndpoint { lo: 0, hi: 86, err: 0 },
+    OptimalEndpoint { lo: 0, hi: 88, err: 0 }, OptimalEndpoint { lo: 0, hi: 89, err: 0 },
+    OptimalEndpoint { lo: 0, hi: 91, err: 0 }, OptimalEndpoint { lo: 0, hi: 92, err: 0 },
+    OptimalEndpoint { lo: 0, hi: 94, err: 0 }, OptimalEndpoint { lo: 0, hi: 95, err: 0 },
+    OptimalEndpoint { lo: 0, hi: 97, err: 0 }, OptimalEndpoint { lo: 0, hi: 98, err: 0 },
+    OptimalEndpoint { lo: 0, hi: 100, err: 0 }, OptimalEndpoint { lo: 0, hi: 101, err: 0 },
+    OptimalEndpoint { lo: 0, hi: 103, err: 0 }, OptimalEndpoint { lo: 0, hi: 104, err: 0 },
+    OptimalEndpoint { lo: 0, hi: 106, err: 0 }, OptimalEndpoint { lo: 0, hi: 107, err: 0 },
+    OptimalEndpoint { lo: 0, hi: 109, err: 0 }, OptimalEndpoint { lo: 0, hi: 110, err: 0 },
+    OptimalEndpoint { lo: 0, hi: 112, err: 0 }, OptimalEndpoint { lo: 0, hi: 114, err: 0 },
+    OptimalEndpoint { lo: 0, hi: 115, err: 0 }, OptimalEndpoint { lo: 0, hi: 117, err: 0 },
+    OptimalEndpoint { lo: 0, hi: 118, err: 0 }, OptimalEndpoint { lo: 0, hi: 120, err: 0 },
+    OptimalEndpoint { lo: 0, hi: 121, err: 0 }, OptimalEndpoint { lo: 0, hi: 123, err: 0 },
+    OptimalEndpoint { lo: 0, hi: 124, err: 0 }, OptimalEndpoint { lo: 0, hi: 126, err: 0 },
+    OptimalEndpoint { lo: 0, hi: 127, err: 0 }, OptimalEndpoint { lo: 1, hi: 127, err: 0 },
+    OptimalEndpoint { lo: 2, hi: 126, err: 0 }, OptimalEndpoint { lo: 3, hi: 126, err: 0 },
+    OptimalEndpoint { lo: 3, hi: 127, err: 0 }, OptimalEndpoint { lo: 4, hi: 127, err: 0 },
+    OptimalEndpoint { lo: 5, hi: 126, err: 0 }, OptimalEndpoint { lo: 6, hi: 126, err: 0 },
+    OptimalEndpoint { lo: 6, hi: 127, err: 0 }, OptimalEndpoint { lo: 7, hi: 127, err: 0 },
+    OptimalEndpoint { lo: 8, hi: 126, err: 0 }, OptimalEndpoint { lo: 9, hi: 126, err: 0 },
+    OptimalEndpoint { lo: 9, hi: 127, err: 0 }, OptimalEndpoint { lo: 10, hi: 127, err: 0 },
+    OptimalEndpoint { lo: 11, hi: 126, err: 0 }, OptimalEndpoint { lo: 12, hi: 126, err: 0 },
+    OptimalEndpoint { lo: 12, hi: 127, err: 0 }, OptimalEndpoint { lo: 13, hi: 127, err: 0 },
+    OptimalEndpoint { lo: 14, hi: 126, err: 0 }, OptimalEndpoint { lo: 15, hi: 125, err: 0 },
+    OptimalEndpoint { lo: 15, hi: 127, err: 0 }, OptimalEndpoint { lo: 16, hi: 126, err: 0 },
+    OptimalEndpoint { lo: 17, hi: 126, err: 0 }, OptimalEndpoint { lo: 17, hi: 127, err: 0 },
+    OptimalEndpoint { lo: 18, hi: 127, err: 0 }, OptimalEndpoint { lo: 19, hi: 126, err: 0 },
+    OptimalEndpoint { lo: 20, hi: 126, err: 0 }, OptimalEndpoint { lo: 20, hi: 127, err: 0 },
+    OptimalEndpoint { lo: 21, hi: 127, err: 0 }, OptimalEndpoint { lo: 22, hi: 126, err: 0 },
+    OptimalEndpoint { lo: 23, hi: 126, err: 0 }, OptimalEndpoint { lo: 23, hi: 127, err: 0 },
+    OptimalEndpoint { lo: 24, hi: 127, err: 0 }, OptimalEndpoint { lo: 25, hi: 126, err: 0 },
+    OptimalEndpoint { lo: 26, hi: 126, err: 0 }, OptimalEndpoint { lo: 26, hi: 127, err: 0 },
+    OptimalEndpoint { lo: 27, hi: 127, err: 0 }, OptimalEndpoint { lo: 28, hi: 126, err: 0 },
+    OptimalEndpoint { lo: 29, hi: 126, err: 0 }, OptimalEndpoint { lo: 29, hi: 127, err: 0 },
+    OptimalEndpoint { lo: 30, hi: 127, err: 0 }, OptimalEndpoint { lo: 31, hi: 126, err: 0 },
+    OptimalEndpoint { lo: 32, hi: 126, err: 0 }, OptimalEndpoint { lo: 32, hi: 127, err: 0 },
+    OptimalEndpoint { lo: 33, hi: 127, err: 0 }, OptimalEndpoint { lo: 34, hi: 126, err: 0 },
+    OptimalEndpoint { lo: 35, hi: 126, err: 0 }, OptimalEndpoint { lo: 35, hi: 127, err: 0 },
+    OptimalEndpoint { lo: 36, hi: 127, err: 0 }, OptimalEndpoint { lo: 37, hi: 126, err: 0 },
+    OptimalEndpoint { lo: 38, hi: 126, err: 0 }, OptimalEndpoint { lo: 38, hi: 127, err: 0 },
+    OptimalEndpoint { lo: 39, hi: 127, err: 0 }, OptimalEndpoint { lo: 40, hi: 126, err: 0 },
+    OptimalEndpoint { lo: 41, hi: 126, err: 0 }, OptimalEndpoint { lo: 41, hi: 127, err: 0 },
+    OptimalEndpoint { lo: 42, hi: 127, err: 0 }, OptimalEndpoint { lo: 43, hi: 126, err: 0 },
+    OptimalEndpoint { lo: 44, hi: 126, err: 0 }, OptimalEndpoint { lo: 44, hi: 127, err: 0 },
+    OptimalEndpoint { lo: 45, hi: 127, err: 0 }, OptimalEndpoint { lo: 46, hi: 126, err: 0 },
+    OptimalEndpoint { lo: 47, hi: 125, err: 0 }, OptimalEndpoint { lo: 47, hi: 127, err: 0 },
+    OptimalEndpoint { lo: 48, hi: 126, err: 0 }, OptimalEndpoint { lo: 49, hi: 126, err: 0 },
+    OptimalEndpoint { lo: 49, hi: 127, err: 0 }, OptimalEndpoint { lo: 50, hi: 127, err: 0 },
+    OptimalEndpoint { lo: 51, hi: 126, err: 0 }, OptimalEndpoint { lo: 52, hi: 126, err: 0 },
+    OptimalEndpoint { lo: 52, hi: 127, err: 0 }, OptimalEndpoint { lo: 53, hi: 127, err: 0 },
+    OptimalEndpoint { lo: 54, hi: 126, err: 0 }, OptimalEndpoint { lo: 55, hi: 126, err: 0 },
+    OptimalEndpoint { lo: 55, hi: 127, err: 0 }, OptimalEndpoint { lo: 56, hi: 127, err: 0 },
+    OptimalEndpoint { lo: 57, hi: 126, err: 0 }, OptimalEndpoint { lo: 58, hi: 126, err: 0 },
+    OptimalEndpoint { lo: 58, hi: 127, err: 0 }, OptimalEndpoint { lo: 59, hi: 127, err: 0 },
+    OptimalEndpoint { lo: 60, hi: 126, err: 0 }, OptimalEndpoint { lo: 61, hi: 126, err: 0 },
+    OptimalEndpoint { lo: 61, hi: 127, err: 0 }, OptimalEndpoint { lo: 62, hi: 127, err: 0 },
+    OptimalEndpoint { lo: 63, hi: 126, err: 0 }, OptimalEndpoint { lo: 64, hi: 125, err: 0 },
+    OptimalEndpoint { lo: 64, hi: 126, err: 0 }, OptimalEndpoint { lo: 65, hi: 126, err: 0 },
+    OptimalEndpoint { lo: 65, hi: 127, err: 0 }, OptimalEndpoint { lo: 66, hi: 127, err: 0 },
+    OptimalEndpoint { lo: 67, hi: 126, err: 0 }, OptimalEndpoint { lo: 68, hi: 126, err: 0 },
+    OptimalEndpoint { lo: 68, hi: 127, err: 0 }, OptimalEndpoint { lo: 69, hi: 127, err: 0 },
+    OptimalEndpoint { lo: 70, hi: 126, err: 0 }, OptimalEndpoint { lo: 71, hi: 126, err: 0 },
+    OptimalEndpoint { lo: 71, hi: 127, err: 0 }, OptimalEndpoint { lo: 72, hi: 127, err: 0 },
+    OptimalEndpoint { lo: 73, hi: 126, err: 0 }, OptimalEndpoint { lo: 74, hi: 126, err: 0 },
+    OptimalEndpoint { lo: 74, hi: 127, err: 0 }, OptimalEndpoint { lo: 75, hi: 127, err: 0 },
+    OptimalEndpoint { lo: 76, hi: 126, err: 0 }, OptimalEndpoint { lo: 77, hi: 125, err: 0 },
+    OptimalEndpoint { lo: 77, hi: 127, err: 0 }, OptimalEndpoint { lo: 78, hi: 126, err: 0 },
+    OptimalEndpoint { lo: 79, hi: 126, err: 0 }, OptimalEndpoint { lo: 79, hi: 127, err: 0 },
+    OptimalEndpoint { lo: 80, hi: 127, err: 0 }, OptimalEndpoint { lo: 81, hi: 126, err: 0 },
+    OptimalEndpoint { lo: 82, hi: 126, err: 0 }, OptimalEndpoint { lo: 82, hi: 127, err: 0 },
+    OptimalEndpoint { lo: 83, hi: 127, err: 0 }, OptimalEndpoint { lo: 84, hi: 126, err: 0 },
+    OptimalEndpoint { lo: 85, hi: 126, err: 0 }, OptimalEndpoint { lo: 85, hi: 127, err: 0 },
+    OptimalEndpoint { lo: 86, hi: 127, err: 0 }, OptimalEndpoint { lo: 87, hi: 126, err: 0 },
+    OptimalEndpoint { lo: 88, hi: 126, err: 0 }, OptimalEndpoint { lo: 88, hi: 127, err: 0 },
+    OptimalEndpoint { lo: 89, hi: 127, err: 0 }, OptimalEndpoint { lo: 90, hi: 126, err: 0 },
+    OptimalEndpoint { lo: 91, hi: 126, err: 0 }, OptimalEndpoint { lo: 91, hi: 127, err: 0 },
+    OptimalEndpoint { lo: 92, hi: 127, err: 0 }, OptimalEndpoint { lo: 93, hi: 126, err: 0 },
+    OptimalEndpoint { lo: 94, hi: 126, err: 0 }, OptimalEndpoint { lo: 94, hi: 127, err: 0 },
+    OptimalEndpoint { lo: 95, hi: 127, err: 0 }, OptimalEndpoint { lo: 96, hi: 126, err: 0 },
+    OptimalEndpoint { lo: 97, hi: 126, err: 0 }, OptimalEndpoint { lo: 97, hi: 127, err: 0 },
+    OptimalEndpoint { lo: 98, hi: 127, err: 0 }, OptimalEndpoint { lo: 99, hi: 126, err: 0 },
+    OptimalEndpoint { lo: 100, hi: 126, err: 0 }, OptimalEndpoint { lo: 100, hi: 127, err: 0 },
+    OptimalEndpoint { lo: 101, hi: 127, err: 0 }, OptimalEndpoint { lo: 102, hi: 126, err: 0 },
+    OptimalEndpoint { lo: 103, hi: 126, err: 0 }, OptimalEndpoint { lo: 103, hi: 127, err: 0 },
+    OptimalEndpoint { lo: 104, hi: 127, err: 0 }, OptimalEndpoint { lo: 105, hi: 126, err: 0 },
+    OptimalEndpoint { lo: 106, hi: 126, err: 0 }, OptimalEndpoint { lo: 106, hi: 127, err: 0 },
+    OptimalEndpoint { lo: 107, hi: 127, err: 0 }, OptimalEndpoint { lo: 108, hi: 126, err: 0 },
+    OptimalEndpoint { lo: 109, hi: 125, err: 0 }, OptimalEndpoint { lo: 109, hi: 127, err: 0 },
+    OptimalEndpoint { lo: 110, hi: 126, err: 0 }, OptimalEndpoint { lo: 111, hi: 126, err: 0 },
+    OptimalEndpoint { lo: 111, hi: 127, err: 0 }, OptimalEndpoint { lo: 112, hi: 127, err: 0 },
+    OptimalEndpoint { lo: 113, hi: 126, err: 0 }, OptimalEndpoint { lo: 114, hi: 126, err: 0 },
+    OptimalEndpoint { lo: 114, hi: 127, err: 0 }, OptimalEndpoint { lo: 115, hi: 127, err: 0 },
+    OptimalEndpoint { lo: 116, hi: 126, err: 0 }, OptimalEndpoint { lo: 117, hi: 126, err: 0 },
+    OptimalEndpoint { lo: 117, hi: 127, err: 0 }, OptimalEndpoint { lo: 118, hi: 127, err: 0 },
+    OptimalEndpoint { lo: 119, hi: 126, err: 0 }, OptimalEndpoint { lo: 120, hi: 126, err: 0 },
+    OptimalEndpoint { lo: 120, hi: 127, err: 0 }, OptimalEndpoint { lo: 121, hi: 127, err: 0 },
+    OptimalEndpoint { lo: 122, hi: 126, err: 0 }, OptimalEndpoint { lo: 123, hi: 126, err: 0 },
+    OptimalEndpoint { lo: 123, hi: 127, err: 0 }, OptimalEndpoint { lo: 124, hi: 127, err: 0 },
+    OptimalEndpoint { lo: 125, hi: 126, err: 0 }, OptimalEndpoint { lo: 126, hi: 126, err: 0 },
+    OptimalEndpoint { lo: 126, hi: 127, err: 0 }, OptimalEndpoint { lo: 127, hi: 127, err: 0 },
+];
 
-fn get_mode_8_bc7_tables() -> (&'static [OptimalEndpoint; 256], &'static [[OptimalEndpoint; 2]; 256]) {
+const BC7_MODE_6_OPTIMAL_ENDPOINTS: [[OptimalEndpoint; 2]; 256] = [
+    [OptimalEndpoint { lo: 0, hi: 0, err: 0 }, OptimalEndpoint { lo: 0, hi: 0, err: 1 }],
+    [OptimalEndpoint { lo: 0, hi: 1, err: 0 }, OptimalEndpoint { lo: 0, hi: 0, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 3, err: 0 }, OptimalEndpoint { lo: 0, hi: 1, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 4, err: 0 }, OptimalEndpoint { lo: 0, hi: 3, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 6, err: 0 }, OptimalEndpoint { lo: 0, hi: 4, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 7, err: 0 }, OptimalEndpoint { lo: 0, hi: 6, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 9, err: 0 }, OptimalEndpoint { lo: 0, hi: 7, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 10, err: 0 }, OptimalEndpoint { lo: 0, hi: 9, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 12, err: 0 }, OptimalEndpoint { lo: 0, hi: 10, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 13, err: 0 }, OptimalEndpoint { lo: 0, hi: 12, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 15, err: 0 }, OptimalEndpoint { lo: 0, hi: 13, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 16, err: 0 }, OptimalEndpoint { lo: 0, hi: 15, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 18, err: 0 }, OptimalEndpoint { lo: 0, hi: 16, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 20, err: 0 }, OptimalEndpoint { lo: 0, hi: 18, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 21, err: 0 }, OptimalEndpoint { lo: 0, hi: 20, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 23, err: 0 }, OptimalEndpoint { lo: 0, hi: 21, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 24, err: 0 }, OptimalEndpoint { lo: 0, hi: 23, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 26, err: 0 }, OptimalEndpoint { lo: 0, hi: 24, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 27, err: 0 }, OptimalEndpoint { lo: 0, hi: 26, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 29, err: 0 }, OptimalEndpoint { lo: 0, hi: 27, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 30, err: 0 }, OptimalEndpoint { lo: 0, hi: 29, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 32, err: 0 }, OptimalEndpoint { lo: 0, hi: 30, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 33, err: 0 }, OptimalEndpoint { lo: 0, hi: 32, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 35, err: 0 }, OptimalEndpoint { lo: 0, hi: 33, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 36, err: 0 }, OptimalEndpoint { lo: 0, hi: 35, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 38, err: 0 }, OptimalEndpoint { lo: 0, hi: 36, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 39, err: 0 }, OptimalEndpoint { lo: 0, hi: 38, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 41, err: 0 }, OptimalEndpoint { lo: 0, hi: 39, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 42, err: 0 }, OptimalEndpoint { lo: 0, hi: 41, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 44, err: 0 }, OptimalEndpoint { lo: 0, hi: 42, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 45, err: 0 }, OptimalEndpoint { lo: 0, hi: 44, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 47, err: 0 }, OptimalEndpoint { lo: 0, hi: 45, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 48, err: 0 }, OptimalEndpoint { lo: 0, hi: 47, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 50, err: 0 }, OptimalEndpoint { lo: 0, hi: 48, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 52, err: 0 }, OptimalEndpoint { lo: 0, hi: 50, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 53, err: 0 }, OptimalEndpoint { lo: 0, hi: 52, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 55, err: 0 }, OptimalEndpoint { lo: 0, hi: 53, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 56, err: 0 }, OptimalEndpoint { lo: 0, hi: 55, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 58, err: 0 }, OptimalEndpoint { lo: 0, hi: 56, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 59, err: 0 }, OptimalEndpoint { lo: 0, hi: 58, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 61, err: 0 }, OptimalEndpoint { lo: 0, hi: 59, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 62, err: 0 }, OptimalEndpoint { lo: 0, hi: 61, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 64, err: 0 }, OptimalEndpoint { lo: 0, hi: 62, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 65, err: 0 }, OptimalEndpoint { lo: 0, hi: 64, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 67, err: 0 }, OptimalEndpoint { lo: 0, hi: 65, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 68, err: 0 }, OptimalEndpoint { lo: 0, hi: 67, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 70, err: 0 }, OptimalEndpoint { lo: 0, hi: 68, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 71, err: 0 }, OptimalEndpoint { lo: 0, hi: 70, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 73, err: 0 }, OptimalEndpoint { lo: 0, hi: 71, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 74, err: 0 }, OptimalEndpoint { lo: 0, hi: 73, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 76, err: 0 }, OptimalEndpoint { lo: 0, hi: 74, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 77, err: 0 }, OptimalEndpoint { lo: 0, hi: 76, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 79, err: 0 }, OptimalEndpoint { lo: 0, hi: 77, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 80, err: 0 }, OptimalEndpoint { lo: 0, hi: 79, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 82, err: 0 }, OptimalEndpoint { lo: 0, hi: 80, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 84, err: 0 }, OptimalEndpoint { lo: 0, hi: 82, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 85, err: 0 }, OptimalEndpoint { lo: 0, hi: 84, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 87, err: 0 }, OptimalEndpoint { lo: 0, hi: 85, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 88, err: 0 }, OptimalEndpoint { lo: 0, hi: 87, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 90, err: 0 }, OptimalEndpoint { lo: 0, hi: 88, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 91, err: 0 }, OptimalEndpoint { lo: 0, hi: 90, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 93, err: 0 }, OptimalEndpoint { lo: 0, hi: 91, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 94, err: 0 }, OptimalEndpoint { lo: 0, hi: 93, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 96, err: 0 }, OptimalEndpoint { lo: 0, hi: 94, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 97, err: 0 }, OptimalEndpoint { lo: 0, hi: 96, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 99, err: 0 }, OptimalEndpoint { lo: 0, hi: 97, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 100, err: 0 }, OptimalEndpoint { lo: 0, hi: 99, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 102, err: 0 }, OptimalEndpoint { lo: 0, hi: 100, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 103, err: 0 }, OptimalEndpoint { lo: 0, hi: 102, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 105, err: 0 }, OptimalEndpoint { lo: 0, hi: 103, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 106, err: 0 }, OptimalEndpoint { lo: 0, hi: 105, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 108, err: 0 }, OptimalEndpoint { lo: 0, hi: 106, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 109, err: 0 }, OptimalEndpoint { lo: 0, hi: 108, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 111, err: 0 }, OptimalEndpoint { lo: 0, hi: 109, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 112, err: 0 }, OptimalEndpoint { lo: 0, hi: 111, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 114, err: 0 }, OptimalEndpoint { lo: 0, hi: 112, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 116, err: 0 }, OptimalEndpoint { lo: 0, hi: 114, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 117, err: 0 }, OptimalEndpoint { lo: 0, hi: 116, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 119, err: 0 }, OptimalEndpoint { lo: 0, hi: 117, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 120, err: 0 }, OptimalEndpoint { lo: 0, hi: 119, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 122, err: 0 }, OptimalEndpoint { lo: 0, hi: 120, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 123, err: 0 }, OptimalEndpoint { lo: 0, hi: 122, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 125, err: 0 }, OptimalEndpoint { lo: 0, hi: 123, err: 0 }],
+    [OptimalEndpoint { lo: 0, hi: 126, err: 0 }, OptimalEndpoint { lo: 0, hi: 125, err: 0 }],
+    [OptimalEndpoint { lo: 1, hi: 126, err: 0 }, OptimalEndpoint { lo: 0, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 1, hi: 127, err: 0 }, OptimalEndpoint { lo: 1, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 2, hi: 127, err: 0 }, OptimalEndpoint { lo: 1, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 3, hi: 126, err: 0 }, OptimalEndpoint { lo: 2, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 4, hi: 126, err: 0 }, OptimalEndpoint { lo: 3, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 4, hi: 127, err: 0 }, OptimalEndpoint { lo: 4, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 5, hi: 127, err: 0 }, OptimalEndpoint { lo: 4, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 6, hi: 126, err: 0 }, OptimalEndpoint { lo: 5, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 7, hi: 126, err: 0 }, OptimalEndpoint { lo: 6, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 7, hi: 127, err: 0 }, OptimalEndpoint { lo: 7, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 8, hi: 127, err: 0 }, OptimalEndpoint { lo: 7, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 9, hi: 126, err: 0 }, OptimalEndpoint { lo: 8, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 10, hi: 126, err: 0 }, OptimalEndpoint { lo: 9, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 10, hi: 127, err: 0 }, OptimalEndpoint { lo: 10, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 11, hi: 127, err: 0 }, OptimalEndpoint { lo: 10, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 12, hi: 126, err: 0 }, OptimalEndpoint { lo: 11, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 13, hi: 125, err: 0 }, OptimalEndpoint { lo: 12, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 13, hi: 127, err: 0 }, OptimalEndpoint { lo: 13, hi: 125, err: 0 }],
+    [OptimalEndpoint { lo: 14, hi: 126, err: 0 }, OptimalEndpoint { lo: 13, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 15, hi: 126, err: 0 }, OptimalEndpoint { lo: 14, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 15, hi: 127, err: 0 }, OptimalEndpoint { lo: 15, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 16, hi: 127, err: 0 }, OptimalEndpoint { lo: 15, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 17, hi: 126, err: 0 }, OptimalEndpoint { lo: 16, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 18, hi: 126, err: 0 }, OptimalEndpoint { lo: 17, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 18, hi: 127, err: 0 }, OptimalEndpoint { lo: 18, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 19, hi: 127, err: 0 }, OptimalEndpoint { lo: 18, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 20, hi: 126, err: 0 }, OptimalEndpoint { lo: 19, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 21, hi: 126, err: 0 }, OptimalEndpoint { lo: 20, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 21, hi: 127, err: 0 }, OptimalEndpoint { lo: 21, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 22, hi: 127, err: 0 }, OptimalEndpoint { lo: 21, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 23, hi: 126, err: 0 }, OptimalEndpoint { lo: 22, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 24, hi: 126, err: 0 }, OptimalEndpoint { lo: 23, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 24, hi: 127, err: 0 }, OptimalEndpoint { lo: 24, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 25, hi: 127, err: 0 }, OptimalEndpoint { lo: 24, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 26, hi: 126, err: 0 }, OptimalEndpoint { lo: 25, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 27, hi: 126, err: 0 }, OptimalEndpoint { lo: 26, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 27, hi: 127, err: 0 }, OptimalEndpoint { lo: 27, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 28, hi: 127, err: 0 }, OptimalEndpoint { lo: 27, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 29, hi: 126, err: 0 }, OptimalEndpoint { lo: 28, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 30, hi: 126, err: 0 }, OptimalEndpoint { lo: 29, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 30, hi: 127, err: 0 }, OptimalEndpoint { lo: 30, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 31, hi: 127, err: 0 }, OptimalEndpoint { lo: 30, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 32, hi: 126, err: 0 }, OptimalEndpoint { lo: 31, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 33, hi: 126, err: 0 }, OptimalEndpoint { lo: 32, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 33, hi: 127, err: 0 }, OptimalEndpoint { lo: 33, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 34, hi: 127, err: 0 }, OptimalEndpoint { lo: 33, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 35, hi: 126, err: 0 }, OptimalEndpoint { lo: 34, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 36, hi: 126, err: 0 }, OptimalEndpoint { lo: 35, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 36, hi: 127, err: 0 }, OptimalEndpoint { lo: 36, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 37, hi: 127, err: 0 }, OptimalEndpoint { lo: 36, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 38, hi: 126, err: 0 }, OptimalEndpoint { lo: 37, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 39, hi: 126, err: 0 }, OptimalEndpoint { lo: 38, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 39, hi: 127, err: 0 }, OptimalEndpoint { lo: 39, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 40, hi: 127, err: 0 }, OptimalEndpoint { lo: 39, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 41, hi: 126, err: 0 }, OptimalEndpoint { lo: 40, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 42, hi: 126, err: 0 }, OptimalEndpoint { lo: 41, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 42, hi: 127, err: 0 }, OptimalEndpoint { lo: 42, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 43, hi: 127, err: 0 }, OptimalEndpoint { lo: 42, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 44, hi: 126, err: 0 }, OptimalEndpoint { lo: 43, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 45, hi: 125, err: 0 }, OptimalEndpoint { lo: 44, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 45, hi: 127, err: 0 }, OptimalEndpoint { lo: 45, hi: 125, err: 0 }],
+    [OptimalEndpoint { lo: 46, hi: 126, err: 0 }, OptimalEndpoint { lo: 45, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 47, hi: 126, err: 0 }, OptimalEndpoint { lo: 46, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 47, hi: 127, err: 0 }, OptimalEndpoint { lo: 47, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 48, hi: 127, err: 0 }, OptimalEndpoint { lo: 47, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 49, hi: 126, err: 0 }, OptimalEndpoint { lo: 48, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 50, hi: 126, err: 0 }, OptimalEndpoint { lo: 49, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 50, hi: 127, err: 0 }, OptimalEndpoint { lo: 50, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 51, hi: 127, err: 0 }, OptimalEndpoint { lo: 50, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 52, hi: 126, err: 0 }, OptimalEndpoint { lo: 51, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 53, hi: 126, err: 0 }, OptimalEndpoint { lo: 52, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 53, hi: 127, err: 0 }, OptimalEndpoint { lo: 53, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 54, hi: 127, err: 0 }, OptimalEndpoint { lo: 53, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 55, hi: 126, err: 0 }, OptimalEndpoint { lo: 54, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 56, hi: 126, err: 0 }, OptimalEndpoint { lo: 55, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 56, hi: 127, err: 0 }, OptimalEndpoint { lo: 56, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 57, hi: 127, err: 0 }, OptimalEndpoint { lo: 56, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 58, hi: 126, err: 0 }, OptimalEndpoint { lo: 57, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 59, hi: 126, err: 0 }, OptimalEndpoint { lo: 58, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 59, hi: 127, err: 0 }, OptimalEndpoint { lo: 59, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 60, hi: 127, err: 0 }, OptimalEndpoint { lo: 59, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 61, hi: 126, err: 0 }, OptimalEndpoint { lo: 60, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 62, hi: 126, err: 0 }, OptimalEndpoint { lo: 61, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 62, hi: 127, err: 0 }, OptimalEndpoint { lo: 62, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 63, hi: 127, err: 0 }, OptimalEndpoint { lo: 62, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 64, hi: 126, err: 0 }, OptimalEndpoint { lo: 63, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 65, hi: 126, err: 0 }, OptimalEndpoint { lo: 64, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 65, hi: 127, err: 0 }, OptimalEndpoint { lo: 65, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 66, hi: 127, err: 0 }, OptimalEndpoint { lo: 65, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 67, hi: 126, err: 0 }, OptimalEndpoint { lo: 66, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 68, hi: 126, err: 0 }, OptimalEndpoint { lo: 67, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 68, hi: 127, err: 0 }, OptimalEndpoint { lo: 68, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 69, hi: 127, err: 0 }, OptimalEndpoint { lo: 68, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 70, hi: 126, err: 0 }, OptimalEndpoint { lo: 69, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 71, hi: 126, err: 0 }, OptimalEndpoint { lo: 70, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 71, hi: 127, err: 0 }, OptimalEndpoint { lo: 71, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 72, hi: 127, err: 0 }, OptimalEndpoint { lo: 71, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 73, hi: 126, err: 0 }, OptimalEndpoint { lo: 72, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 74, hi: 126, err: 0 }, OptimalEndpoint { lo: 73, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 74, hi: 127, err: 0 }, OptimalEndpoint { lo: 74, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 75, hi: 127, err: 0 }, OptimalEndpoint { lo: 74, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 76, hi: 126, err: 0 }, OptimalEndpoint { lo: 75, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 77, hi: 125, err: 0 }, OptimalEndpoint { lo: 76, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 77, hi: 127, err: 0 }, OptimalEndpoint { lo: 77, hi: 125, err: 0 }],
+    [OptimalEndpoint { lo: 78, hi: 126, err: 0 }, OptimalEndpoint { lo: 77, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 79, hi: 126, err: 0 }, OptimalEndpoint { lo: 78, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 79, hi: 127, err: 0 }, OptimalEndpoint { lo: 79, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 80, hi: 127, err: 0 }, OptimalEndpoint { lo: 79, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 81, hi: 126, err: 0 }, OptimalEndpoint { lo: 80, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 82, hi: 126, err: 0 }, OptimalEndpoint { lo: 81, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 82, hi: 127, err: 0 }, OptimalEndpoint { lo: 82, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 83, hi: 127, err: 0 }, OptimalEndpoint { lo: 82, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 84, hi: 126, err: 0 }, OptimalEndpoint { lo: 83, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 85, hi: 126, err: 0 }, OptimalEndpoint { lo: 84, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 85, hi: 127, err: 0 }, OptimalEndpoint { lo: 85, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 86, hi: 127, err: 0 }, OptimalEndpoint { lo: 85, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 87, hi: 126, err: 0 }, OptimalEndpoint { lo: 86, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 88, hi: 126, err: 0 }, OptimalEndpoint { lo: 87, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 88, hi: 127, err: 0 }, OptimalEndpoint { lo: 88, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 89, hi: 127, err: 0 }, OptimalEndpoint { lo: 88, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 90, hi: 126, err: 0 }, OptimalEndpoint { lo: 89, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 91, hi: 126, err: 0 }, OptimalEndpoint { lo: 90, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 91, hi: 127, err: 0 }, OptimalEndpoint { lo: 91, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 92, hi: 127, err: 0 }, OptimalEndpoint { lo: 91, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 93, hi: 126, err: 0 }, OptimalEndpoint { lo: 92, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 94, hi: 126, err: 0 }, OptimalEndpoint { lo: 93, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 94, hi: 127, err: 0 }, OptimalEndpoint { lo: 94, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 95, hi: 127, err: 0 }, OptimalEndpoint { lo: 94, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 96, hi: 126, err: 0 }, OptimalEndpoint { lo: 95, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 97, hi: 126, err: 0 }, OptimalEndpoint { lo: 96, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 97, hi: 127, err: 0 }, OptimalEndpoint { lo: 97, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 98, hi: 127, err: 0 }, OptimalEndpoint { lo: 97, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 99, hi: 126, err: 0 }, OptimalEndpoint { lo: 98, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 100, hi: 126, err: 0 }, OptimalEndpoint { lo: 99, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 100, hi: 127, err: 0 }, OptimalEndpoint { lo: 100, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 101, hi: 127, err: 0 }, OptimalEndpoint { lo: 100, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 102, hi: 126, err: 0 }, OptimalEndpoint { lo: 101, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 103, hi: 126, err: 0 }, OptimalEndpoint { lo: 102, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 103, hi: 127, err: 0 }, OptimalEndpoint { lo: 103, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 104, hi: 127, err: 0 }, OptimalEndpoint { lo: 103, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 105, hi: 126, err: 0 }, OptimalEndpoint { lo: 104, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 106, hi: 126, err: 0 }, OptimalEndpoint { lo: 105, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 106, hi: 127, err: 0 }, OptimalEndpoint { lo: 106, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 107, hi: 127, err: 0 }, OptimalEndpoint { lo: 106, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 108, hi: 126, err: 0 }, OptimalEndpoint { lo: 107, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 109, hi: 125, err: 0 }, OptimalEndpoint { lo: 108, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 109, hi: 127, err: 0 }, OptimalEndpoint { lo: 109, hi: 125, err: 0 }],
+    [OptimalEndpoint { lo: 110, hi: 126, err: 0 }, OptimalEndpoint { lo: 109, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 111, hi: 126, err: 0 }, OptimalEndpoint { lo: 110, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 111, hi: 127, err: 0 }, OptimalEndpoint { lo: 111, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 112, hi: 127, err: 0 }, OptimalEndpoint { lo: 111, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 113, hi: 126, err: 0 }, OptimalEndpoint { lo: 112, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 114, hi: 126, err: 0 }, OptimalEndpoint { lo: 113, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 114, hi: 127, err: 0 }, OptimalEndpoint { lo: 114, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 115, hi: 127, err: 0 }, OptimalEndpoint { lo: 114, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 116, hi: 126, err: 0 }, OptimalEndpoint { lo: 115, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 117, hi: 126, err: 0 }, OptimalEndpoint { lo: 116, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 117, hi: 127, err: 0 }, OptimalEndpoint { lo: 117, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 118, hi: 127, err: 0 }, OptimalEndpoint { lo: 117, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 119, hi: 126, err: 0 }, OptimalEndpoint { lo: 118, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 120, hi: 126, err: 0 }, OptimalEndpoint { lo: 119, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 120, hi: 127, err: 0 }, OptimalEndpoint { lo: 120, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 121, hi: 127, err: 0 }, OptimalEndpoint { lo: 120, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 122, hi: 126, err: 0 }, OptimalEndpoint { lo: 121, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 123, hi: 126, err: 0 }, OptimalEndpoint { lo: 122, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 123, hi: 127, err: 0 }, OptimalEndpoint { lo: 123, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 124, hi: 127, err: 0 }, OptimalEndpoint { lo: 123, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 125, hi: 126, err: 0 }, OptimalEndpoint { lo: 124, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 126, hi: 126, err: 0 }, OptimalEndpoint { lo: 125, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 126, hi: 127, err: 0 }, OptimalEndpoint { lo: 126, hi: 126, err: 0 }],
+    [OptimalEndpoint { lo: 127, hi: 127, err: 0 }, OptimalEndpoint { lo: 126, hi: 127, err: 0 }],
+    [OptimalEndpoint { lo: 127, hi: 127, err: 1 }, OptimalEndpoint { lo: 127, hi: 127, err: 0 }],
+];
 
-    MODE_8_BC7_TABLES.call_once(|| {
-        calculate_mode_8_bc7_tables();
-    });
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    fn calculate_mode_8_bc7_tables() {
+    #[test]
+    fn check_mode_8_bc7_tables() {
+        let mut bc7_mode_5_optimal_endpoints = [Default::default(); 256];
+        let mut bc7_mode_6_optimal_endpoints = [[Default::default(); 2]; 256];
 
-        let weights2: [u8; 4] = [ 0, 21, 43, 64 ];
-        let weights4: [u8; 16] = [ 0, 4, 9, 13, 17, 21, 26, 30, 34, 38, 43, 47, 51, 55, 60, 64 ];
+        let weights2: [u8; 4] = [0, 21, 43, 64];
+        let weights4: [u8; 16] = [0, 4, 9, 13, 17, 21, 26, 30, 34, 38, 43, 47, 51, 55, 60, 64];
 
         // TODO: Precompute?
         // BC7 777.1
@@ -714,9 +1090,7 @@ fn get_mode_8_bc7_tables() -> (&'static [OptimalEndpoint; 256], &'static [[Optim
                     } // h
                 } // l
 
-                unsafe {
-                    BC7_MODE_6_OPTIMAL_ENDPOINTS[c as usize][lp as usize] = best;
-                }
+                bc7_mode_6_optimal_endpoints[c as usize][lp as usize] = best;
             } // lp
 
         } // c
@@ -747,14 +1121,10 @@ fn get_mode_8_bc7_tables() -> (&'static [OptimalEndpoint; 256], &'static [[Optim
                 } // h
             } // l
 
-            unsafe {
-                BC7_MODE_5_OPTIMAL_ENDPOINTS[c as usize] = best;
-            }
-
+            bc7_mode_5_optimal_endpoints[c as usize] = best;
         } // c
-    }
 
-    unsafe {
-        (&BC7_MODE_5_OPTIMAL_ENDPOINTS, &BC7_MODE_6_OPTIMAL_ENDPOINTS)
+        assert_eq!(bc7_mode_5_optimal_endpoints, BC7_MODE_5_OPTIMAL_ENDPOINTS);
+        assert_eq!(bc7_mode_6_optimal_endpoints, BC7_MODE_6_OPTIMAL_ENDPOINTS);
     }
 }
