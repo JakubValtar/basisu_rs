@@ -1,7 +1,7 @@
 mod common;
 use common::*;
 
-use std::fmt::{ self, Write };
+use std::fmt::{self, Write};
 use std::fs;
 use std::path::Path;
 
@@ -29,11 +29,22 @@ fn uastc_block_export() {
 
     {
         let mut output = String::new();
-        writeln!(output, "static TEST_DATA_UASTC_RGBA: [[([u8; 16], [u32; 16]); {}]; 19] = [", TARGET_BLOCKS_PER_MODE).unwrap();
+        writeln!(
+            output,
+            "static TEST_DATA_UASTC_RGBA: [[([u8; 16], [u32; 16]); {}]; 19] = [",
+            TARGET_BLOCKS_PER_MODE
+        )
+        .unwrap();
         for (mode, mode_blocks) in collected_blocks.iter().enumerate() {
             writeln!(output, "    [   // {}", mode).unwrap();
             for block in mode_blocks {
-                writeln!(output, "        ({}, {}),", U8ArrayHexPrint(&block.uastc), U32ArrayHexPrint(&block.rgba)).unwrap();
+                writeln!(
+                    output,
+                    "        ({}, {}),",
+                    U8ArrayHexPrint(&block.uastc),
+                    U32ArrayHexPrint(&block.rgba)
+                )
+                .unwrap();
             }
             writeln!(output, "    ],").unwrap();
         }
@@ -46,11 +57,22 @@ fn uastc_block_export() {
 
     {
         let mut output = String::new();
-        writeln!(output, "static TEST_DATA_UASTC_ASTC: [[([u8; 16], [u8; 16]); {}]; 19] = [", TARGET_BLOCKS_PER_MODE).unwrap();
+        writeln!(
+            output,
+            "static TEST_DATA_UASTC_ASTC: [[([u8; 16], [u8; 16]); {}]; 19] = [",
+            TARGET_BLOCKS_PER_MODE
+        )
+        .unwrap();
         for (mode, mode_blocks) in collected_blocks.iter().enumerate() {
             writeln!(output, "    [   // {}", mode).unwrap();
             for block in mode_blocks {
-                writeln!(output, "        ({}, {}),", U8ArrayHexPrint(&block.uastc), U8ArrayHexPrint(&block.astc)).unwrap();
+                writeln!(
+                    output,
+                    "        ({}, {}),",
+                    U8ArrayHexPrint(&block.uastc),
+                    U8ArrayHexPrint(&block.astc)
+                )
+                .unwrap();
             }
             writeln!(output, "    ],").unwrap();
         }
@@ -63,11 +85,22 @@ fn uastc_block_export() {
 
     {
         let mut output = String::new();
-        writeln!(output, "static TEST_DATA_UASTC_BC7: [[([u8; 16], [u8; 16]); {}]; 19] = [", TARGET_BLOCKS_PER_MODE).unwrap();
+        writeln!(
+            output,
+            "static TEST_DATA_UASTC_BC7: [[([u8; 16], [u8; 16]); {}]; 19] = [",
+            TARGET_BLOCKS_PER_MODE
+        )
+        .unwrap();
         for (mode, mode_blocks) in collected_blocks.iter().enumerate() {
             writeln!(output, "    [   // {}", mode).unwrap();
             for block in mode_blocks {
-                writeln!(output, "        ({}, {}),", U8ArrayHexPrint(&block.uastc), U8ArrayHexPrint(&block.bc7)).unwrap();
+                writeln!(
+                    output,
+                    "        ({}, {}),",
+                    U8ArrayHexPrint(&block.uastc),
+                    U8ArrayHexPrint(&block.bc7)
+                )
+                .unwrap();
             }
             writeln!(output, "    ],").unwrap();
         }
@@ -80,11 +113,22 @@ fn uastc_block_export() {
 
     {
         let mut output = String::new();
-        writeln!(output, "static TEST_DATA_UASTC_ETC1: [[([u8; 16], [u8; 8]); {}]; 19] = [", TARGET_BLOCKS_PER_MODE).unwrap();
+        writeln!(
+            output,
+            "static TEST_DATA_UASTC_ETC1: [[([u8; 16], [u8; 8]); {}]; 19] = [",
+            TARGET_BLOCKS_PER_MODE
+        )
+        .unwrap();
         for (mode, mode_blocks) in collected_blocks.iter().enumerate() {
             writeln!(output, "    [   // {}", mode).unwrap();
             for block in mode_blocks {
-                writeln!(output, "        ({}, {}),", U8ArrayHexPrint(&block.uastc), U8ArrayHexPrint(&block.etc1)).unwrap();
+                writeln!(
+                    output,
+                    "        ({}, {}),",
+                    U8ArrayHexPrint(&block.uastc),
+                    U8ArrayHexPrint(&block.etc1)
+                )
+                .unwrap();
             }
             writeln!(output, "    ],").unwrap();
         }
@@ -97,11 +141,22 @@ fn uastc_block_export() {
 
     {
         let mut output = String::new();
-        writeln!(output, "static TEST_DATA_UASTC_ETC2: [[([u8; 16], [u8; 16]); {}]; 19] = [", TARGET_BLOCKS_PER_MODE).unwrap();
+        writeln!(
+            output,
+            "static TEST_DATA_UASTC_ETC2: [[([u8; 16], [u8; 16]); {}]; 19] = [",
+            TARGET_BLOCKS_PER_MODE
+        )
+        .unwrap();
         for (mode, mode_blocks) in collected_blocks.iter().enumerate() {
             writeln!(output, "    [   // {}", mode).unwrap();
             for block in mode_blocks {
-                writeln!(output, "        ({}, {}),", U8ArrayHexPrint(&block.uastc), U8ArrayHexPrint(&block.etc2)).unwrap();
+                writeln!(
+                    output,
+                    "        ({}, {}),",
+                    U8ArrayHexPrint(&block.uastc),
+                    U8ArrayHexPrint(&block.etc2)
+                )
+                .unwrap();
             }
             writeln!(output, "    ],").unwrap();
         }
@@ -129,7 +184,7 @@ fn collect_blocks(case: &TestCase, collected_blocks: &mut [Vec<TestBlock>]) -> R
             h: info.height,
             stride,
             y_flipped: false,
-            data: vec![0u8; len as usize]
+            data: vec![0u8; len as usize],
         };
 
         let mut rgba_rows = image.data.chunks_exact_mut(stride as usize);
@@ -143,32 +198,32 @@ fn collect_blocks(case: &TestCase, collected_blocks: &mut [Vec<TestBlock>]) -> R
             png::ColorType::RGB => {
                 while let (Some(src), Some(dst)) = (reader.next_row()?, rgba_rows.next()) {
                     for i in 0..image.w as usize {
-                        dst[4*i..4*i+3].copy_from_slice(&src[3*i..3*i+3]);
-                        dst[4*i+3] = 255;
+                        dst[4 * i..4 * i + 3].copy_from_slice(&src[3 * i..3 * i + 3]);
+                        dst[4 * i + 3] = 255;
                     }
                 }
             }
             png::ColorType::GrayscaleAlpha => {
                 while let (Some(src), Some(dst)) = (reader.next_row()?, rgba_rows.next()) {
                     for i in 0..image.w as usize {
-                        dst[4*i] = src[2*i];
-                        dst[4*i+1] = src[2*i];
-                        dst[4*i+2] = src[2*i];
-                        dst[4*i+3] = src[2*i+1];
+                        dst[4 * i] = src[2 * i];
+                        dst[4 * i + 1] = src[2 * i];
+                        dst[4 * i + 2] = src[2 * i];
+                        dst[4 * i + 3] = src[2 * i + 1];
                     }
                 }
             }
             png::ColorType::Grayscale => {
                 while let (Some(src), Some(dst)) = (reader.next_row()?, rgba_rows.next()) {
                     for i in 0..image.w as usize {
-                        dst[4*i] = src[i];
-                        dst[4*i+1] = src[i];
-                        dst[4*i+2] = src[i];
-                        dst[4*i+3] = 255;
+                        dst[4 * i] = src[i];
+                        dst[4 * i + 1] = src[i];
+                        dst[4 * i + 2] = src[i];
+                        dst[4 * i + 3] = 255;
                     }
                 }
             }
-            _ => unimplemented!()
+            _ => unimplemented!(),
         }
 
         image
@@ -204,28 +259,32 @@ fn collect_blocks(case: &TestCase, collected_blocks: &mut [Vec<TestBlock>]) -> R
             let mode_blocks = &mut collected_blocks[mode];
             if mode_blocks.len() < TARGET_BLOCKS_PER_MODE {
                 let colors_differ = rgba.chunks_exact(4).any(|c| {
-                    (c[0] as i32 - c[1] as i32).abs() >= MIN_RGB_DIFF &&
-                    (c[1] as i32 - c[2] as i32).abs() >= MIN_RGB_DIFF &&
-                    (c[2] as i32 - c[0] as i32).abs() >= MIN_RGB_DIFF
+                    (c[0] as i32 - c[1] as i32).abs() >= MIN_RGB_DIFF
+                        && (c[1] as i32 - c[2] as i32).abs() >= MIN_RGB_DIFF
+                        && (c[2] as i32 - c[0] as i32).abs() >= MIN_RGB_DIFF
                 });
-                let not_opaque_or_transparent = rgba.chunks_exact(4).any(|c| c[3] >= 5 && c[3] <= 250);
+                let not_opaque_or_transparent =
+                    rgba.chunks_exact(4).any(|c| c[3] >= 5 && c[3] <= 250);
                 let not_black_or_white = rgba.chunks_exact(4).any(|c| {
-                    c[0] >= 5 && c[0] <= 250 &&
-                    c[1] >= 5 && c[1] <= 250 &&
-                    c[2] >= 5 && c[2] <= 250
+                    c[0] >= 5 && c[0] <= 250 && c[1] >= 5 && c[1] <= 250 && c[2] >= 5 && c[2] <= 250
                 });
                 let grayscale = mode >= 15 && mode <= 17;
                 if (colors_differ && (mode != 8 || not_opaque_or_transparent))
-                    || (grayscale && not_opaque_or_transparent && not_black_or_white) {
+                    || (grayscale && not_opaque_or_transparent && not_black_or_white)
+                {
                     let mut test_block = TestBlock::default();
                     test_block.uastc.copy_from_slice(uastc);
                     test_block.astc.copy_from_slice(astc);
                     test_block.bc7.copy_from_slice(bc7);
                     test_block.etc1.copy_from_slice(etc1);
                     test_block.etc2.copy_from_slice(etc2);
-                    test_block.rgba.iter_mut()
-                        .zip(rgba.chunks_exact(4)
-                            .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]])))
+                    test_block
+                        .rgba
+                        .iter_mut()
+                        .zip(
+                            rgba.chunks_exact(4)
+                                .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]])),
+                        )
                         .for_each(|(a, b)| *a = b);
                     mode_blocks.push(test_block);
                 }
@@ -236,6 +295,7 @@ fn collect_blocks(case: &TestCase, collected_blocks: &mut [Vec<TestBlock>]) -> R
     Ok(())
 }
 
+#[rustfmt::skip]
 static UASTC_MODE_LUT: [u8; 128] = [
     11,  0, 10, 3, 11, 15, 12,  7,
     11, 18, 10, 5, 11, 14, 12,  9,

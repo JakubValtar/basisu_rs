@@ -1,7 +1,4 @@
-use byteorder::{
-    ByteOrder,
-    LE,
-};
+use byteorder::{ByteOrder, LE};
 
 pub struct ByteReaderLE<'a> {
     bytes: &'a [u8],
@@ -10,10 +7,7 @@ pub struct ByteReaderLE<'a> {
 
 impl<'a> ByteReaderLE<'a> {
     pub fn new(bytes: &'a [u8]) -> Self {
-        Self {
-            bytes,
-            pos: 0,
-        }
+        Self { bytes, pos: 0 }
     }
 
     pub fn pos(&self) -> usize {

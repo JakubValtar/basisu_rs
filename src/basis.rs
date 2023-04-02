@@ -1,13 +1,6 @@
-use crate::{
-    bytereader::ByteReaderLE,
-    Error,
-    Result,
-};
+use crate::{bytereader::ByteReaderLE, Error, Result};
 
-use byteorder::{
-    ByteOrder,
-    LE,
-};
+use byteorder::{ByteOrder, LE};
 use std::convert::TryFrom;
 
 pub const SIG: u16 = 0x4273;
@@ -25,8 +18,10 @@ pub fn read_header(bytes: &[u8]) -> Result<Header> {
     if !Header::check_size(&bytes) {
         return Err(format!(
             "Expected at least {} byte header, got {} bytes",
-            Header::FILE_SIZE, bytes.len()).into()
-        );
+            Header::FILE_SIZE,
+            bytes.len()
+        )
+        .into());
     }
 
     let header = Header::from_file_bytes(&bytes);
@@ -34,8 +29,10 @@ pub fn read_header(bytes: &[u8]) -> Result<Header> {
     if header.header_size as usize != Header::FILE_SIZE {
         return Err(format!(
             "File specified unexpected header size, expected {}, got {}",
-            Header::FILE_SIZE, header.header_size).into()
-        );
+            Header::FILE_SIZE,
+            header.header_size
+        )
+        .into());
     }
 
     let header_crc16 = crc16(&bytes[8..Header::FILE_SIZE], 0);
@@ -60,7 +57,9 @@ pub fn read_slice_descs(bytes: &[u8], header: &Header) -> Result<Vec<SliceDesc>>
         if !SliceDesc::check_size(&bytes[slice_start..]) {
             let message = format!(
                 "Expected {} byte slice desc at pos {}, only {} bytes remain",
-                SliceDesc::FILE_SIZE, slice_start, bytes.len()-slice_start
+                SliceDesc::FILE_SIZE,
+                slice_start,
+                bytes.len() - slice_start
             );
             return Err(message.into());
         }
@@ -92,14 +91,14 @@ pub enum TextureType {
 // basis_slice_desc::flags
 pub enum SliceDescFlags {
     HasAlpha = 1,
-    FrameIsIFrame = 2
+    FrameIsIFrame = 2,
 }
 
 // basis_file_header::m_tex_format
 #[derive(Clone, Copy, PartialEq)]
 pub enum TexFormat {
     ETC1S = 0,
-    UASTC4x4 = 1
+    UASTC4x4 = 1,
 }
 
 impl TryFrom<u8> for TexFormat {
@@ -121,6 +120,7 @@ pub enum HeaderFlags {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[rustfmt::skip]
 pub struct Header {
     pub sig: u16,                  // 2 byte file signature
     pub ver: u16,                  // File version

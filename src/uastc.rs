@@ -1,13 +1,9 @@
 use crate::{
-    Color32,
-    Image,
-    Result,
-    basis::{
-        Header,
-        SliceDesc,
-    },
+    astc,
+    basis::{Header, SliceDesc},
+    bc7,
     bitreader::BitReaderLsb,
-    astc, bc7, etc,
+    etc, Color32, Image, Result,
 };
 
 #[cfg(test)]
@@ -67,13 +63,12 @@ impl Decoder {
     }
 
     pub(crate) fn read_to_uastc(&self, slice_desc: &SliceDesc, bytes: &[u8]) -> Result<Image<u8>> {
-
         const UASTC_BLOCK_SIZE: usize = 16;
 
         let block_bytes = {
             let start = slice_desc.file_ofs as usize;
             let len = slice_desc.file_size as usize;
-            &bytes[start..start+len]
+            &bytes[start..start + len]
         };
 
         let image = Image {
@@ -87,32 +82,43 @@ impl Decoder {
         Ok(image)
     }
 
-    pub(crate) fn decode_to_rgba(&self, slice_desc: &SliceDesc, bytes: &[u8]) -> Result<Image<Color32>> {
-
+    pub(crate) fn decode_to_rgba(
+        &self,
+        slice_desc: &SliceDesc,
+        bytes: &[u8],
+    ) -> Result<Image<Color32>> {
         let mut image = Image {
             w: slice_desc.orig_width as u32,
             h: slice_desc.orig_height as u32,
-            stride: 4*slice_desc.num_blocks_x as u32,
+            stride: 4 * slice_desc.num_blocks_x as u32,
             y_flipped: self.y_flipped,
-            data: vec![Color32::default(); slice_desc.num_blocks_x as usize * slice_desc.num_blocks_y as usize * 16],
+            data: vec![
+                Color32::default();
+                slice_desc.num_blocks_x as usize * slice_desc.num_blocks_y as usize * 16
+            ],
         };
 
-        let block_to_rgba = |block_x: u32, block_y: u32, _block_offset: usize, block_bytes: &[u8]| {
-            let rgba = decode_block_to_rgba(&block_bytes);
-            for y in 0..4 {
-                let x_start = 4 * block_x as usize;
-                let image_start = (4 * block_y as usize + y) * image.stride as usize + x_start;
-                image.data[image_start..image_start + 4].copy_from_slice(&rgba[4 * y..4 * y + 4]);
-            }
-        };
+        let block_to_rgba =
+            |block_x: u32, block_y: u32, _block_offset: usize, block_bytes: &[u8]| {
+                let rgba = decode_block_to_rgba(&block_bytes);
+                for y in 0..4 {
+                    let x_start = 4 * block_x as usize;
+                    let image_start = (4 * block_y as usize + y) * image.stride as usize + x_start;
+                    image.data[image_start..image_start + 4]
+                        .copy_from_slice(&rgba[4 * y..4 * y + 4]);
+                }
+            };
 
         self.iterate_blocks(slice_desc, bytes, block_to_rgba)?;
 
         Ok(image)
     }
 
-    pub(crate) fn transcode_to_astc(&self, slice_desc: &SliceDesc, bytes: &[u8]) -> Result<Image<u8>> {
-
+    pub(crate) fn transcode_to_astc(
+        &self,
+        slice_desc: &SliceDesc,
+        bytes: &[u8],
+    ) -> Result<Image<u8>> {
         const ASTC_BLOCK_SIZE: usize = 16;
 
         let mut image = Image {
@@ -120,21 +126,30 @@ impl Decoder {
             h: slice_desc.orig_height as u32,
             stride: ASTC_BLOCK_SIZE as u32 * slice_desc.num_blocks_x as u32,
             y_flipped: self.y_flipped,
-            data: vec![0u8; slice_desc.num_blocks_x as usize * slice_desc.num_blocks_y as usize * ASTC_BLOCK_SIZE],
+            data: vec![
+                0u8;
+                slice_desc.num_blocks_x as usize
+                    * slice_desc.num_blocks_y as usize
+                    * ASTC_BLOCK_SIZE
+            ],
         };
 
-        let block_to_astc = |_block_x: u32, _block_y: u32, block_offset: usize, block_bytes: &[u8]| {
-            let output = &mut image.data[block_offset..block_offset + ASTC_BLOCK_SIZE];
-            astc::convert_block_from_uastc(&block_bytes, output);
-        };
+        let block_to_astc =
+            |_block_x: u32, _block_y: u32, block_offset: usize, block_bytes: &[u8]| {
+                let output = &mut image.data[block_offset..block_offset + ASTC_BLOCK_SIZE];
+                astc::convert_block_from_uastc(&block_bytes, output);
+            };
 
         self.iterate_blocks(slice_desc, bytes, block_to_astc)?;
 
         Ok(image)
     }
 
-    pub(crate) fn transcode_to_bc7(&self, slice_desc: &SliceDesc, bytes: &[u8]) -> Result<Image<u8>> {
-
+    pub(crate) fn transcode_to_bc7(
+        &self,
+        slice_desc: &SliceDesc,
+        bytes: &[u8],
+    ) -> Result<Image<u8>> {
         const BC7_BLOCK_SIZE: usize = 16;
 
         let mut image = Image {
@@ -142,21 +157,30 @@ impl Decoder {
             h: slice_desc.orig_height as u32,
             stride: BC7_BLOCK_SIZE as u32 * slice_desc.num_blocks_x as u32,
             y_flipped: self.y_flipped,
-            data: vec![0u8; slice_desc.num_blocks_x as usize * slice_desc.num_blocks_y as usize * BC7_BLOCK_SIZE],
+            data: vec![
+                0u8;
+                slice_desc.num_blocks_x as usize
+                    * slice_desc.num_blocks_y as usize
+                    * BC7_BLOCK_SIZE
+            ],
         };
 
-        let block_to_bc7 = |_block_x: u32, _block_y: u32, block_offset: usize, block_bytes: &[u8]| {
-            let output = &mut image.data[block_offset..block_offset + BC7_BLOCK_SIZE];
-            bc7::convert_block_from_uastc(&block_bytes, output);
-        };
+        let block_to_bc7 =
+            |_block_x: u32, _block_y: u32, block_offset: usize, block_bytes: &[u8]| {
+                let output = &mut image.data[block_offset..block_offset + BC7_BLOCK_SIZE];
+                bc7::convert_block_from_uastc(&block_bytes, output);
+            };
 
         self.iterate_blocks(slice_desc, bytes, block_to_bc7)?;
 
         Ok(image)
     }
 
-    pub(crate) fn transcode_to_etc1(&self, slice_desc: &SliceDesc, bytes: &[u8]) -> Result<Image<u8>> {
-
+    pub(crate) fn transcode_to_etc1(
+        &self,
+        slice_desc: &SliceDesc,
+        bytes: &[u8],
+    ) -> Result<Image<u8>> {
         const ETC1_BLOCK_SIZE: usize = 8;
 
         let mut image = Image {
@@ -164,21 +188,30 @@ impl Decoder {
             h: slice_desc.orig_height as u32,
             stride: ETC1_BLOCK_SIZE as u32 * slice_desc.num_blocks_x as u32,
             y_flipped: self.y_flipped,
-            data: vec![0u8; slice_desc.num_blocks_x as usize * slice_desc.num_blocks_y as usize * ETC1_BLOCK_SIZE],
+            data: vec![
+                0u8;
+                slice_desc.num_blocks_x as usize
+                    * slice_desc.num_blocks_y as usize
+                    * ETC1_BLOCK_SIZE
+            ],
         };
 
-        let block_to_etc1 = |_block_x: u32, _block_y: u32, block_offset: usize, block_bytes: &[u8]| {
-            let output = &mut image.data[block_offset/2..block_offset/2 + ETC1_BLOCK_SIZE];
-            etc::convert_block_from_uastc(&block_bytes, output, false);
-        };
+        let block_to_etc1 =
+            |_block_x: u32, _block_y: u32, block_offset: usize, block_bytes: &[u8]| {
+                let output = &mut image.data[block_offset / 2..block_offset / 2 + ETC1_BLOCK_SIZE];
+                etc::convert_block_from_uastc(&block_bytes, output, false);
+            };
 
         self.iterate_blocks(slice_desc, bytes, block_to_etc1)?;
 
         Ok(image)
     }
 
-    pub(crate) fn transcode_to_etc2(&self, slice_desc: &SliceDesc, bytes: &[u8]) -> Result<Image<u8>> {
-
+    pub(crate) fn transcode_to_etc2(
+        &self,
+        slice_desc: &SliceDesc,
+        bytes: &[u8],
+    ) -> Result<Image<u8>> {
         const ETC2_BLOCK_SIZE: usize = 16;
 
         let mut image = Image {
@@ -186,13 +219,19 @@ impl Decoder {
             h: slice_desc.orig_height as u32,
             stride: ETC2_BLOCK_SIZE as u32 * slice_desc.num_blocks_x as u32,
             y_flipped: self.y_flipped,
-            data: vec![0u8; slice_desc.num_blocks_x as usize * slice_desc.num_blocks_y as usize * ETC2_BLOCK_SIZE],
+            data: vec![
+                0u8;
+                slice_desc.num_blocks_x as usize
+                    * slice_desc.num_blocks_y as usize
+                    * ETC2_BLOCK_SIZE
+            ],
         };
 
-        let block_to_etc1 = |_block_x: u32, _block_y: u32, block_offset: usize, block_bytes: &[u8]| {
-            let output = &mut image.data[block_offset..block_offset + ETC2_BLOCK_SIZE];
-            etc::convert_block_from_uastc(&block_bytes, output, true);
-        };
+        let block_to_etc1 =
+            |_block_x: u32, _block_y: u32, block_offset: usize, block_bytes: &[u8]| {
+                let output = &mut image.data[block_offset..block_offset + ETC2_BLOCK_SIZE];
+                etc::convert_block_from_uastc(&block_bytes, output, true);
+            };
 
         self.iterate_blocks(slice_desc, bytes, block_to_etc1)?;
 
@@ -200,7 +239,8 @@ impl Decoder {
     }
 
     fn iterate_blocks<F>(&self, slice_desc: &SliceDesc, bytes: &[u8], mut f: F) -> Result<()>
-        where F: FnMut(u32, u32, usize, &[u8])
+    where
+        F: FnMut(u32, u32, usize, &[u8]),
     {
         let num_blocks_x = slice_desc.num_blocks_x as u32;
         let num_blocks_y = slice_desc.num_blocks_y as u32;
@@ -208,7 +248,7 @@ impl Decoder {
         let bytes = {
             let start = slice_desc.file_ofs as usize;
             let len = slice_desc.file_size as usize;
-            &bytes[start..start+len]
+            &bytes[start..start + len]
         };
 
         let mut block_offset = 0;
@@ -221,7 +261,12 @@ impl Decoder {
 
         for block_y in 0..num_blocks_y {
             for block_x in 0..num_blocks_x {
-                f(block_x, block_y, block_offset, &bytes[block_offset..block_offset + BLOCK_SIZE]);
+                f(
+                    block_x,
+                    block_y,
+                    block_offset,
+                    &bytes[block_offset..block_offset + BLOCK_SIZE],
+                );
                 block_offset += BLOCK_SIZE;
             }
         }
@@ -235,7 +280,10 @@ pub(crate) fn assemble_endpoint_pairs(mode: Mode, endpoint_bytes: &[u8]) -> [[Co
 
     match mode.format {
         Format::Rgb => {
-            for (pair, bytes) in endpoint_pairs.iter_mut().zip(endpoint_bytes.chunks_exact(6)) {
+            for (pair, bytes) in endpoint_pairs
+                .iter_mut()
+                .zip(endpoint_bytes.chunks_exact(6))
+            {
                 *pair = [
                     Color32::new(bytes[0], bytes[2], bytes[4], 0xFF),
                     Color32::new(bytes[1], bytes[3], bytes[5], 0xFF),
@@ -243,7 +291,10 @@ pub(crate) fn assemble_endpoint_pairs(mode: Mode, endpoint_bytes: &[u8]) -> [[Co
             }
         }
         Format::Rgba => {
-            for (pair, bytes) in endpoint_pairs.iter_mut().zip(endpoint_bytes.chunks_exact(8)) {
+            for (pair, bytes) in endpoint_pairs
+                .iter_mut()
+                .zip(endpoint_bytes.chunks_exact(8))
+            {
                 *pair = [
                     Color32::new(bytes[0], bytes[2], bytes[4], bytes[6]),
                     Color32::new(bytes[1], bytes[3], bytes[5], bytes[7]),
@@ -251,7 +302,10 @@ pub(crate) fn assemble_endpoint_pairs(mode: Mode, endpoint_bytes: &[u8]) -> [[Co
             }
         }
         Format::La => {
-            for (pair, bytes) in endpoint_pairs.iter_mut().zip(endpoint_bytes.chunks_exact(4)) {
+            for (pair, bytes) in endpoint_pairs
+                .iter_mut()
+                .zip(endpoint_bytes.chunks_exact(4))
+            {
                 *pair = [
                     Color32::new(bytes[0], bytes[0], bytes[0], bytes[2]),
                     Color32::new(bytes[1], bytes[1], bytes[1], bytes[3]),
@@ -285,7 +339,6 @@ pub(crate) fn decode_block_to_rgba(bytes: &[u8]) -> [Color32; 16] {
 }
 
 fn decode_block_to_rgba_result(bytes: &[u8]) -> Result<[Color32; 16]> {
-
     let reader = &mut BitReaderLsb::new(bytes);
 
     let mode = decode_mode(reader)?;
@@ -332,10 +385,10 @@ fn decode_block_to_rgba_result(bytes: &[u8]) -> Result<[Color32; 16]> {
         }
 
         for id in 0..16 {
-            let wr = weights[ws_per_texel*id + w_plane_id[0]] as u32;
-            let wg = weights[ws_per_texel*id + w_plane_id[1]] as u32;
-            let wb = weights[ws_per_texel*id + w_plane_id[2]] as u32;
-            let wa = weights[ws_per_texel*id + w_plane_id[3]] as u32;
+            let wr = weights[ws_per_texel * id + w_plane_id[0]] as u32;
+            let wg = weights[ws_per_texel * id + w_plane_id[1]] as u32;
+            let wb = weights[ws_per_texel * id + w_plane_id[2]] as u32;
+            let wa = weights[ws_per_texel * id + w_plane_id[3]] as u32;
 
             output[id] = Color32::new(
                 astc_interpolate(e0[0] as u32, e1[0] as u32, wr, srgb),
@@ -530,9 +583,12 @@ impl Mode {
 
 #[derive(Clone, Copy, Debug)]
 pub enum Format {
-    Rgb, Rgba, La,
+    Rgb,
+    Rgba,
+    La,
 }
 
+#[rustfmt::skip]
 static MODES: [Mode; 20] = [
     // RGB
     Mode { id:  0, code_size: 4, endpoint_range_index: 19, format: Format::Rgb,  weight_bits: 4, plane_count: 1, subset_count: 1, trans_flags_bits: 15 },
@@ -566,6 +622,7 @@ static MODES: [Mode; 20] = [
     Mode { id: 19, code_size: 7, endpoint_range_index:  0, format: Format::Rgb,  weight_bits: 0, plane_count: 0, subset_count: 0, trans_flags_bits:  0 }, // reserved
 ];
 
+#[rustfmt::skip]
 static MODE_LUT: [u8; 128] = [
     11,  0, 10, 3, 11, 15, 12,  7,
     11, 18, 10, 5, 11, 14, 12,  9,
@@ -622,7 +679,11 @@ pub fn unquant_endpoint(quant: QuantEndpoint, range_index: u8) -> u8 {
     }
 }
 
-pub fn decode_endpoints(reader: &mut BitReaderLsb, range_index: u8, value_count: usize) -> [QuantEndpoint; MAX_ENDPOINT_COUNT] {
+pub fn decode_endpoints(
+    reader: &mut BitReaderLsb,
+    range_index: u8,
+    value_count: usize,
+) -> [QuantEndpoint; MAX_ENDPOINT_COUNT] {
     assert!(value_count <= MAX_ENDPOINT_COUNT);
 
     let mut output = [QuantEndpoint::default(); MAX_ENDPOINT_COUNT];
@@ -700,11 +761,14 @@ pub fn decode_endpoints(reader: &mut BitReaderLsb, range_index: u8, value_count:
 }
 
 fn unquant_weights(weights: &mut [u8], weight_bits: u8) {
-    const LUT1: [u8; 2] = [ 0, 64 ];
-    const LUT2: [u8; 4] = [ 0, 21, 43, 64 ];
-    const LUT3: [u8; 8] = [ 0, 9, 18, 27, 37, 46, 55, 64 ];
-    const LUT4: [u8; 16] = [ 0, 4, 8, 12, 17, 21, 25, 29, 35, 39, 43, 47, 52, 56, 60, 64 ];
-    const LUT5: [u8; 32] = [ 0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 34, 36, 38, 40, 42, 44, 46, 48, 50, 52, 54, 56, 58, 60, 62, 64 ];
+    const LUT1: [u8; 2] = [0, 64];
+    const LUT2: [u8; 4] = [0, 21, 43, 64];
+    const LUT3: [u8; 8] = [0, 9, 18, 27, 37, 46, 55, 64];
+    const LUT4: [u8; 16] = [0, 4, 8, 12, 17, 21, 25, 29, 35, 39, 43, 47, 52, 56, 60, 64];
+    const LUT5: [u8; 32] = [
+        0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 34, 36, 38, 40, 42, 44, 46, 48,
+        50, 52, 54, 56, 58, 60, 62, 64,
+    ];
 
     let lut = match weight_bits {
         1 => &LUT1[..],
@@ -712,7 +776,7 @@ fn unquant_weights(weights: &mut [u8], weight_bits: u8) {
         3 => &LUT3[..],
         4 => &LUT4[..],
         5 => &LUT5[..],
-        _ => unreachable!()
+        _ => unreachable!(),
     };
 
     for weight in weights {
@@ -721,7 +785,8 @@ fn unquant_weights(weights: &mut [u8], weight_bits: u8) {
 }
 
 pub fn decode_weights<F>(reader: &mut BitReaderLsb, mode: Mode, pat: u8, mut f: F)
-    where F: FnMut(usize, u8)
+where
+    F: FnMut(usize, u8),
 {
     let plane_count = mode.plane_count as usize;
     let anchors = get_anchor_weight_indices(mode, pat);
@@ -745,6 +810,7 @@ pub const TOTAL_ASTC_BC7_COMMON_PARTITIONS3: usize = 11;
 pub const TOTAL_BC7_3_ASTC2_COMMON_PARTITIONS: usize = 19;
 
 // UASTC pattern table for the 2-subset modes
+#[rustfmt::skip]
 static PATTERNS_2: [[u8; 16]; TOTAL_ASTC_BC7_COMMON_PARTITIONS2] = [
     [ 0,0,1,1,0,0,1,1,0,0,1,1,0,0,1,1 ], [ 0,0,0,1,0,0,0,1,0,0,0,1,0,0,0,1 ],
     [ 1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0 ], [ 0,0,0,1,0,0,1,1,0,0,1,1,0,1,1,1 ],
@@ -764,6 +830,7 @@ static PATTERNS_2: [[u8; 16]; TOTAL_ASTC_BC7_COMMON_PARTITIONS2] = [
 ];
 
 // UASTC pattern table for the 3-subset modes
+#[rustfmt::skip]
 static PATTERNS_3: [[u8; 16]; TOTAL_ASTC_BC7_COMMON_PARTITIONS3] = [
     [ 0,0,0,0,0,0,0,0,1,1,2,2,1,1,2,2 ], [ 1,1,1,1,1,1,1,1,0,0,0,0,2,2,2,2 ],
     [ 1,1,1,1,0,0,0,0,0,0,0,0,2,2,2,2 ], [ 1,1,1,1,2,2,2,2,0,0,0,0,0,0,0,0 ],
@@ -773,6 +840,7 @@ static PATTERNS_3: [[u8; 16]; TOTAL_ASTC_BC7_COMMON_PARTITIONS3] = [
     [ 0,0,2,2,0,0,1,1,0,0,1,1,0,0,2,2 ]
 ];
 
+#[rustfmt::skip]
 static PATTERNS_2_3: [[u8; 16]; TOTAL_BC7_3_ASTC2_COMMON_PARTITIONS] = [
     [ 0,0,0,0,1,1,1,1,0,0,0,0,0,0,0,0 ], [ 0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0 ],
     [ 1,1,0,0,1,1,0,0,1,0,0,0,0,0,0,0 ], [ 0,0,0,0,0,0,0,1,0,0,1,1,0,0,1,1 ],
@@ -786,6 +854,7 @@ static PATTERNS_2_3: [[u8; 16]; TOTAL_BC7_3_ASTC2_COMMON_PARTITIONS] = [
     [ 1,1,1,1,0,1,1,1,0,0,0,0,0,0,0,0 ]
 ];
 
+#[rustfmt::skip]
 static PATTERNS_2_ANCHORS: [[u8; 2]; TOTAL_ASTC_BC7_COMMON_PARTITIONS2] = [
     [ 0, 2 ], [ 0, 3 ], [ 1, 0 ], [ 0, 3 ], [ 7, 0 ], [ 0, 2 ], [ 3, 0 ],
     [ 7, 0 ], [ 0, 11 ], [ 2, 0 ], [ 0, 7 ], [ 11, 0 ], [ 3, 0 ], [ 8, 0 ],
@@ -794,11 +863,13 @@ static PATTERNS_2_ANCHORS: [[u8; 2]; TOTAL_ASTC_BC7_COMMON_PARTITIONS2] = [
     [ 4, 0 ], [ 1, 0 ]
 ];
 
+#[rustfmt::skip]
 static PATTERNS_3_ANCHORS: [[u8; 3]; TOTAL_ASTC_BC7_COMMON_PARTITIONS3] = [
     [ 0, 8, 10 ],  [ 8, 0, 12 ], [ 4, 0, 12 ], [ 8, 0, 4 ], [ 3, 0, 2 ],
     [ 0, 1, 3 ], [ 0, 2, 1 ], [ 1, 9, 0 ], [ 1, 2, 0 ], [ 4, 0, 8 ], [ 0, 6, 2 ]
 ];
 
+#[rustfmt::skip]
 static PATTERNS_2_3_ANCHORS: [[u8; 2]; TOTAL_BC7_3_ASTC2_COMMON_PARTITIONS] = [
     [ 0, 4 ], [ 0, 2 ], [ 2, 0 ], [ 0, 7 ], [ 8, 0 ], [ 0, 1 ], [ 0, 3 ],
     [ 0, 1 ], [ 2, 0 ], [ 0, 1 ], [ 0, 8 ], [ 2, 0 ], [ 0, 1 ], [ 0, 7 ],

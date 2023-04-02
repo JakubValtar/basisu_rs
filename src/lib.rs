@@ -4,20 +4,18 @@ use std::fmt;
 use std::ops::{Index, IndexMut};
 use std::path::Path;
 
-mod huffman;
+mod astc;
+mod basis;
+mod bc7;
 mod bitreader;
 mod bitwriter;
 mod bytereader;
-mod etc1s;
-mod uastc;
-mod basis;
-mod bc7;
-mod astc;
 mod etc;
+mod etc1s;
+mod huffman;
+mod uastc;
 
-use basis::{
-    TexFormat,
-};
+use basis::TexFormat;
 
 type Error = Box<dyn std::error::Error>;
 type Result<T> = std::result::Result<T, Error>;
@@ -59,11 +57,11 @@ pub fn read_to_rgba<P: AsRef<Path>>(path: P) -> Result<Vec<Image<u8>>> {
         let decoder = uastc::Decoder::from_file_bytes(&header, &buf)?;
 
         let mut images = Vec::with_capacity(header.total_slices as usize);
-            for slice_desc in &slice_descs {
-                let image = decoder.decode_to_rgba(slice_desc, &buf)?;
-                images.push(image.into_rgba_bytes());
-            }
-            Ok(images)
+        for slice_desc in &slice_descs {
+            let image = decoder.decode_to_rgba(slice_desc, &buf)?;
+            images.push(image.into_rgba_bytes());
+        }
+        Ok(images)
     } else {
         unimplemented!();
     }
@@ -146,7 +144,6 @@ pub fn read_to_uastc<P: AsRef<Path>>(path: P) -> Result<Vec<Image<u8>>> {
     let slice_descs = basis::read_slice_descs(&buf, &header)?;
 
     if header.texture_format()? == TexFormat::UASTC4x4 {
-
         let decoder = uastc::Decoder::from_file_bytes(&header, &buf)?;
 
         let mut images = Vec::with_capacity(header.total_slices as usize);
@@ -172,7 +169,6 @@ pub fn read_to_astc<P: AsRef<Path>>(path: P) -> Result<Vec<Image<u8>>> {
     let slice_descs = basis::read_slice_descs(&buf, &header)?;
 
     if header.texture_format()? == TexFormat::UASTC4x4 {
-
         let decoder = uastc::Decoder::from_file_bytes(&header, &buf)?;
 
         let mut images = Vec::with_capacity(header.total_slices as usize);
@@ -198,7 +194,6 @@ pub fn read_to_bc7<P: AsRef<Path>>(path: P) -> Result<Vec<Image<u8>>> {
     let slice_descs = basis::read_slice_descs(&buf, &header)?;
 
     if header.texture_format()? == TexFormat::UASTC4x4 {
-
         let decoder = uastc::Decoder::from_file_bytes(&header, &buf)?;
 
         let mut images = Vec::with_capacity(header.total_slices as usize);
@@ -217,9 +212,8 @@ pub fn read_to_bc7<P: AsRef<Path>>(path: P) -> Result<Vec<Image<u8>>> {
 macro_rules! mask {
     ($size:expr) => {
         !(!($size ^ $size)).checked_shl($size as u32).unwrap_or(0)
-    }
+    };
 }
-
 
 pub struct Image<T> {
     pub w: u32,

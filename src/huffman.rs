@@ -41,14 +41,14 @@ const SmallRepeatCode: usize = 19;
 const BigRepeatCode: usize = 20;
 
 pub fn read_huffman_table(reader: &mut BitReaderLsb) -> Result<HuffmanDecodingTable> {
-
     // TODO: sanity & overflow checks
 
-    let total_used_syms = reader.read_u32(MaxSymsLog2) as usize;  // [1, MaxSyms]
+    let total_used_syms = reader.read_u32(MaxSymsLog2) as usize; // [1, MaxSyms]
 
     let codelength_table = {
         let num_codelength_codes = reader.read_u32(5) as usize; // [1, TotalCodelengthCodes]
 
+        #[rustfmt::skip]
         let indices = [
             SmallZeroRunCode, BigZeroRunCode,
             SmallRepeatCode, BigRepeatCode,
@@ -83,10 +83,15 @@ pub fn read_huffman_table(reader: &mut BitReaderLsb) -> Result<HuffmanDecodingTa
                 }
             }
             SmallRepeatCode => {
-                let prev_sym_code_size = symbol_code_sizes.last().copied()
+                let prev_sym_code_size = symbol_code_sizes
+                    .last()
+                    .copied()
                     .ok_or_else(|| "Encountered SmallRepeatCode as the first code")?;
                 if prev_sym_code_size == 0 {
-                    return Err("Encountered SmallRepeatCode, but the previous symbol's code length was 0".into());
+                    return Err(
+                        "Encountered SmallRepeatCode, but the previous symbol's code length was 0"
+                            .into(),
+                    );
                 }
                 let count = SmallRepeatSizeMin + reader.read_u32(SmallRepeatExtraBits) as usize;
                 for _ in 0..count {
@@ -94,17 +99,22 @@ pub fn read_huffman_table(reader: &mut BitReaderLsb) -> Result<HuffmanDecodingTa
                 }
             }
             BigRepeatCode => {
-                let prev_sym_code_size = symbol_code_sizes.last().copied()
+                let prev_sym_code_size = symbol_code_sizes
+                    .last()
+                    .copied()
                     .ok_or_else(|| "Encountered BigRepeatCode as the first code")?;
                 if prev_sym_code_size == 0 {
-                    return Err("Encountered BigRepeatCode, but the previous symbol's code length was 0".into());
+                    return Err(
+                        "Encountered BigRepeatCode, but the previous symbol's code length was 0"
+                            .into(),
+                    );
                 }
                 let count = BigRepeatSizeMin + reader.read_u32(BigRepeatExtraBits) as usize;
                 for _ in 0..count {
                     symbol_code_sizes.push(prev_sym_code_size);
                 }
             }
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
 
@@ -127,7 +137,7 @@ impl HuffmanDecodingTable {
     pub fn from_sizes(code_sizes: &[u8]) -> Result<Self> {
         // TODO: sanity checks
 
-        let mut syms_using_codesize = [0u32; MaxSupportedCodeSize+1];
+        let mut syms_using_codesize = [0u32; MaxSupportedCodeSize + 1];
         let mut max_code_size = 0;
         for &count in code_sizes {
             syms_using_codesize[count as usize] += 1;
@@ -135,10 +145,10 @@ impl HuffmanDecodingTable {
         }
 
         let mut total = 0;
-        let mut next_code = [0u32; MaxSupportedCodeSize+1];
+        let mut next_code = [0u32; MaxSupportedCodeSize + 1];
         syms_using_codesize[0] = 0;
         for bits in 1..MaxSupportedCodeSize + 1 {
-            total = (total + syms_using_codesize[bits-1]) << 1;
+            total = (total + syms_using_codesize[bits - 1]) << 1;
             next_code[bits] = total;
         }
 
@@ -146,7 +156,11 @@ impl HuffmanDecodingTable {
 
         let code_width = std::mem::size_of_val(&next_code[0]) * 8;
 
-        for (symbol, code_size) in code_sizes.iter().enumerate().map(|(sym, &size)| (sym as u16, size)) {
+        for (symbol, code_size) in code_sizes
+            .iter()
+            .enumerate()
+            .map(|(sym, &size)| (sym as u16, size))
+        {
             if code_size != 0 {
                 let entry = HuffmanTableEntry { symbol, code_size };
                 let size = code_size as usize;
@@ -180,7 +194,11 @@ impl HuffmanDecodingTable {
             reader.remove(entry.code_size as usize);
             Ok(entry.symbol)
         } else {
-            Err(format!("No matching code found in the decoding table, bits: {:016b}", bits).into())
+            Err(format!(
+                "No matching code found in the decoding table, bits: {:016b}",
+                bits
+            )
+            .into())
         }
     }
 }

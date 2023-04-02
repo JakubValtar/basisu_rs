@@ -1,10 +1,4 @@
-use crate::{
-    Color32,
-    Result,
-    bitreader::BitReaderLsb,
-    bitwriter::BitWriterLsb,
-    mask, uastc
-};
+use crate::{bitreader::BitReaderLsb, bitwriter::BitWriterLsb, mask, uastc, Color32, Result};
 
 pub fn convert_block_from_uastc(bytes: &[u8], output: &mut [u8]) {
     match convert_block_from_uastc_result(bytes, output) {
@@ -23,7 +17,8 @@ fn convert_block_from_uastc_result(bytes: &[u8], output: &mut [u8]) -> Result<()
     if mode.id == 8 {
         let rgba = uastc::decode_mode8_rgba(reader);
 
-        let (mode, endpoint, p_bits, weights) = convert_mode_8_to_bc7_mode_endpoint_p_bits_weights(rgba);
+        let (mode, endpoint, p_bits, weights) =
+            convert_mode_8_to_bc7_mode_endpoint_p_bits_weights(rgba);
 
         let bc7_mode = BC7_MODES[mode as usize];
 
@@ -36,7 +31,11 @@ fn convert_block_from_uastc_result(bytes: &[u8], output: &mut [u8]) -> Result<()
         }
 
         for channel in 0..4 {
-            let bit_count = if channel != ALPHA_CHANNEL { bc7_mode.color_bits } else { bc7_mode.alpha_bits } as usize;
+            let bit_count = if channel != ALPHA_CHANNEL {
+                bc7_mode.color_bits
+            } else {
+                bc7_mode.alpha_bits
+            } as usize;
             writer.write_u8(bit_count, endpoint[0][channel]);
             writer.write_u8(bit_count, endpoint[1][channel]);
         }
@@ -45,7 +44,8 @@ fn convert_block_from_uastc_result(bytes: &[u8], output: &mut [u8]) -> Result<()
             writer.write_u8(2, (p_bits[1] << 1) | p_bits[0]);
         }
 
-        {   // Write weights
+        {
+            // Write weights
             let bit_count = bc7_mode.weight_bits as usize;
             for &weight in weights.iter() {
                 writer.write_u8(bit_count - 1, weight);
@@ -54,7 +54,7 @@ fn convert_block_from_uastc_result(bytes: &[u8], output: &mut [u8]) -> Result<()
                 }
             }
         }
-        return Ok(())
+        return Ok(());
     }
 
     let bc7_mode_index = UASTC_TO_BC7_MODES[mode.id as usize];
@@ -72,9 +72,14 @@ fn convert_block_from_uastc_result(bytes: &[u8], output: &mut [u8]) -> Result<()
 
     let mut endpoints = {
         let endpoint_count = mode.endpoint_count();
-        let quant_endpoints = uastc::decode_endpoints(reader, mode.endpoint_range_index, endpoint_count);
+        let quant_endpoints =
+            uastc::decode_endpoints(reader, mode.endpoint_range_index, endpoint_count);
         let mut unquant_endpoints = [0; 18];
-        for (quant, unquant) in quant_endpoints.iter().zip(unquant_endpoints.iter_mut()).take(endpoint_count) {
+        for (quant, unquant) in quant_endpoints
+            .iter()
+            .zip(unquant_endpoints.iter_mut())
+            .take(endpoint_count)
+        {
             *unquant = uastc::unquant_endpoint(*quant, mode.endpoint_range_index);
         }
         uastc::assemble_endpoint_pairs(mode, &unquant_endpoints)
@@ -110,38 +115,62 @@ fn convert_block_from_uastc_result(bytes: &[u8], output: &mut [u8]) -> Result<()
 
     // Write partition bits
     if bc7_subset_count > 1 {
-        let (bc7_pat, pattern, anchors, perm): (_, _, &[u8], &[u8]) = match (mode.id, mode.subset_count) {
-            (1, _) => {
-                let (index, _) = PATTERNS_2_BC7_INDEX_INV[0];
-                (index, &PATTERNS_2_BC7[uastc_pat as usize], &PATTERNS_2_BC7_ANCHORS[index as usize], &[0, 0])
-            }
-            (7, _) => {
-                let (index, p) = PATTERNS_2_3_BC7_INDEX_PERM[uastc_pat as usize];
-                let perm = &PATTERNS_2_3_BC7_TO_ASTC_PERMUTATIONS[p as usize];
-                (index, &PATTERNS_2_3_BC7[uastc_pat as usize], &PATTERNS_3_BC7_ANCHORS[index as usize], perm)
-            }
-            (_, 2) => {
-                let (index, inv) = PATTERNS_2_BC7_INDEX_INV[uastc_pat as usize];
-                (index, &PATTERNS_2_BC7[uastc_pat as usize], &PATTERNS_2_BC7_ANCHORS[index as usize], if inv { &[1, 0] } else { &[0, 1] })
-            }
-            (_, 3) => {
-                let (index, p) = PATTERNS_3_BC7_INDEX_PERM[uastc_pat as usize];
-                let perm = &PATTERNS_3_BC7_TO_ASTC_PERMUTATIONS[p as usize];
-                (index, &PATTERNS_3_BC7[uastc_pat as usize], &PATTERNS_3_BC7_ANCHORS[index as usize], perm)
-            }
-            _ => unreachable!()
-        };
+        let (bc7_pat, pattern, anchors, perm): (_, _, &[u8], &[u8]) =
+            match (mode.id, mode.subset_count) {
+                (1, _) => {
+                    let (index, _) = PATTERNS_2_BC7_INDEX_INV[0];
+                    (
+                        index,
+                        &PATTERNS_2_BC7[uastc_pat as usize],
+                        &PATTERNS_2_BC7_ANCHORS[index as usize],
+                        &[0, 0],
+                    )
+                }
+                (7, _) => {
+                    let (index, p) = PATTERNS_2_3_BC7_INDEX_PERM[uastc_pat as usize];
+                    let perm = &PATTERNS_2_3_BC7_TO_ASTC_PERMUTATIONS[p as usize];
+                    (
+                        index,
+                        &PATTERNS_2_3_BC7[uastc_pat as usize],
+                        &PATTERNS_3_BC7_ANCHORS[index as usize],
+                        perm,
+                    )
+                }
+                (_, 2) => {
+                    let (index, inv) = PATTERNS_2_BC7_INDEX_INV[uastc_pat as usize];
+                    (
+                        index,
+                        &PATTERNS_2_BC7[uastc_pat as usize],
+                        &PATTERNS_2_BC7_ANCHORS[index as usize],
+                        if inv { &[1, 0] } else { &[0, 1] },
+                    )
+                }
+                (_, 3) => {
+                    let (index, p) = PATTERNS_3_BC7_INDEX_PERM[uastc_pat as usize];
+                    let perm = &PATTERNS_3_BC7_TO_ASTC_PERMUTATIONS[p as usize];
+                    (
+                        index,
+                        &PATTERNS_3_BC7[uastc_pat as usize],
+                        &PATTERNS_3_BC7_ANCHORS[index as usize],
+                        perm,
+                    )
+                }
+                _ => unreachable!(),
+            };
         bc7_anchors = anchors;
 
         writer.write_u8(bc7_mode.pat_bits as usize, bc7_pat);
 
-        {   // Permute endpoints
+        {
+            // Permute endpoints
             let mut permuted_endpoints = [[Color32::default(); 2]; 3];
             permute(&endpoints, &mut permuted_endpoints, perm);
-            endpoints[0..bc7_subset_count].copy_from_slice(&permuted_endpoints[0..bc7_subset_count]);
+            endpoints[0..bc7_subset_count]
+                .copy_from_slice(&permuted_endpoints[0..bc7_subset_count]);
         }
 
-        {   // Swap endpoints and invert weights if anchor weight MSB is not 0
+        {
+            // Swap endpoints and invert weights if anchor weight MSB is not 0
             let weight_mask = mask!(bc7_mode.weight_bits);
             let weight_msb_mask = 1 << (bc7_mode.weight_bits - 1);
 
@@ -245,7 +274,11 @@ fn convert_block_from_uastc_result(bytes: &[u8], output: &mut [u8]) -> Result<()
     let p_bits = &mut p_bits[0..bc7_subset_count];
 
     for channel in 0..bc7_channel_count {
-        let bit_count = if channel != ALPHA_CHANNEL { color_bits } else { alpha_bits };
+        let bit_count = if channel != ALPHA_CHANNEL {
+            color_bits
+        } else {
+            alpha_bits
+        };
         for e in endpoints.iter() {
             writer.write_u8(bit_count, e[0][channel]);
             writer.write_u8(bit_count, e[1][channel]);
@@ -260,7 +293,8 @@ fn convert_block_from_uastc_result(bytes: &[u8], output: &mut [u8]) -> Result<()
         writer.write_u8(2, (p_bits[1][0] << 1) | p_bits[0][0]);
     }
 
-    {   // Write weights
+    {
+        // Write weights
         let mut bit_counts = [bc7_mode.weight_bits; 16];
         for &anchor in bc7_anchors {
             bit_counts[anchor as usize] -= 1;
@@ -275,13 +309,22 @@ fn convert_block_from_uastc_result(bytes: &[u8], output: &mut [u8]) -> Result<()
     Ok(())
 }
 
-fn convert_mode_8_to_bc7_mode_endpoint_p_bits_weights(solid_color: Color32) -> (u8, [Color32; 2], [u8; 2], [u8; 2]) {
-
+fn convert_mode_8_to_bc7_mode_endpoint_p_bits_weights(
+    solid_color: Color32,
+) -> (u8, [Color32; 2], [u8; 2], [u8; 2]) {
     // Compute the error from BC7 mode 6 p-bit 0
-    let best_err0: u32 = solid_color.0.iter().map(|&c| BC7_MODE_6_OPTIMAL_ENDPOINTS[c as usize][0].err as u32).sum();
+    let best_err0: u32 = solid_color
+        .0
+        .iter()
+        .map(|&c| BC7_MODE_6_OPTIMAL_ENDPOINTS[c as usize][0].err as u32)
+        .sum();
 
     // Compute the error from BC7 mode 6 p-bit 1
-    let best_err1: u32 = solid_color.0.iter().map(|&c| BC7_MODE_6_OPTIMAL_ENDPOINTS[c as usize][1].err as u32).sum();
+    let best_err1: u32 = solid_color
+        .0
+        .iter()
+        .map(|&c| BC7_MODE_6_OPTIMAL_ENDPOINTS[c as usize][1].err as u32)
+        .sum();
 
     let mode;
     let mut endpoint = [Color32::default(); 2];
@@ -316,8 +359,10 @@ fn convert_mode_8_to_bc7_mode_endpoint_p_bits_weights(solid_color: Color32) -> (
 
         // Convert the components
         for c in 0..4 {
-            endpoint[0][c] = BC7_MODE_6_OPTIMAL_ENDPOINTS[solid_color[c] as usize][best_p as usize].lo;
-            endpoint[1][c] = BC7_MODE_6_OPTIMAL_ENDPOINTS[solid_color[c] as usize][best_p as usize].hi;
+            endpoint[0][c] =
+                BC7_MODE_6_OPTIMAL_ENDPOINTS[solid_color[c] as usize][best_p as usize].lo;
+            endpoint[1][c] =
+                BC7_MODE_6_OPTIMAL_ENDPOINTS[solid_color[c] as usize][best_p as usize].hi;
         }
 
         // Set the output p-bits
@@ -332,10 +377,13 @@ fn convert_mode_8_to_bc7_mode_endpoint_p_bits_weights(solid_color: Color32) -> (
 }
 
 fn convert_weights_to_bc7(weights: &mut [u8; 16], uastc_weight_bits: u8, bc7_weight_bits: u8) {
-    const UASTC_1_TO_BC7_2: &[u8; 2] = &[ 0, 3 ];
-    const UASTC_2_TO_BC7_4: &[u8; 4] = &[ 0, 5, 10, 15 ];
-    const UASTC_3_TO_BC7_4: &[u8; 8] = &[ 0, 2, 4, 6, 9, 11, 13, 15 ];
-    const UASTC_5_TO_BC7_4: &[u8; 32] = &[ 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 6, 7, 8, 9, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13, 14, 14, 15, 15 ];
+    const UASTC_1_TO_BC7_2: &[u8; 2] = &[0, 3];
+    const UASTC_2_TO_BC7_4: &[u8; 4] = &[0, 5, 10, 15];
+    const UASTC_3_TO_BC7_4: &[u8; 8] = &[0, 2, 4, 6, 9, 11, 13, 15];
+    const UASTC_5_TO_BC7_4: &[u8; 32] = &[
+        0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 6, 7, 8, 9, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13,
+        14, 14, 15, 15,
+    ];
 
     let lut = match (uastc_weight_bits, bc7_weight_bits) {
         (1, 2) => &UASTC_1_TO_BC7_2[..],
@@ -343,7 +391,7 @@ fn convert_weights_to_bc7(weights: &mut [u8; 16], uastc_weight_bits: u8, bc7_wei
         (3, 4) => &UASTC_3_TO_BC7_4[..],
         (5, 4) => &UASTC_5_TO_BC7_4[..],
         (a, b) if a == b => return,
-        _ => unreachable!()
+        _ => unreachable!(),
     };
 
     for weight in weights {
@@ -351,7 +399,7 @@ fn convert_weights_to_bc7(weights: &mut [u8; 16], uastc_weight_bits: u8, bc7_wei
     }
 }
 
-fn permute<T: Copy>(src: &[T], dst: &mut[T], src_for_dst: &[u8]) {
+fn permute<T: Copy>(src: &[T], dst: &mut [T], src_for_dst: &[u8]) {
     // dst[X] = src[src_for_dst[X]]
     for (&src_id, dst_pair) in src_for_dst.iter().zip(dst.iter_mut()) {
         *dst_pair = src[src_id as usize];
@@ -360,7 +408,9 @@ fn permute<T: Copy>(src: &[T], dst: &mut[T], src_for_dst: &[u8]) {
 
 // Determines the best shared pbits to use to encode xl/xh
 fn determine_shared_pbits(
-    total_comps: usize, comp_bits: u8, endpoint_pair: &mut [Color32; 2]
+    total_comps: usize,
+    comp_bits: u8,
+    endpoint_pair: &mut [Color32; 2],
 ) -> [u8; 2] {
     let total_bits = comp_bits + 1;
     assert!(total_bits >= 4 && total_bits <= 8);
@@ -390,8 +440,12 @@ fn determine_shared_pbits(
         let mut x_min_col = Color32::default();
         let mut x_max_col = Color32::default();
         for c in 0..4 {
-            x_min_col[c] = (((xl[c] * scalep - p as f32) / 2. + 0.5) as i32 * 2 + p).max(p).min(iscalep - 1 + p) as u8;
-            x_max_col[c] = (((xh[c] * scalep - p as f32) / 2. + 0.5) as i32 * 2 + p).max(p).min(iscalep - 1 + p) as u8;
+            x_min_col[c] = (((xl[c] * scalep - p as f32) / 2. + 0.5) as i32 * 2 + p)
+                .max(p)
+                .min(iscalep - 1 + p) as u8;
+            x_max_col[c] = (((xh[c] * scalep - p as f32) / 2. + 0.5) as i32 * 2 + p)
+                .max(p)
+                .min(iscalep - 1 + p) as u8;
         }
 
         let mut scaled_low = Color32::default();
@@ -407,7 +461,8 @@ fn determine_shared_pbits(
 
         let mut err = 0.;
         for i in 0..total_comps {
-            err += (scaled_low[i] as f32 / 255. - xl[i]).powi(2) + (scaled_high[i] as f32 / 255. - xh[i]).powi(2);
+            err += (scaled_low[i] as f32 / 255. - xl[i]).powi(2)
+                + (scaled_high[i] as f32 / 255. - xh[i]).powi(2);
         }
 
         if err < best_err {
@@ -425,7 +480,9 @@ fn determine_shared_pbits(
 
 // Determines the best unique pbits to use to encode xl/xh
 fn determine_unique_pbits(
-    total_comps: usize, comp_bits: u8, endpoint_pair: &mut [Color32; 2]
+    total_comps: usize,
+    comp_bits: u8,
+    endpoint_pair: &mut [Color32; 2],
 ) -> [u8; 2] {
     let total_bits = comp_bits + 1;
     let iscalep = (1 << total_bits) - 1;
@@ -455,8 +512,12 @@ fn determine_unique_pbits(
         let mut x_max_color = Color32::default();
 
         for c in 0..4 {
-            x_min_color[c] = (((xl[c] * scalep - p as f32) / 2. + 0.5) as i32 * 2 + p).max(p).min(iscalep - 1 + p) as u8;
-            x_max_color[c] = (((xh[c] * scalep - p as f32) / 2. + 0.5) as i32 * 2 + p).max(p).min(iscalep - 1 + p) as u8;
+            x_min_color[c] = (((xl[c] * scalep - p as f32) / 2. + 0.5) as i32 * 2 + p)
+                .max(p)
+                .min(iscalep - 1 + p) as u8;
+            x_max_color[c] = (((xh[c] * scalep - p as f32) / 2. + 0.5) as i32 * 2 + p)
+                .max(p)
+                .min(iscalep - 1 + p) as u8;
         }
 
         let mut scaled_low = Color32::default();
@@ -511,6 +572,7 @@ struct Bc7Mode {
     sp_bits: u8,
 }
 
+#[rustfmt::skip]
 static BC7_MODES: [Bc7Mode; 8] = [
     Bc7Mode { id: 0, endpoint_count: 18, color_bits: 4, alpha_bits: 0, weight_bits: 3, plane_count: 1, subset_count: 3, pat_bits: 4, p_bits: 1, sp_bits: 0 },
     Bc7Mode { id: 1, endpoint_count: 12, color_bits: 6, alpha_bits: 0, weight_bits: 3, plane_count: 1, subset_count: 2, pat_bits: 6, p_bits: 0, sp_bits: 1 },
@@ -522,6 +584,7 @@ static BC7_MODES: [Bc7Mode; 8] = [
     Bc7Mode { id: 7, endpoint_count: 16, color_bits: 5, alpha_bits: 5, weight_bits: 2, plane_count: 1, subset_count: 2, pat_bits: 6, p_bits: 1, sp_bits: 0 },
 ];
 
+#[rustfmt::skip]
 static UASTC_TO_BC7_MODES: [u8; 20] = [
     6, 3, 1, 2, 3, 6, 5, 2, // 0..=7 RGB
     0,                      // 8 Void extent
@@ -531,6 +594,7 @@ static UASTC_TO_BC7_MODES: [u8; 20] = [
     0,                      // 19 Reserved
 ];
 
+#[rustfmt::skip]
 static PATTERNS_2_BC7_INDEX_INV: [(u8, bool); uastc::TOTAL_ASTC_BC7_COMMON_PARTITIONS2] = [
     ( 0, false), ( 1, false), ( 2, true ), ( 3, false),
     ( 4, true ), ( 5, false), ( 6, true ), ( 7, true ),
@@ -542,16 +606,19 @@ static PATTERNS_2_BC7_INDEX_INV: [(u8, bool); uastc::TOTAL_ASTC_BC7_COMMON_PARTI
     (33, true ), (52, true ),
 ];
 
+#[rustfmt::skip]
 static PATTERNS_3_BC7_INDEX_PERM: [(u8, u8); uastc::TOTAL_ASTC_BC7_COMMON_PARTITIONS3] = [
     ( 4, 0), ( 8, 5), ( 9, 5), (10, 2),
     (11, 2), (12, 0), (13, 4), (20, 1),
     (35, 1), (36, 5), (57, 0),
 ];
 
+#[rustfmt::skip]
 static PATTERNS_3_BC7_TO_ASTC_PERMUTATIONS: [[u8; 3]; 6] = [
     [0, 1, 2], [2, 0, 1], [1, 2, 0], [2, 1, 0], [0, 2, 1], [1, 0, 2],
 ];
 
+#[rustfmt::skip]
 static PATTERNS_2_3_BC7_INDEX_PERM: [(u8, u8); uastc::TOTAL_BC7_3_ASTC2_COMMON_PARTITIONS] = [
     (10, 4), (11, 4), ( 0, 3), ( 2, 4),
     ( 8, 5), (13, 4), ( 1, 2), (33, 2),
@@ -560,6 +627,7 @@ static PATTERNS_2_3_BC7_INDEX_PERM: [(u8, u8); uastc::TOTAL_BC7_3_ASTC2_COMMON_P
     (20, 1), (14, 4), (31, 3),
 ];
 
+#[rustfmt::skip]
 static PATTERNS_2_3_BC7_TO_ASTC_PERMUTATIONS: [[u8; 3]; 6] = [
     [0, 0, 1], [1, 1, 0], [0, 1, 1], [1, 0, 0], [0, 1, 0], [1, 0, 1],
 ];
@@ -590,6 +658,7 @@ static PATTERNS_2_3_BC7_TO_ASTC_PERMUTATIONS: [[u8; 3]; 6] = [
 //     p
 // }
 
+#[rustfmt::skip]
 static PATTERNS_2_BC7: [[u8; 16]; uastc::TOTAL_ASTC_BC7_COMMON_PARTITIONS2] = [
     [ 0,0,1,1,0,0,1,1,0,0,1,1,0,0,1,1 ], [ 0,0,0,1,0,0,0,1,0,0,0,1,0,0,0,1 ],
     [ 0,1,1,1,0,1,1,1,0,1,1,1,0,1,1,1 ], [ 0,0,0,1,0,0,1,1,0,0,1,1,0,1,1,1 ],
@@ -608,6 +677,7 @@ static PATTERNS_2_BC7: [[u8; 16]; uastc::TOTAL_ASTC_BC7_COMMON_PARTITIONS2] = [
     [ 0,0,0,0,1,1,1,1,0,0,0,0,1,1,1,1 ], [ 0,1,1,0,1,1,0,0,1,0,0,1,0,0,1,1 ],
 ];
 
+#[rustfmt::skip]
 static PATTERNS_3_BC7: [[u8; 16]; uastc::TOTAL_ASTC_BC7_COMMON_PARTITIONS3] = [
     [ 0,0,0,0,0,0,0,0,1,1,2,2,1,1,2,2 ], [ 0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2 ],
     [ 0,0,0,0,1,1,1,1,1,1,1,1,2,2,2,2 ], [ 0,0,0,0,1,1,1,1,2,2,2,2,2,2,2,2 ],
@@ -617,6 +687,7 @@ static PATTERNS_3_BC7: [[u8; 16]; uastc::TOTAL_ASTC_BC7_COMMON_PARTITIONS3] = [
     [ 0,0,2,2,0,0,1,1,0,0,1,1,0,0,2,2 ]
 ];
 
+#[rustfmt::skip]
 static PATTERNS_2_3_BC7: [[u8; 16]; uastc::TOTAL_BC7_3_ASTC2_COMMON_PARTITIONS] = [
     [ 0,0,0,0,1,1,1,1,2,2,2,2,2,2,2,2 ], [ 0,0,1,2,0,0,1,2,0,0,1,2,0,0,1,2 ],
     [ 0,0,1,1,0,0,1,1,0,2,2,1,2,2,2,2 ], [ 0,0,0,0,2,0,0,1,2,2,1,1,2,2,1,1 ],
@@ -632,6 +703,7 @@ static PATTERNS_2_3_BC7: [[u8; 16]; uastc::TOTAL_BC7_3_ASTC2_COMMON_PARTITIONS] 
 
 const TOTAL_BC7_PATTERNS: usize = 64;
 
+#[rustfmt::skip]
 static PATTERNS_2_BC7_ANCHORS: [[u8; 2]; TOTAL_BC7_PATTERNS] = [
     [0, 15], [0, 15], [0, 15], [0, 15], [0, 15], [0, 15], [0, 15], [0, 15],
     [0, 15], [0, 15], [0, 15], [0, 15], [0, 15], [0, 15], [0, 15], [0, 15],
@@ -643,6 +715,7 @@ static PATTERNS_2_BC7_ANCHORS: [[u8; 2]; TOTAL_BC7_PATTERNS] = [
     [0, 15], [0, 15], [0, 15], [0, 15], [0, 15], [0,  2], [0,  2], [0, 15],
 ];
 
+#[rustfmt::skip]
 static PATTERNS_3_BC7_ANCHORS: [[u8; 3]; TOTAL_BC7_PATTERNS] = [
     [0,  3, 15], [0,  3,  8], [0, 15,  8], [0, 15,  3], [0,  8, 15], [0,  3, 15], [0, 15,  3], [0, 15,  8],
     [0,  8, 15], [0,  8, 15], [0,  6, 15], [0,  6, 15], [0,  6, 15], [0,  5, 15], [0,  3, 15], [0,  3,  8],
@@ -664,6 +737,7 @@ struct OptimalEndpoint {
 const BC7ENC_MODE_5_OPTIMAL_INDEX: u8 = 1;
 const BC7ENC_MODE_6_OPTIMAL_INDEX: u8 = 5;
 
+#[rustfmt::skip]
 const BC7_MODE_5_OPTIMAL_ENDPOINTS: [OptimalEndpoint; 256] = [
     OptimalEndpoint { lo: 0, hi: 0, err: 0 }, OptimalEndpoint { lo: 0, hi: 1, err: 0 },
     OptimalEndpoint { lo: 0, hi: 3, err: 0 }, OptimalEndpoint { lo: 0, hi: 4, err: 0 },
@@ -795,6 +869,7 @@ const BC7_MODE_5_OPTIMAL_ENDPOINTS: [OptimalEndpoint; 256] = [
     OptimalEndpoint { lo: 126, hi: 127, err: 0 }, OptimalEndpoint { lo: 127, hi: 127, err: 0 },
 ];
 
+#[rustfmt::skip]
 const BC7_MODE_6_OPTIMAL_ENDPOINTS: [[OptimalEndpoint; 2]; 256] = [
     [OptimalEndpoint { lo: 0, hi: 0, err: 0 }, OptimalEndpoint { lo: 0, hi: 0, err: 1 }],
     [OptimalEndpoint { lo: 0, hi: 1, err: 0 }, OptimalEndpoint { lo: 0, hi: 0, err: 0 }],
@@ -1079,7 +1154,11 @@ mod tests {
                     for h in 0..128i32 {
                         let high = (h << 1) | lp;
 
-                        let k = (low * (64 - weights4[BC7ENC_MODE_6_OPTIMAL_INDEX as usize] as i32) + high * weights4[BC7ENC_MODE_6_OPTIMAL_INDEX as usize] as i32 + 32) >> 6;
+                        let k = (low
+                            * (64 - weights4[BC7ENC_MODE_6_OPTIMAL_INDEX as usize] as i32)
+                            + high * weights4[BC7ENC_MODE_6_OPTIMAL_INDEX as usize] as i32
+                            + 32)
+                            >> 6;
 
                         let err = ((k - c) * (k - c)) as u16;
                         if err < best.err {
@@ -1092,7 +1171,6 @@ mod tests {
 
                 bc7_mode_6_optimal_endpoints[c as usize][lp as usize] = best;
             } // lp
-
         } // c
 
         // BC7 777
@@ -1106,11 +1184,10 @@ mod tests {
                 for h in 0..128 {
                     let high = (h << 1) | (h >> 6);
 
-                    let k = (
-                        low * (64 - weights2[BC7ENC_MODE_5_OPTIMAL_INDEX as usize] as i32)
+                    let k = (low * (64 - weights2[BC7ENC_MODE_5_OPTIMAL_INDEX as usize] as i32)
                         + high * weights2[BC7ENC_MODE_5_OPTIMAL_INDEX as usize] as i32
-                        + 32
-                    ) >> 6;
+                        + 32)
+                        >> 6;
 
                     let err = ((k - c) * (k - c)) as u16;
                     if err < best.err {

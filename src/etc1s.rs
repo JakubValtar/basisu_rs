@@ -1,25 +1,11 @@
-
-use std::ops::{
-    Index,
-    IndexMut,
-};
 use crate::{
-    Color32,
-    etc::{self, Selector},
-    Image,
-    mask,
-    Result,
-    basis::{
-        Header,
-        SliceDesc,
-        TextureType,
-    },
+    basis::{Header, SliceDesc, TextureType},
     bitreader::BitReaderLsb,
-    huffman::{
-        self,
-        HuffmanDecodingTable,
-    }
+    etc::{self, Selector},
+    huffman::{self, HuffmanDecodingTable},
+    mask, Color32, Image, Result,
 };
+use std::ops::{Index, IndexMut};
 
 const ENDPOINT_PRED_TOTAL_SYMBOLS: u16 = (4 * 4 * 4 * 4) + 1;
 const ENDPOINT_PRED_REPEAT_LAST_SYMBOL: u16 = ENDPOINT_PRED_TOTAL_SYMBOLS - 1;
@@ -113,12 +99,19 @@ impl Decoder {
         })
     }
 
-    pub(crate) fn decode_to_rgba(&self, rgb_desc: &SliceDesc, alpha_desc: Option<&SliceDesc>, bytes: &[u8]) -> Result<Image<Color32>> {
+    pub(crate) fn decode_to_rgba(
+        &self,
+        rgb_desc: &SliceDesc,
+        alpha_desc: Option<&SliceDesc>,
+        bytes: &[u8],
+    ) -> Result<Image<Color32>> {
         if let Some(alpha_desc) = alpha_desc {
             if !alpha_desc.has_alpha() {
                 return Err("Expected slice with alpha".into());
             }
-            if alpha_desc.num_blocks_x != rgb_desc.num_blocks_x || alpha_desc.num_blocks_y != rgb_desc.num_blocks_y {
+            if alpha_desc.num_blocks_x != rgb_desc.num_blocks_x
+                || alpha_desc.num_blocks_y != rgb_desc.num_blocks_y
+            {
                 return Err("RGB slice and Alpha slice have different dimensions".into());
             }
         }
@@ -141,12 +134,19 @@ impl Decoder {
         })
     }
 
-    fn decode_to_rgba_internal(&self, slice_desc: &SliceDesc, bytes: &[u8], pixels: &mut [Color32], alpha: bool) -> Result<()> {
+    fn decode_to_rgba_internal(
+        &self,
+        slice_desc: &SliceDesc,
+        bytes: &[u8],
+        pixels: &mut [Color32],
+        alpha: bool,
+    ) -> Result<()> {
         let block_to_rgba = |block: DecodedBlock| {
             let endpoint: Endpoint = self.endpoints[block.endpoint_index as usize];
             let selector: Selector = self.selectors[block.selector_index as usize];
 
-            let colors: [Color32; 4] = etc::apply_mod_to_base_color(etc::color_5_to_8(endpoint.color5), endpoint.inten5);
+            let colors: [Color32; 4] =
+                etc::apply_mod_to_base_color(etc::color_5_to_8(endpoint.color5), endpoint.inten5);
 
             let block_pos_x = (block.block_x * 4) as usize;
             let block_pos_y = (block.block_y * 4) as usize;
@@ -172,7 +172,11 @@ impl Decoder {
         Ok(())
     }
 
-    pub(crate) fn transcode_to_etc1(&self, slice_desc: &SliceDesc, bytes: &[u8]) -> Result<Image<u8>> {
+    pub(crate) fn transcode_to_etc1(
+        &self,
+        slice_desc: &SliceDesc,
+        bytes: &[u8],
+    ) -> Result<Image<u8>> {
         let num_blocks_x = slice_desc.num_blocks_x as u32;
         let num_blocks_y = slice_desc.num_blocks_y as u32;
 
@@ -214,13 +218,13 @@ impl Decoder {
     }
 
     fn decode_blocks<F>(&self, slice_desc: &SliceDesc, bytes: &[u8], mut f: F) -> Result<()>
-        where F: FnMut(DecodedBlock)
+    where
+        F: FnMut(DecodedBlock),
     {
-
         let reader = {
             let start = slice_desc.file_ofs as usize;
             let len = slice_desc.file_size as usize;
-            &mut BitReaderLsb::new(&bytes[start..start+len])
+            &mut BitReaderLsb::new(&bytes[start..start + len])
         };
 
         let num_endpoints = self.endpoints.len() as u16;
@@ -244,7 +248,8 @@ impl Decoder {
 
         // Some constants and state used during block decoding
         let selector_history_buf_first_symbol_index: u16 = num_selectors;
-        let selector_history_buf_rle_symbol_index: u16 = self.selector_history_buffer_size as u16 + selector_history_buf_first_symbol_index;
+        let selector_history_buf_rle_symbol_index: u16 =
+            self.selector_history_buffer_size as u16 + selector_history_buf_first_symbol_index;
         let mut cur_selector_rle_count: u32 = 0;
 
         let mut cur_pred_bits: u8 = 0;
@@ -258,11 +263,13 @@ impl Decoder {
             selector_index: u16,
         }
         // This array is only used for texture video. It holds the previous frame's endpoint and selector indices (each 16-bits, for 32-bits total).
-        let mut prev_frame_indices = vec![PrevFrameIndices::default(); (num_blocks_x * num_blocks_y) as usize];
+        let mut prev_frame_indices =
+            vec![PrevFrameIndices::default(); (num_blocks_x * num_blocks_y) as usize];
 
         // Selector history buffer - See section 10.1.
         // For the selector history buffer's size, see section 9.0.
-        let mut selector_history_buf = ApproxMoveToFront::new(self.selector_history_buffer_size as usize);
+        let mut selector_history_buf =
+            ApproxMoveToFront::new(self.selector_history_buffer_size as usize);
 
         // Loop over all slice blocks in raster order
         for block_y in 0..num_blocks_y {
@@ -287,7 +294,10 @@ impl Decoder {
                             let pred_bits_sym = self.endpoint_pred_model.decode_symbol(reader)?;
                             if pred_bits_sym == ENDPOINT_PRED_REPEAT_LAST_SYMBOL {
                                 // It's a run of symbols, so decode the count using VLC decoding (see section 10.2)
-                                endpoint_pred_repeat_count = decode_vlc(reader, ENDPOINT_PRED_COUNT_VLC_BITS) + ENDPOINT_PRED_MIN_REPEAT_COUNT - 1;
+                                endpoint_pred_repeat_count =
+                                    decode_vlc(reader, ENDPOINT_PRED_COUNT_VLC_BITS)
+                                        + ENDPOINT_PRED_MIN_REPEAT_COUNT
+                                        - 1;
                                 cur_pred_bits = prev_endpoint_pred_sym;
                             } else {
                                 // It's not a run of symbols
@@ -298,10 +308,14 @@ impl Decoder {
 
                         // The symbol has enough endpoint prediction information for 4 blocks (2 bits per block), so 8 bits total.
                         // Remember the prediction information we should use for the next row of 2 blocks beneath the current block.
-                        block_endpoint_preds[cur_block_endpoint_pred_array as usize ^ 1][block_x as usize].pred_bits = (cur_pred_bits >> 4) as u8;
+                        block_endpoint_preds[cur_block_endpoint_pred_array as usize ^ 1]
+                            [block_x as usize]
+                            .pred_bits = (cur_pred_bits >> 4) as u8;
                     } else {
                         // We're on an odd row of blocks, so use the endpoint prediction information we previously stored on the previous even row.
-                        cur_pred_bits = block_endpoint_preds[cur_block_endpoint_pred_array as usize][block_x as usize].pred_bits;
+                        cur_pred_bits = block_endpoint_preds
+                            [cur_block_endpoint_pred_array as usize][block_x as usize]
+                            .pred_bits;
                     }
                 }
 
@@ -317,24 +331,41 @@ impl Decoder {
                 let endpoint_index = match pred {
                     0 => {
                         // Reuse the left block's endpoint index
-                        assert!(block_x > 0, "block_x: {}, block_y: {}, cur_pred_bits: {}", block_x, block_y, cur_pred_bits);
+                        assert!(
+                            block_x > 0,
+                            "block_x: {}, block_y: {}, cur_pred_bits: {}",
+                            block_x,
+                            block_y,
+                            cur_pred_bits
+                        );
                         prev_endpoint_index
                     }
                     1 => {
                         // Reuse the upper block's endpoint index
-                        assert!(block_y > 0, "block_x: {}, block_y: {}, cur_pred_bits: {}", block_x, block_y, cur_pred_bits);
-                        block_endpoint_preds[cur_block_endpoint_pred_array as usize ^ 1][block_x as usize].endpoint_index as u16
+                        assert!(
+                            block_y > 0,
+                            "block_x: {}, block_y: {}, cur_pred_bits: {}",
+                            block_x,
+                            block_y,
+                            cur_pred_bits
+                        );
+                        block_endpoint_preds[cur_block_endpoint_pred_array as usize ^ 1]
+                            [block_x as usize]
+                            .endpoint_index as u16
                     }
                     2 => {
                         if self.is_video {
                             // If it's texture video, reuse the previous frame's endpoint index, at this block.
                             assert_eq!(pred, CR_ENDPOINT_PRED_INDEX);
-                            prev_frame_indices[(block_x + block_y * num_blocks_x) as usize].endpoint_index
+                            prev_frame_indices[(block_x + block_y * num_blocks_x) as usize]
+                                .endpoint_index
                         } else {
                             // Reuse the upper left block's endpoint index.
                             assert!(block_x > 0);
                             assert!(block_y > 0);
-                            block_endpoint_preds[cur_block_endpoint_pred_array as usize ^ 1][block_x as usize - 1].endpoint_index
+                            block_endpoint_preds[cur_block_endpoint_pred_array as usize ^ 1]
+                                [block_x as usize - 1]
+                                .endpoint_index
                         }
                     }
                     _ => {
@@ -354,7 +385,8 @@ impl Decoder {
                 };
 
                 // Remember the endpoint index we used on this block, so the next row can potentially reuse the index.
-                block_endpoint_preds[cur_block_endpoint_pred_array as usize][block_x as usize].endpoint_index = endpoint_index;
+                block_endpoint_preds[cur_block_endpoint_pred_array as usize][block_x as usize]
+                    .endpoint_index = endpoint_index;
 
                 // Remember the endpoint index used
                 prev_endpoint_index = endpoint_index;
@@ -377,13 +409,16 @@ impl Decoder {
                         // Is it a run?
                         if sym == selector_history_buf_rle_symbol_index as u16 {
                             // Decode the selector run's size, using the selector history buf RLE Huffman table (see section 9.0).
-                            let run_sym = self.selector_history_buf_rle_model.decode_symbol(reader)? as u32;
+                            let run_sym =
+                                self.selector_history_buf_rle_model.decode_symbol(reader)? as u32;
 
                             // Is it a very long run?
                             if run_sym == (SELECTOR_HISTORY_BUF_RLE_COUNT_TOTAL - 1) {
-                                cur_selector_rle_count = SELECTOR_HISTORY_BUF_RLE_COUNT_THRESH + decode_vlc(reader, 7);
+                                cur_selector_rle_count =
+                                    SELECTOR_HISTORY_BUF_RLE_COUNT_THRESH + decode_vlc(reader, 7);
                             } else {
-                                cur_selector_rle_count = SELECTOR_HISTORY_BUF_RLE_COUNT_THRESH + run_sym;
+                                cur_selector_rle_count =
+                                    SELECTOR_HISTORY_BUF_RLE_COUNT_THRESH + run_sym;
                             }
 
                             cur_selector_rle_count -= 1;
@@ -427,7 +462,8 @@ impl Decoder {
 
                 // For texture video, remember the endpoint and selector indices used by the block on this frame, for later reuse on the next frame.
                 if self.is_video {
-                    let curr_frame_indices = &mut prev_frame_indices[(block_x + num_blocks_x * block_y) as usize];
+                    let curr_frame_indices =
+                        &mut prev_frame_indices[(block_x + num_blocks_x * block_y) as usize];
                     curr_frame_indices.endpoint_index = endpoint_index;
                     curr_frame_indices.selector_index = selector_index;
                 }
@@ -438,7 +474,10 @@ impl Decoder {
                 assert!(selector_index < num_selectors);
 
                 let block = DecodedBlock {
-                    block_x, block_y, endpoint_index, selector_index
+                    block_x,
+                    block_y,
+                    endpoint_index,
+                    selector_index,
                 };
 
                 f(block);
@@ -466,7 +505,6 @@ fn decode_endpoints(num_endpoints: usize, bytes: &[u8]) -> Result<Vec<Endpoint>>
 
     // For each endpoint codebook entry
     for endpoint in &mut endpoints {
-
         // Decode the intensity delta Huffman code
         let inten_delta = inten_delta_model.decode_symbol(reader)?;
         endpoint.inten5 = ((inten_delta as u32 + prev_inten) & 7) as u8;
@@ -475,13 +513,18 @@ fn decode_endpoints(num_endpoints: usize, bytes: &[u8]) -> Result<Vec<Endpoint>>
         // Now decode the endpoint entry's color or intensity value
         let channel_count = if grayscale { 1 } else { 3 };
         for c in 0..channel_count {
-
             // The Huffman table used to decode the delta depends on the previous color's value
             let delta = match prev_color5[c as usize] {
-                COLOR5_PAL0_PREV_LO..=COLOR5_PAL0_PREV_HI => color5_delta_model0.decode_symbol(reader)?,
-                COLOR5_PAL1_PREV_LO..=COLOR5_PAL1_PREV_HI => color5_delta_model1.decode_symbol(reader)?,
-                COLOR5_PAL2_PREV_LO..=COLOR5_PAL2_PREV_HI => color5_delta_model2.decode_symbol(reader)?,
-                _ => unreachable!()
+                COLOR5_PAL0_PREV_LO..=COLOR5_PAL0_PREV_HI => {
+                    color5_delta_model0.decode_symbol(reader)?
+                }
+                COLOR5_PAL1_PREV_LO..=COLOR5_PAL1_PREV_HI => {
+                    color5_delta_model1.decode_symbol(reader)?
+                }
+                COLOR5_PAL2_PREV_LO..=COLOR5_PAL2_PREV_HI => {
+                    color5_delta_model2.decode_symbol(reader)?
+                }
+                _ => unreachable!(),
             };
 
             // Apply the delta
@@ -538,7 +581,7 @@ fn decode_selectors(num_selectors: usize, bytes: &[u8]) -> Result<Vec<Selector>>
                     *prev_byte = cur_byte;
 
                     for x in 0..4 {
-                        selector.set_selector(x, y, (cur_byte >> (x*2)) & 3);
+                        selector.set_selector(x, y, (cur_byte >> (x * 2)) & 3);
                     }
                 }
             } else {
@@ -550,7 +593,7 @@ fn decode_selectors(num_selectors: usize, bytes: &[u8]) -> Result<Vec<Selector>>
                     *prev_byte = cur_byte;
 
                     for x in 0..4 {
-                        selector.set_selector(x, y, (cur_byte >> (x*2)) & 3);
+                        selector.set_selector(x, y, (cur_byte >> (x * 2)) & 3);
                     }
                 }
             }
@@ -560,7 +603,7 @@ fn decode_selectors(num_selectors: usize, bytes: &[u8]) -> Result<Vec<Selector>>
             for y in 0..4 {
                 let cur_byte = reader.read_u8(8);
                 for x in 0..4 {
-                    selector.set_selector(x, y, (cur_byte >> (x*2)) & 3);
+                    selector.set_selector(x, y, (cur_byte >> (x * 2)) & 3);
                 }
             }
         }
@@ -568,7 +611,6 @@ fn decode_selectors(num_selectors: usize, bytes: &[u8]) -> Result<Vec<Selector>>
 
     Ok(selectors)
 }
-
 
 fn decode_vlc(reader: &mut BitReaderLsb, chunk_bits: u32) -> u32 {
     assert!(chunk_bits > 0);
@@ -594,7 +636,6 @@ fn decode_vlc(reader: &mut BitReaderLsb, chunk_bits: u32) -> u32 {
 
     v
 }
-
 
 struct ApproxMoveToFront {
     values: Vec<u16>,

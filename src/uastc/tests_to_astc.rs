@@ -5,13 +5,16 @@ fn test_uastc_mode(mode: usize) {
     for (uastc, expected_astc) in test_data.iter() {
         let mut actual_astc = [0; 16];
         astc::convert_block_from_uastc(uastc, &mut actual_astc);
-        assert_eq!(&actual_astc, expected_astc, "\n{:02X?}\n{:02X?}\n{:02X?}", uastc, &actual_astc, expected_astc);
+        assert_eq!(
+            &actual_astc, expected_astc,
+            "\n{:02X?}\n{:02X?}\n{:02X?}",
+            uastc, &actual_astc, expected_astc
+        );
     }
 }
 
 #[test]
 fn test_blocks_uastc_to_astc() {
-
     // CEM 8 - RGB Direct
     test_uastc_mode(0);
     test_uastc_mode(1);
@@ -42,6 +45,7 @@ fn test_blocks_uastc_to_astc() {
     test_uastc_mode(18);
 }
 
+#[rustfmt::skip]
 static TEST_DATA_UASTC_ASTC: [[([u8; 16], [u8; 16]); 32]; 19] = [
     [   // 0
         ([0xB1, 0x1B, 0x7F, 0x16, 0xD0, 0xA9, 0x98, 0xB9, 0x4B, 0x50, 0x9E, 0x57, 0xB8, 0x9C, 0x73, 0xAB], [0x42, 0x02, 0x81, 0x75, 0x28, 0xF1, 0xCC, 0x5B, 0xD5, 0xCE, 0x39, 0x1D, 0xEA, 0x79, 0x0A, 0xA2]),

@@ -7,10 +7,7 @@ pub struct BitReaderLsb<'a> {
 
 impl<'a> BitReaderLsb<'a> {
     pub fn new(bytes: &'a [u8]) -> Self {
-        Self {
-            bytes,
-            bit_pos: 0,
-        }
+        Self { bytes, bit_pos: 0 }
     }
 
     pub fn read_bool(&mut self) -> bool {
@@ -72,11 +69,10 @@ mod tests {
         let pattern = 0x5555_5555_5555_5555u64;
         for i in 0..16 {
             let segment = mask!(16u64);
-            let xor_mask =
-                (segment * ((i >> 3) & 0x1)) << 48 |
-                (segment * ((i >> 2) & 0x1)) << 32 |
-                (segment * ((i >> 1) & 0x1)) << 16 |
-                (segment * (i & 0x1));
+            let xor_mask = (segment * ((i >> 3) & 0x1)) << 48
+                | (segment * ((i >> 2) & 0x1)) << 32
+                | (segment * ((i >> 1) & 0x1)) << 16
+                | (segment * (i & 0x1));
             let data = pattern ^ xor_mask;
             let bytes = data.to_le_bytes();
             for len in 0..32 {

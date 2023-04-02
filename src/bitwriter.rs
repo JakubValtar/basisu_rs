@@ -7,10 +7,7 @@ pub struct BitWriterLsb<'a> {
 
 impl<'a> BitWriterLsb<'a> {
     pub fn new(bytes: &'a mut [u8]) -> Self {
-        Self {
-            bytes,
-            bit_pos: 0,
-        }
+        Self { bytes, bit_pos: 0 }
     }
 
     pub fn write_bool(&mut self, v: bool) {
@@ -70,10 +67,7 @@ pub struct BitWriterMsbRevBytes<'a> {
 impl<'a> BitWriterMsbRevBytes<'a> {
     pub fn new(bytes: &'a mut [u8]) -> Self {
         let bit_pos = bytes.len() * 8;
-        Self {
-            bytes,
-            bit_pos,
-        }
+        Self { bytes, bit_pos }
     }
 
     pub fn write_u8_rev_bits(&mut self, count: usize, v: u8) {
@@ -135,11 +129,10 @@ mod tests {
     fn generate_test_pattern(i: u64) -> u64 {
         let pattern = 0x5555_5555_5555_5555u64;
         let segment = mask!(16u64);
-        let xor_mask =
-            (segment * ((i >> 3) & 0x1)) << 48 |
-            (segment * ((i >> 2) & 0x1)) << 32 |
-            (segment * ((i >> 1) & 0x1)) << 16 |
-            (segment * (i & 0x1));
+        let xor_mask = (segment * ((i >> 3) & 0x1)) << 48
+            | (segment * ((i >> 2) & 0x1)) << 32
+            | (segment * ((i >> 1) & 0x1)) << 16
+            | (segment * (i & 0x1));
 
         pattern ^ xor_mask
     }

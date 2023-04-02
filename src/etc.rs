@@ -1,10 +1,4 @@
-use crate::{
-    Color32,
-    Result,
-    bitreader::BitReaderLsb,
-    bitwriter::BitWriterLsb,
-    mask, uastc,
-};
+use crate::{bitreader::BitReaderLsb, bitwriter::BitWriterLsb, mask, uastc, Color32, Result};
 
 pub fn convert_block_from_uastc(bytes: &[u8], output: &mut [u8], alpha: bool) {
     match convert_block_from_uastc_result(bytes, output, alpha) {
@@ -40,7 +34,10 @@ fn convert_block_from_uastc_result(bytes: &[u8], output: &mut [u8], alpha: bool)
             writer.write_u8(8, trans_flags.etc1b << 3);
         }
         // codeword1 (3), codeword2 (3), diff bit, flip bit
-        writer.write_u8(8, trans_flags.etc1i << 5 | trans_flags.etc1i << 2 | (trans_flags.etc1d as u8) << 1);
+        writer.write_u8(
+            8,
+            trans_flags.etc1i << 5 | trans_flags.etc1i << 2 | (trans_flags.etc1d as u8) << 1,
+        );
 
         let selector = [0b11, 0b10, 0b00, 0b01][trans_flags.etc1s as usize];
         let s_lo = selector & 1;
@@ -63,7 +60,7 @@ fn convert_block_from_uastc_result(bytes: &[u8], output: &mut [u8], alpha: bool)
     if !trans_flags.etc1f {
         // Transpose to have the two subblocks in 0..8 and 8..16
         for y in 0..3 {
-            for x in (y+1)..4 {
+            for x in (y + 1)..4 {
                 let a = y * 4 + x;
                 let b = x * 4 + y;
                 rgba.swap(a, b);
@@ -83,7 +80,7 @@ fn convert_block_from_uastc_result(bytes: &[u8], output: &mut [u8], alpha: bool)
             acc
         });
         for (&sum, avg) in sum.iter().zip(avg.0.iter_mut()).take(3) {
-            *avg = ((sum as u32 * limit + 1020) / (8*255)) as u8;
+            *avg = ((sum as u32 * limit + 1020) / (8 * 255)) as u8;
         }
     }
 
@@ -121,23 +118,27 @@ fn convert_block_from_uastc_result(bytes: &[u8], output: &mut [u8], alpha: bool)
         ];
     }
 
-    {   // Write codebooks, diff and flip bits
-        let val =
-            trans_flags.etc1i0 << 5 |
-            trans_flags.etc1i1 << 2 |
-            (trans_flags.etc1d as u8) << 1 |
-            trans_flags.etc1f as u8;
+    {
+        // Write codebooks, diff and flip bits
+        let val = trans_flags.etc1i0 << 5
+            | trans_flags.etc1i1 << 2
+            | (trans_flags.etc1d as u8) << 1
+            | trans_flags.etc1f as u8;
         writer.write_u8(8, val);
     }
 
     let mut selector = Selector::default();
 
-    for (subblock, (rgba, block_colors)) in rgba.chunks_exact(8).zip(block_colors.iter()).enumerate() {
-
+    for (subblock, (rgba, block_colors)) in
+        rgba.chunks_exact(8).zip(block_colors.iter()).enumerate()
+    {
         const LUM_FACTORS: [i32; 3] = [108, 366, 38];
         let mut block_lums = [0; 4];
         for (block_lum, block_color) in block_lums.iter_mut().zip(block_colors.iter()) {
-            *block_lum = block_color.0.iter().zip(LUM_FACTORS.iter())
+            *block_lum = block_color
+                .0
+                .iter()
+                .zip(LUM_FACTORS.iter())
                 .map(|(&col, &f)| col as i32 * f)
                 .sum();
         }
@@ -146,10 +147,14 @@ fn convert_block_from_uastc_result(bytes: &[u8], output: &mut [u8], alpha: bool)
         let block_lum_23 = (block_lums[2] + block_lums[3]) / 2;
 
         for (i, c) in rgba.iter().enumerate() {
-            let lum: i32 = c.0.iter().zip(LUM_FACTORS.iter())
-                .map(|(&col, &f)| col as i32 * f)
-                .sum();
-            let sel = (lum >= block_lum_01) as u8 + (lum >= block_lum_12) as u8 + (lum >= block_lum_23) as u8;
+            let lum: i32 =
+                c.0.iter()
+                    .zip(LUM_FACTORS.iter())
+                    .map(|(&col, &f)| col as i32 * f)
+                    .sum();
+            let sel = (lum >= block_lum_01) as u8
+                + (lum >= block_lum_12) as u8
+                + (lum >= block_lum_23) as u8;
             let x = i & 0b11;
             let y = 2 * subblock + (i >> 2);
             if trans_flags.etc1f {
@@ -170,9 +175,10 @@ fn apply_etc1_bias(mut block_color: Color32, bias: u8, limit: u32, subblock: u32
         return block_color;
     }
 
-    const S_DIVS: [u8; 3] = [ 1, 3, 9 ];
+    const S_DIVS: [u8; 3] = [1, 3, 9];
 
     for c in 0..3 {
+        #[rustfmt::skip]
         let delta: i32 = match bias {
             2 => if subblock == 1 { 0 } else if c == 0 { -1 } else { 0 },
             5 => if subblock == 1 { 0 } else if c == 1 { -1 } else { 0 },
@@ -271,20 +277,23 @@ fn write_etc2_alpha_block(writer: &mut BitWriterLsb, etc2tm: u8, rgba: &[Color32
             }
 
             let mod_0_at_range_fraction = -(mod_min as f32) / range as f32;
-            let center = (lerp(min_alpha as f32, max_alpha as f32, mod_0_at_range_fraction)).round() as i32;
+            let center =
+                (lerp(min_alpha as f32, max_alpha as f32, mod_0_at_range_fraction)).round() as i32;
 
             let mut values = [0u8; 8];
             for (val, &modifier) in values.iter_mut().zip(mod_table.iter()) {
-                *val = (center + (modifier as i32 * multiplier as i32)).max(0).min(255) as u8;
+                *val = (center + (modifier as i32 * multiplier as i32))
+                    .max(0)
+                    .min(255) as u8;
             }
 
             let mut selectors = 0u64;
             for (i, c) in rgba.iter().enumerate() {
                 let a = c[3];
-                let best_selector = values.iter().enumerate()
-                    .min_by_key(|(_, &val)| {
-                        (val as i32 - a as i32).abs()
-                    })
+                let best_selector = values
+                    .iter()
+                    .enumerate()
+                    .min_by_key(|(_, &val)| (val as i32 - a as i32).abs())
                     .map(|(i, _)| i)
                     .unwrap() as u64;
 
@@ -309,7 +318,7 @@ fn write_etc2_alpha_block(writer: &mut BitWriterLsb, etc2tm: u8, rgba: &[Color32
     }
 }
 
-#[derive(Clone, Copy, Debug,  Default)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct Selector {
     // Plain selectors (2-bits per value), one byte for each row
     selectors: [u8; 4],
@@ -319,7 +328,6 @@ pub struct Selector {
 }
 
 impl Selector {
-
     // Returned selector value ranges from 0-3 and is a direct index into g_etc1_inten_tables.
     pub fn get_selector(&self, x: usize, y: usize) -> usize {
         assert!(x < 4);
@@ -363,7 +371,7 @@ impl Selector {
     }
 }
 
-pub(crate) fn color_5_to_8(color5: Color32)-> Color32 {
+pub(crate) fn color_5_to_8(color5: Color32) -> Color32 {
     fn extend_5_to_8(x: u8) -> u8 {
         (x << 3) | (x >> 2)
     }
@@ -371,11 +379,11 @@ pub(crate) fn color_5_to_8(color5: Color32)-> Color32 {
         extend_5_to_8(color5[0]),
         extend_5_to_8(color5[1]),
         extend_5_to_8(color5[2]),
-        255
+        255,
     )
 }
 
-pub(crate) fn color_4_to_8(color5: Color32)-> Color32 {
+pub(crate) fn color_4_to_8(color5: Color32) -> Color32 {
     fn extend_4_to_8(x: u8) -> u8 {
         (x << 4) | x
     }
@@ -383,7 +391,7 @@ pub(crate) fn color_4_to_8(color5: Color32)-> Color32 {
         extend_4_to_8(color5[0]),
         extend_4_to_8(color5[1]),
         extend_4_to_8(color5[2]),
-        255
+        255,
     )
 }
 
@@ -394,16 +402,15 @@ pub(crate) fn apply_mod_to_base_color(base: Color32, inten: u8) -> [Color32; 4] 
             (base[0] as i16 + modifier).max(0).min(255) as u8,
             (base[1] as i16 + modifier).max(0).min(255) as u8,
             (base[2] as i16 + modifier).max(0).min(255) as u8,
-            255
+            255,
         );
     }
     colors
 }
 
-static SELECTOR_ID_TO_ETC1: [u8; 4] = [
-    0b11, 0b10, 0b00, 0b01,
-];
+static SELECTOR_ID_TO_ETC1: [u8; 4] = [0b11, 0b10, 0b00, 0b01];
 
+#[rustfmt::skip]
 static ETC1_MODIFIERS: [[i16; 4]; 8] = [
     [   -8,  -2,  2,   8 ],
     [  -17,  -5,  5,  17 ],
@@ -418,6 +425,7 @@ static ETC1_MODIFIERS: [[i16; 4]; 8] = [
 const ETC2_ALPHA_MODIFIERS_MIN_INDEX: usize = 3;
 const ETC2_ALPHA_MODIFIERS_MAX_INDEX: usize = 7;
 
+#[rustfmt::skip]
 static ETC2_ALPHA_MODIFIERS: [[i8; 8]; 16] = [
     [ -3, -6,  -9, -15, 2, 5, 8, 14 ],
     [ -3, -7, -10, -13, 2, 6, 9, 12 ],

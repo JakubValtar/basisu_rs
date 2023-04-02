@@ -8,13 +8,16 @@ fn test_uastc_mode(mode: usize) {
         for i in 0..16 {
             decoded_rgba_u32[i] = decoded_rgba[i].to_rgba_u32();
         }
-        assert_eq!(&decoded_rgba_u32, rgba, "\n{:02X?}\n{:08X?}\n{:08X?}", uastc, &decoded_rgba_u32, rgba);
+        assert_eq!(
+            &decoded_rgba_u32, rgba,
+            "\n{:02X?}\n{:08X?}\n{:08X?}",
+            uastc, &decoded_rgba_u32, rgba
+        );
     }
 }
 
 #[test]
 fn test_blocks_uastc_to_rgba() {
-
     // CEM 8 - RGB Direct
     test_uastc_mode(0);
     test_uastc_mode(1);
@@ -45,6 +48,7 @@ fn test_blocks_uastc_to_rgba() {
     test_uastc_mode(18);
 }
 
+#[rustfmt::skip]
 static TEST_DATA_UASTC_RGBA: [[([u8; 16], [u32; 16]); 32]; 19] = [
     [   // 0
         ([0xB1, 0x1B, 0x7F, 0x16, 0xD0, 0xA9, 0x98, 0xB9, 0x4B, 0x50, 0x9E, 0x57, 0xB8, 0x9C, 0x73, 0xAB], [0xFF415026, 0xFF39491E, 0xFF1A2A00, 0xFF415026, 0xFF8A976D, 0xFF627146, 0xFF505E34, 0xFF415026, 0xFF5B693F, 0xFF717F55, 0xFF7B885E, 0xFF627146, 0xFF304015, 0xFF505E34, 0xFF717F55, 0xFF6A784E]),

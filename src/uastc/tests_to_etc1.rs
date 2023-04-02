@@ -19,13 +19,20 @@ fn test_uastc_mode(mode: usize) {
     for (uastc, expected_etc1) in test_data.iter() {
         let mut actual_etc1 = [0; 8];
         etc::convert_block_from_uastc(uastc, &mut actual_etc1, false);
-        assert_eq!(&actual_etc1, expected_etc1, "\nUASTC Mode: {}\n{:02X?}\n{}\n{}", mode, uastc, U8ArrayBinPrint(&actual_etc1), U8ArrayBinPrint(expected_etc1));
+        assert_eq!(
+            &actual_etc1,
+            expected_etc1,
+            "\nUASTC Mode: {}\n{:02X?}\n{}\n{}",
+            mode,
+            uastc,
+            U8ArrayBinPrint(&actual_etc1),
+            U8ArrayBinPrint(expected_etc1)
+        );
     }
 }
 
 #[test]
 fn test_blocks_uastc_to_etc1() {
-
     // CEM 8 - RGB Direct
     test_uastc_mode(0);
     test_uastc_mode(1);
@@ -56,6 +63,7 @@ fn test_blocks_uastc_to_etc1() {
     test_uastc_mode(18);
 }
 
+#[rustfmt::skip]
 static TEST_DATA_UASTC_ETC1: [[([u8; 16], [u8; 8]); 32]; 19] = [
     [   // 0
         ([0xB1, 0x1B, 0x7F, 0x16, 0xD0, 0xA9, 0x98, 0xB9, 0x4B, 0x50, 0x9E, 0x57, 0xB8, 0x9C, 0x73, 0xAB], [0x46, 0x6E, 0x5E, 0x6E, 0x31, 0x9D, 0x8D, 0x1A]),

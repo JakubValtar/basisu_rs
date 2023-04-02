@@ -1,6 +1,6 @@
-use std::fs::{ self, File };
+use std::fs::{self, File};
 use std::io::BufReader;
-use std::path::{ Path, PathBuf };
+use std::path::{Path, PathBuf};
 
 use ktx::header::KtxInfo;
 
@@ -49,19 +49,22 @@ impl TestCase {
 }
 
 pub fn iterate_textures_etc1s<F>(f: F)
-    where F: FnMut(TestCase)
+where
+    F: FnMut(TestCase),
 {
     iterate_textures(ETC1S_CORPUS, f);
 }
 
 pub fn iterate_textures_uastc<F>(f: F)
-    where F: FnMut(TestCase)
+where
+    F: FnMut(TestCase),
 {
     iterate_textures(UASTC_CORPUS, f);
 }
 
 fn iterate_textures<F>(dir: &str, mut f: F)
-    where F: FnMut(TestCase)
+where
+    F: FnMut(TestCase),
 {
     let base = PathBuf::from(dir);
     for dir in [DIR_RGB, DIR_RGBA].iter() {
@@ -122,39 +125,50 @@ pub fn compare_png<P: AsRef<Path>>(path: P, image: &basisu::Image<u8>) -> Result
 
     match info.color_type {
         png::ColorType::RGBA => {
-            while let (Some(expected_row), Some(actual_row)) = (reader.next_row()?, actual_rows.next()) {
+            while let (Some(expected_row), Some(actual_row)) =
+                (reader.next_row()?, actual_rows.next())
+            {
                 assert_slices_eq(expected_row, actual_row);
             }
         }
         png::ColorType::RGB => {
-            while let (Some(expected_row), Some(actual_row)) = (reader.next_row()?, actual_rows.next()) {
+            while let (Some(expected_row), Some(actual_row)) =
+                (reader.next_row()?, actual_rows.next())
+            {
                 for i in 0..image.w as usize {
-                    assert_eq!(&expected_row[3*i..3*i+3], &actual_row[4*i..4*i+3]);
-                    assert_eq!(255, actual_row[4*i+3]);
+                    assert_eq!(
+                        &expected_row[3 * i..3 * i + 3],
+                        &actual_row[4 * i..4 * i + 3]
+                    );
+                    assert_eq!(255, actual_row[4 * i + 3]);
                 }
             }
         }
         png::ColorType::GrayscaleAlpha => {
-            while let (Some(expected_row), Some(actual_row)) = (reader.next_row()?, actual_rows.next()) {
+            while let (Some(expected_row), Some(actual_row)) =
+                (reader.next_row()?, actual_rows.next())
+            {
                 for i in 0..image.w as usize {
-                    assert_eq!(expected_row[2*i], actual_row[4*i]);
-                    assert_eq!(expected_row[2*i], actual_row[4*i+1]);
-                    assert_eq!(expected_row[2*i], actual_row[4*i+2]);
-                    assert_eq!(expected_row[2*i+1], actual_row[4*i+3]);
+                    assert_eq!(expected_row[2 * i], actual_row[4 * i]);
+                    assert_eq!(expected_row[2 * i], actual_row[4 * i + 1]);
+                    assert_eq!(expected_row[2 * i], actual_row[4 * i + 2]);
+                    assert_eq!(expected_row[2 * i + 1], actual_row[4 * i + 3]);
                 }
             }
         }
         png::ColorType::Grayscale => {
-            while let (Some(expected_row), Some(actual_row)) = (reader.next_row()?, actual_rows.next()) {
+            while let (Some(expected_row), Some(actual_row)) =
+                (reader.next_row()?, actual_rows.next())
+            {
                 for i in 0..image.w as usize {
-                    assert_eq!(expected_row[i], actual_row[4*i]);
-                    assert_eq!(expected_row[i], actual_row[4*i+1]);
-                    assert_eq!(expected_row[i], actual_row[4*i+2]);
-                    assert_eq!(255, actual_row[4*i+3]);
+                    assert_eq!(expected_row[i], actual_row[4 * i]);
+                    assert_eq!(expected_row[i], actual_row[4 * i + 1]);
+                    assert_eq!(expected_row[i], actual_row[4 * i + 2]);
+                    assert_eq!(255, actual_row[4 * i + 3]);
                 }
             }
         }
-        _ => unimplemented!()
+        _ => unimplemented!(),
     }
 
     Ok(())
@@ -172,22 +186,29 @@ pub fn compare_png_rgb<P: AsRef<Path>>(path: P, image: &basisu::Image<u8>) -> Re
 
     match info.color_type {
         png::ColorType::RGB => {
-            while let (Some(expected_row), Some(actual_row)) = (reader.next_row()?, actual_rows.next()) {
+            while let (Some(expected_row), Some(actual_row)) =
+                (reader.next_row()?, actual_rows.next())
+            {
                 for i in 0..image.w as usize {
-                    assert_eq!(&expected_row[3*i..3*i+3], &actual_row[4*i..4*i+3]);
+                    assert_eq!(
+                        &expected_row[3 * i..3 * i + 3],
+                        &actual_row[4 * i..4 * i + 3]
+                    );
                 }
             }
         }
         png::ColorType::Grayscale => {
-            while let (Some(expected_row), Some(actual_row)) = (reader.next_row()?, actual_rows.next()) {
+            while let (Some(expected_row), Some(actual_row)) =
+                (reader.next_row()?, actual_rows.next())
+            {
                 for i in 0..image.w as usize {
-                    assert_eq!(expected_row[i], actual_row[4*i]);
-                    assert_eq!(expected_row[i], actual_row[4*i+1]);
-                    assert_eq!(expected_row[i], actual_row[4*i+2]);
+                    assert_eq!(expected_row[i], actual_row[4 * i]);
+                    assert_eq!(expected_row[i], actual_row[4 * i + 1]);
+                    assert_eq!(expected_row[i], actual_row[4 * i + 2]);
                 }
             }
         }
-        _ => unimplemented!()
+        _ => unimplemented!(),
     }
 
     Ok(())
@@ -205,13 +226,15 @@ pub fn compare_png_alpha<P: AsRef<Path>>(path: P, image: &basisu::Image<u8>) -> 
 
     match info.color_type {
         png::ColorType::Grayscale => {
-            while let (Some(expected_row), Some(actual_row)) = (reader.next_row()?, actual_rows.next()) {
+            while let (Some(expected_row), Some(actual_row)) =
+                (reader.next_row()?, actual_rows.next())
+            {
                 for i in 0..image.w as usize {
-                    assert_eq!(expected_row[i], actual_row[4*i+3]);
+                    assert_eq!(expected_row[i], actual_row[4 * i + 3]);
                 }
             }
         }
-        _ => unimplemented!()
+        _ => unimplemented!(),
     }
 
     Ok(())
@@ -234,10 +257,11 @@ pub fn compare_ktx<P: AsRef<Path>>(path: P, image: &basisu::Image<u8>) -> Result
     }
 }
 
-pub fn rgba_rows<'a>(image: &'a basisu::Image<u8>) -> Box<dyn Iterator<Item=&'a [u8]> + 'a> {
+pub fn rgba_rows<'a>(image: &'a basisu::Image<u8>) -> Box<dyn Iterator<Item = &'a [u8]> + 'a> {
     // TODO: Is texture with y flipped aligned to the top or to the bottom? This code assumes to the top.
     let bytes_per_pixel = 4;
-    let res = image.data
+    let res = image
+        .data
         .chunks_exact(image.stride as usize)
         .take(image.h as usize)
         .map(move |r| &r[0..(image.w * bytes_per_pixel) as usize]);
