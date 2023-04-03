@@ -175,7 +175,8 @@ fn collect_blocks(case: &TestCase, collected_blocks: &mut [Vec<TestBlock>]) -> R
     let etc1_data = open_ktx(&case.etc1_rgb)?.read_textures().next().unwrap();
     let etc2_data = open_ktx(&case.etc2_rgba)?.read_textures().next().unwrap();
     let rgba_data = {
-        let (info, mut reader) = open_png(&case.uastc_rgba32)?.read_info()?;
+        let mut reader = open_png(&case.uastc_rgba32)?.read_info()?;
+        let info = reader.info();
         let stride = ((info.width + 3) / 4 * 4) * 4;
         let height = (info.height + 3) / 4 * 4;
         let len = stride * height;
@@ -190,13 +191,15 @@ fn collect_blocks(case: &TestCase, collected_blocks: &mut [Vec<TestBlock>]) -> R
         let mut rgba_rows = image.data.chunks_exact_mut(stride as usize);
 
         match info.color_type {
-            png::ColorType::RGBA => {
+            png::ColorType::Rgba => {
                 while let (Some(src), Some(dst)) = (reader.next_row()?, rgba_rows.next()) {
+                    let src = src.data();
                     dst[0..src.len()].copy_from_slice(src);
                 }
             }
-            png::ColorType::RGB => {
+            png::ColorType::Rgb => {
                 while let (Some(src), Some(dst)) = (reader.next_row()?, rgba_rows.next()) {
+                    let src = src.data();
                     for i in 0..image.w as usize {
                         dst[4 * i..4 * i + 3].copy_from_slice(&src[3 * i..3 * i + 3]);
                         dst[4 * i + 3] = 255;
@@ -205,6 +208,7 @@ fn collect_blocks(case: &TestCase, collected_blocks: &mut [Vec<TestBlock>]) -> R
             }
             png::ColorType::GrayscaleAlpha => {
                 while let (Some(src), Some(dst)) = (reader.next_row()?, rgba_rows.next()) {
+                    let src = src.data();
                     for i in 0..image.w as usize {
                         dst[4 * i] = src[2 * i];
                         dst[4 * i + 1] = src[2 * i];
@@ -215,6 +219,7 @@ fn collect_blocks(case: &TestCase, collected_blocks: &mut [Vec<TestBlock>]) -> R
             }
             png::ColorType::Grayscale => {
                 while let (Some(src), Some(dst)) = (reader.next_row()?, rgba_rows.next()) {
+                    let src = src.data();
                     for i in 0..image.w as usize {
                         dst[4 * i] = src[i];
                         dst[4 * i + 1] = src[i];

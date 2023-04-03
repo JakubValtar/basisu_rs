@@ -118,7 +118,9 @@ pub fn open_png<P: AsRef<Path>>(path: P) -> Result<png::Decoder<BufReader<File>>
 pub fn compare_png<P: AsRef<Path>>(path: P, image: &basisu::Image<u8>) -> Result<()> {
     let decoder = open_png(path)?;
 
-    let (info, mut reader) = decoder.read_info()?;
+    let mut reader = decoder.read_info()?;
+
+    let info = reader.info();
 
     assert_eq!(info.width, image.w);
     assert_eq!(info.height, image.h);
@@ -126,20 +128,20 @@ pub fn compare_png<P: AsRef<Path>>(path: P, image: &basisu::Image<u8>) -> Result
     let mut actual_rows = rgba_rows(image);
 
     match info.color_type {
-        png::ColorType::RGBA => {
+        png::ColorType::Rgba => {
             while let (Some(expected_row), Some(actual_row)) =
                 (reader.next_row()?, actual_rows.next())
             {
-                assert_slices_eq(expected_row, actual_row);
+                assert_slices_eq(expected_row.data(), actual_row);
             }
         }
-        png::ColorType::RGB => {
+        png::ColorType::Rgb => {
             while let (Some(expected_row), Some(actual_row)) =
                 (reader.next_row()?, actual_rows.next())
             {
                 for i in 0..image.w as usize {
                     assert_eq!(
-                        &expected_row[3 * i..3 * i + 3],
+                        &expected_row.data()[3 * i..3 * i + 3],
                         &actual_row[4 * i..4 * i + 3]
                     );
                     assert_eq!(255, actual_row[4 * i + 3]);
@@ -151,10 +153,10 @@ pub fn compare_png<P: AsRef<Path>>(path: P, image: &basisu::Image<u8>) -> Result
                 (reader.next_row()?, actual_rows.next())
             {
                 for i in 0..image.w as usize {
-                    assert_eq!(expected_row[2 * i], actual_row[4 * i]);
-                    assert_eq!(expected_row[2 * i], actual_row[4 * i + 1]);
-                    assert_eq!(expected_row[2 * i], actual_row[4 * i + 2]);
-                    assert_eq!(expected_row[2 * i + 1], actual_row[4 * i + 3]);
+                    assert_eq!(expected_row.data()[2 * i], actual_row[4 * i]);
+                    assert_eq!(expected_row.data()[2 * i], actual_row[4 * i + 1]);
+                    assert_eq!(expected_row.data()[2 * i], actual_row[4 * i + 2]);
+                    assert_eq!(expected_row.data()[2 * i + 1], actual_row[4 * i + 3]);
                 }
             }
         }
@@ -163,9 +165,9 @@ pub fn compare_png<P: AsRef<Path>>(path: P, image: &basisu::Image<u8>) -> Result
                 (reader.next_row()?, actual_rows.next())
             {
                 for i in 0..image.w as usize {
-                    assert_eq!(expected_row[i], actual_row[4 * i]);
-                    assert_eq!(expected_row[i], actual_row[4 * i + 1]);
-                    assert_eq!(expected_row[i], actual_row[4 * i + 2]);
+                    assert_eq!(expected_row.data()[i], actual_row[4 * i]);
+                    assert_eq!(expected_row.data()[i], actual_row[4 * i + 1]);
+                    assert_eq!(expected_row.data()[i], actual_row[4 * i + 2]);
                     assert_eq!(255, actual_row[4 * i + 3]);
                 }
             }
@@ -179,7 +181,9 @@ pub fn compare_png<P: AsRef<Path>>(path: P, image: &basisu::Image<u8>) -> Result
 pub fn compare_png_rgb<P: AsRef<Path>>(path: P, image: &basisu::Image<u8>) -> Result<()> {
     let decoder = open_png(path)?;
 
-    let (info, mut reader) = decoder.read_info()?;
+    let mut reader = decoder.read_info()?;
+
+    let info = reader.info();
 
     assert_eq!(info.width, image.w);
     assert_eq!(info.height, image.h);
@@ -187,13 +191,13 @@ pub fn compare_png_rgb<P: AsRef<Path>>(path: P, image: &basisu::Image<u8>) -> Re
     let mut actual_rows = rgba_rows(image);
 
     match info.color_type {
-        png::ColorType::RGB => {
+        png::ColorType::Rgb => {
             while let (Some(expected_row), Some(actual_row)) =
                 (reader.next_row()?, actual_rows.next())
             {
                 for i in 0..image.w as usize {
                     assert_eq!(
-                        &expected_row[3 * i..3 * i + 3],
+                        &expected_row.data()[3 * i..3 * i + 3],
                         &actual_row[4 * i..4 * i + 3]
                     );
                 }
@@ -204,9 +208,9 @@ pub fn compare_png_rgb<P: AsRef<Path>>(path: P, image: &basisu::Image<u8>) -> Re
                 (reader.next_row()?, actual_rows.next())
             {
                 for i in 0..image.w as usize {
-                    assert_eq!(expected_row[i], actual_row[4 * i]);
-                    assert_eq!(expected_row[i], actual_row[4 * i + 1]);
-                    assert_eq!(expected_row[i], actual_row[4 * i + 2]);
+                    assert_eq!(expected_row.data()[i], actual_row[4 * i]);
+                    assert_eq!(expected_row.data()[i], actual_row[4 * i + 1]);
+                    assert_eq!(expected_row.data()[i], actual_row[4 * i + 2]);
                 }
             }
         }
@@ -219,7 +223,9 @@ pub fn compare_png_rgb<P: AsRef<Path>>(path: P, image: &basisu::Image<u8>) -> Re
 pub fn compare_png_alpha<P: AsRef<Path>>(path: P, image: &basisu::Image<u8>) -> Result<()> {
     let decoder = open_png(path)?;
 
-    let (info, mut reader) = decoder.read_info()?;
+    let mut reader = decoder.read_info()?;
+
+    let info = reader.info();
 
     assert_eq!(info.width, image.w);
     assert_eq!(info.height, image.h);
@@ -232,7 +238,7 @@ pub fn compare_png_alpha<P: AsRef<Path>>(path: P, image: &basisu::Image<u8>) -> 
                 (reader.next_row()?, actual_rows.next())
             {
                 for i in 0..image.w as usize {
-                    assert_eq!(expected_row[i], actual_row[4 * i + 3]);
+                    assert_eq!(expected_row.data()[i], actual_row[4 * i + 3]);
                 }
             }
         }

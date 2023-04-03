@@ -13,5 +13,5 @@ readme = "README.md"
 byteorder = "1.3.4"
 
 [dev-dependencies]
-png = "0.16.4"
+png = "0.17"
 ktx = "0.3.1"
