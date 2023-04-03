@@ -73,7 +73,7 @@ fn convert_block_from_uastc_result(bytes: &[u8], output: &mut [u8]) -> Result<()
             let s0 = endpoints[0] as u32 + endpoints[2] as u32 + endpoints[4] as u32;
             let s1 = endpoints[1] as u32 + endpoints[3] as u32 + endpoints[5] as u32;
             if s0 > s1 {
-                invert_subset_weights[subset as usize] = true;
+                invert_subset_weights[subset] = true;
                 for pair in quant_endpoints.chunks_exact_mut(2) {
                     pair.swap(0, 1);
                 }

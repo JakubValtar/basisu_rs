@@ -9,26 +9,26 @@ const MaxSupportedCodeSize: usize = 16;
 
 // The maximum number of symbols  is 2^14
 const MaxSymsLog2: usize = 14;
-const MaxSyms: usize = 1 << MaxSymsLog2;
+const _MaxSyms: usize = 1 << MaxSymsLog2;
 
 // Small zero runs may range from 3-10 entries
 const SmallZeroRunSizeMin: usize = 3;
-const SmallZeroRunSizeMax: usize = 10;
+const _SmallZeroRunSizeMax: usize = 10;
 const SmallZeroRunExtraBits: usize = 3;
 
 // Big zero runs may range from 11-138 entries
 const BigZeroRunSizeMin: usize = 11;
-const BigZeroRunSizeMax: usize = 138;
+const _BigZeroRunSizeMax: usize = 138;
 const BigZeroRunExtraBits: usize = 7;
 
 // Small non-zero runs may range from 3-6 entries
 const SmallRepeatSizeMin: usize = 3;
-const SmallRepeatSizeMax: usize = 6;
+const _SmallRepeatSizeMax: usize = 6;
 const SmallRepeatExtraBits: usize = 2;
 
 // Big non-zero run may range from 7-134 entries
 const BigRepeatSizeMin: usize = 7;
-const BigRepeatSizeMax: usize = 134;
+const _BigRepeatSizeMax: usize = 134;
 const BigRepeatExtraBits: usize = 7;
 
 // There are a maximum of 21 symbols in a compressed Huffman code length table.
@@ -72,21 +72,17 @@ pub fn read_huffman_table(reader: &mut BitReaderLsb) -> Result<HuffmanDecodingTa
             }
             SmallZeroRunCode => {
                 let count = SmallZeroRunSizeMin + reader.read_u32(SmallZeroRunExtraBits) as usize;
-                for _ in 0..count {
-                    symbol_code_sizes.push(0);
-                }
+                symbol_code_sizes.extend(std::iter::repeat(0).take(count));
             }
             BigZeroRunCode => {
                 let count = BigZeroRunSizeMin + reader.read_u32(BigZeroRunExtraBits) as usize;
-                for _ in 0..count {
-                    symbol_code_sizes.push(0);
-                }
+                symbol_code_sizes.extend(std::iter::repeat(0).take(count));
             }
             SmallRepeatCode => {
                 let prev_sym_code_size = symbol_code_sizes
                     .last()
                     .copied()
-                    .ok_or_else(|| "Encountered SmallRepeatCode as the first code")?;
+                    .ok_or("Encountered SmallRepeatCode as the first code")?;
                 if prev_sym_code_size == 0 {
                     return Err(
                         "Encountered SmallRepeatCode, but the previous symbol's code length was 0"
@@ -102,7 +98,7 @@ pub fn read_huffman_table(reader: &mut BitReaderLsb) -> Result<HuffmanDecodingTa
                 let prev_sym_code_size = symbol_code_sizes
                     .last()
                     .copied()
-                    .ok_or_else(|| "Encountered BigRepeatCode as the first code")?;
+                    .ok_or("Encountered BigRepeatCode as the first code")?;
                 if prev_sym_code_size == 0 {
                     return Err(
                         "Encountered BigRepeatCode, but the previous symbol's code length was 0"

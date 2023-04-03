@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::fs::{self, File};
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
@@ -69,9 +71,9 @@ where
     let base = PathBuf::from(dir);
     for dir in [DIR_RGB, DIR_RGBA].iter() {
         let base = &base.join(dir);
-        let textures = list_textures(&base).unwrap();
+        let textures = list_textures(base).unwrap();
         for texture in textures {
-            let case = TestCase::new(&base, &texture);
+            let case = TestCase::new(base, &texture);
             f(case);
         }
     }
@@ -121,7 +123,7 @@ pub fn compare_png<P: AsRef<Path>>(path: P, image: &basisu::Image<u8>) -> Result
     assert_eq!(info.width, image.w);
     assert_eq!(info.height, image.h);
 
-    let mut actual_rows = rgba_rows(&image);
+    let mut actual_rows = rgba_rows(image);
 
     match info.color_type {
         png::ColorType::RGBA => {
@@ -182,7 +184,7 @@ pub fn compare_png_rgb<P: AsRef<Path>>(path: P, image: &basisu::Image<u8>) -> Re
     assert_eq!(info.width, image.w);
     assert_eq!(info.height, image.h);
 
-    let mut actual_rows = rgba_rows(&image);
+    let mut actual_rows = rgba_rows(image);
 
     match info.color_type {
         png::ColorType::RGB => {
@@ -222,7 +224,7 @@ pub fn compare_png_alpha<P: AsRef<Path>>(path: P, image: &basisu::Image<u8>) -> 
     assert_eq!(info.width, image.w);
     assert_eq!(info.height, image.h);
 
-    let mut actual_rows = rgba_rows(&image);
+    let mut actual_rows = rgba_rows(image);
 
     match info.color_type {
         png::ColorType::Grayscale => {

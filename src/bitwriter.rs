@@ -10,10 +10,6 @@ impl<'a> BitWriterLsb<'a> {
         Self { bytes, bit_pos: 0 }
     }
 
-    pub fn write_bool(&mut self, v: bool) {
-        self.write_u32(1, v as u32)
-    }
-
     pub fn write_u8(&mut self, count: usize, v: u8) {
         assert!(count <= 8);
         self.write_u32(count, v as u32)

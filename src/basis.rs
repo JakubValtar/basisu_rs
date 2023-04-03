@@ -6,16 +6,16 @@ use std::convert::TryFrom;
 pub const SIG: u16 = 0x4273;
 
 pub fn check_file_sig(bytes: &[u8]) -> bool {
-    let sig = LE::read_u16(&bytes);
+    let sig = LE::read_u16(bytes);
     sig == SIG
 }
 
 pub fn read_header(bytes: &[u8]) -> Result<Header> {
-    if !check_file_sig(&bytes) {
+    if !check_file_sig(bytes) {
         return Err("Sig mismatch, not a Basis Universal file".into());
     }
 
-    if !Header::check_size(&bytes) {
+    if !Header::check_size(bytes) {
         return Err(format!(
             "Expected at least {} byte header, got {} bytes",
             Header::FILE_SIZE,
@@ -24,7 +24,7 @@ pub fn read_header(bytes: &[u8]) -> Result<Header> {
         .into());
     }
 
-    let header = Header::from_file_bytes(&bytes);
+    let header = Header::from_file_bytes(bytes);
 
     if header.header_size as usize != Header::FILE_SIZE {
         return Err(format!(
@@ -80,6 +80,7 @@ fn crc16(r: &[u8], mut crc: u16) -> u16 {
 }
 
 // basis_file_header::m_tex_type
+#[allow(dead_code)]
 pub enum TextureType {
     Type2D = 0,
     Type2DArray = 1,
@@ -89,6 +90,7 @@ pub enum TextureType {
 }
 
 // basis_slice_desc::flags
+#[allow(dead_code)]
 pub enum SliceDescFlags {
     HasAlpha = 1,
     FrameIsIFrame = 2,
@@ -113,6 +115,7 @@ impl TryFrom<u8> for TexFormat {
 }
 
 // basis_file_header::m_flags
+#[allow(dead_code)]
 pub enum HeaderFlags {
     ETC1S = 1,
     YFlipped = 2,
@@ -178,7 +181,7 @@ impl Header {
     }
 
     pub fn from_file_bytes(buf: &[u8]) -> Self {
-        assert!(Self::check_size(&buf));
+        assert!(Self::check_size(buf));
         let mut r = ByteReaderLE::new(buf);
         let res = Self {
             sig: r.read_u16(),
@@ -251,7 +254,7 @@ impl SliceDesc {
     }
 
     pub fn from_file_bytes(buf: &[u8]) -> Self {
-        assert!(Self::check_size(&buf));
+        assert!(Self::check_size(buf));
         let mut r = ByteReaderLE::new(buf);
         let res = Self {
             image_index: r.read_u24(),

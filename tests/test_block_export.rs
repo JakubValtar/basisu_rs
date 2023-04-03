@@ -268,7 +268,7 @@ fn collect_blocks(case: &TestCase, collected_blocks: &mut [Vec<TestBlock>]) -> R
                 let not_black_or_white = rgba.chunks_exact(4).any(|c| {
                     c[0] >= 5 && c[0] <= 250 && c[1] >= 5 && c[1] <= 250 && c[2] >= 5 && c[2] <= 250
                 });
-                let grayscale = mode >= 15 && mode <= 17;
+                let grayscale = (15..=17).contains(&mode);
                 if (colors_differ && (mode != 8 || not_opaque_or_transparent))
                     || (grayscale && not_opaque_or_transparent && not_black_or_white)
                 {

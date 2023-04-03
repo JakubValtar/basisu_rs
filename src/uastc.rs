@@ -55,7 +55,7 @@ pub struct Decoder {
 }
 
 impl Decoder {
-    pub(crate) fn from_file_bytes(header: &Header, bytes: &[u8]) -> Result<Self> {
+    pub(crate) fn from_file_bytes(header: &Header, _bytes: &[u8]) -> Result<Self> {
         // TODO: LUTs
         Ok(Self {
             y_flipped: header.has_y_flipped(),
@@ -100,7 +100,7 @@ impl Decoder {
 
         let block_to_rgba =
             |block_x: u32, block_y: u32, _block_offset: usize, block_bytes: &[u8]| {
-                let rgba = decode_block_to_rgba(&block_bytes);
+                let rgba = decode_block_to_rgba(block_bytes);
                 for y in 0..4 {
                     let x_start = 4 * block_x as usize;
                     let image_start = (4 * block_y as usize + y) * image.stride as usize + x_start;
@@ -137,7 +137,7 @@ impl Decoder {
         let block_to_astc =
             |_block_x: u32, _block_y: u32, block_offset: usize, block_bytes: &[u8]| {
                 let output = &mut image.data[block_offset..block_offset + ASTC_BLOCK_SIZE];
-                astc::convert_block_from_uastc(&block_bytes, output);
+                astc::convert_block_from_uastc(block_bytes, output);
             };
 
         self.iterate_blocks(slice_desc, bytes, block_to_astc)?;
@@ -168,7 +168,7 @@ impl Decoder {
         let block_to_bc7 =
             |_block_x: u32, _block_y: u32, block_offset: usize, block_bytes: &[u8]| {
                 let output = &mut image.data[block_offset..block_offset + BC7_BLOCK_SIZE];
-                bc7::convert_block_from_uastc(&block_bytes, output);
+                bc7::convert_block_from_uastc(block_bytes, output);
             };
 
         self.iterate_blocks(slice_desc, bytes, block_to_bc7)?;
@@ -199,7 +199,7 @@ impl Decoder {
         let block_to_etc1 =
             |_block_x: u32, _block_y: u32, block_offset: usize, block_bytes: &[u8]| {
                 let output = &mut image.data[block_offset / 2..block_offset / 2 + ETC1_BLOCK_SIZE];
-                etc::convert_block_from_uastc(&block_bytes, output, false);
+                etc::convert_block_from_uastc(block_bytes, output, false);
             };
 
         self.iterate_blocks(slice_desc, bytes, block_to_etc1)?;
@@ -230,7 +230,7 @@ impl Decoder {
         let block_to_etc1 =
             |_block_x: u32, _block_y: u32, block_offset: usize, block_bytes: &[u8]| {
                 let output = &mut image.data[block_offset..block_offset + ETC2_BLOCK_SIZE];
-                etc::convert_block_from_uastc(&block_bytes, output, true);
+                etc::convert_block_from_uastc(block_bytes, output, true);
             };
 
         self.iterate_blocks(slice_desc, bytes, block_to_etc1)?;
@@ -358,8 +358,8 @@ fn decode_block_to_rgba_result(bytes: &[u8]) -> Result<[Color32; 16]> {
     let endpoint_count = mode.endpoint_count();
     let weight_count = mode.weight_count();
 
-    let endpoints = &mut [0u8; MAX_ENDPOINT_COUNT][..endpoint_count as usize];
-    let weights = &mut [0u8; MAX_WEIGHT_COUNT][..weight_count as usize];
+    let endpoints = &mut [0u8; MAX_ENDPOINT_COUNT][..endpoint_count];
+    let weights = &mut [0u8; MAX_WEIGHT_COUNT][..weight_count];
 
     let quant_endpoints = decode_endpoints(reader, mode.endpoint_range_index, endpoints.len());
     for (quant, unquant) in quant_endpoints.iter().zip(endpoints.iter_mut()) {
@@ -509,25 +509,28 @@ pub fn decode_mode8_etc1_flags(reader: &mut BitReaderLsb) -> Mode8Etc1Flags {
 pub fn decode_trans_flags(reader: &mut BitReaderLsb, mode: Mode) -> TranscodingFlags {
     assert_ne!(mode.id, 8);
 
-    let mut flags = TranscodingFlags::default();
-
-    flags.bc1h0 = reader.read_bool();
-    if mode.id < 10 || mode.id > 12 {
-        flags.bc1h1 = reader.read_bool();
+    TranscodingFlags {
+        bc1h0: reader.read_bool(),
+        bc1h1: if (10..=12).contains(&mode.id) {
+            false
+        } else {
+            reader.read_bool()
+        },
+        etc1f: reader.read_bool(),
+        etc1d: reader.read_bool(),
+        etc1i0: reader.read_u8(3),
+        etc1i1: reader.read_u8(3),
+        etc1bias: if (10..=12).contains(&mode.id) {
+            TranscodingFlags::ETC1BIAS_NONE
+        } else {
+            reader.read_u8(5)
+        },
+        etc2tm: if mode.has_alpha() {
+            reader.read_u8(8)
+        } else {
+            0
+        },
     }
-    flags.etc1f = reader.read_bool();
-    flags.etc1d = reader.read_bool();
-    flags.etc1i0 = reader.read_u8(3);
-    flags.etc1i1 = reader.read_u8(3);
-    flags.etc1bias = if mode.id < 10 || mode.id > 12 {
-        reader.read_u8(5)
-    } else {
-        TranscodingFlags::ETC1BIAS_NONE
-    };
-    if mode.has_alpha() {
-        flags.etc2tm = reader.read_u8(8);
-    }
-    flags
 }
 
 pub fn skip_trans_flags(reader: &mut BitReaderLsb, mode: Mode) {
@@ -696,10 +699,10 @@ pub fn decode_endpoints(
         const QUINTS_PER_GROUP: usize = 3;
         const BITS_PER_GROUP: usize = 7;
         let mut out_pos = 0;
-        for _ in 0..(value_count / QUINTS_PER_GROUP) as usize {
+        for _ in 0..(value_count / QUINTS_PER_GROUP) {
             let mut quints = reader.read_u8(BITS_PER_GROUP);
             for _ in 0..QUINTS_PER_GROUP {
-                output[out_pos as usize].trit_quint = quints % 5;
+                output[out_pos].trit_quint = quints % 5;
                 quints /= 5;
                 out_pos += 1;
             }
@@ -713,7 +716,7 @@ pub fn decode_endpoints(
             };
             let mut quints = reader.read_u8(bits_used);
             for _ in 0..remaining {
-                output[out_pos as usize].trit_quint = quints % 5;
+                output[out_pos].trit_quint = quints % 5;
                 quints /= 5;
                 out_pos += 1;
             }
@@ -724,10 +727,10 @@ pub fn decode_endpoints(
         const TRITS_PER_GROUP: usize = 5;
         const BITS_PER_GROUP: usize = 8;
         let mut out_pos = 0;
-        for _ in 0..(value_count / TRITS_PER_GROUP) as usize {
+        for _ in 0..(value_count / TRITS_PER_GROUP) {
             let mut trits = reader.read_u8(BITS_PER_GROUP);
             for _ in 0..TRITS_PER_GROUP {
-                output[out_pos as usize].trit_quint = trits % 3;
+                output[out_pos].trit_quint = trits % 3;
                 trits /= 3;
                 out_pos += 1;
             }
@@ -743,7 +746,7 @@ pub fn decode_endpoints(
             };
             let mut trits = reader.read_u8(bits_used);
             for _ in 0..remaining {
-                output[out_pos as usize].trit_quint = trits % 3;
+                output[out_pos].trit_quint = trits % 3;
                 trits /= 3;
                 out_pos += 1;
             }
@@ -751,9 +754,9 @@ pub fn decode_endpoints(
     }
 
     if bit_count > 0 {
-        for i in 0..value_count {
+        for endpoint in output.iter_mut().take(value_count) {
             let bits = reader.read_u8(bit_count as usize);
-            output[i].bits = bits;
+            endpoint.bits = bits;
         }
     }
 
@@ -800,7 +803,7 @@ where
     for i in 0..16 {
         let bits = bits[i] as usize;
         for plane in 0..plane_count {
-            f(plane_count * i as usize + plane, reader.read_u8(bits));
+            f(plane_count * i + plane, reader.read_u8(bits));
         }
     }
 }

@@ -50,7 +50,7 @@ fn convert_block_from_uastc_result(bytes: &[u8], output: &mut [u8]) -> Result<()
             for &weight in weights.iter() {
                 writer.write_u8(bit_count - 1, weight);
                 for _ in 0..15 {
-                    writer.write_u8(bit_count as usize, weight);
+                    writer.write_u8(bit_count, weight);
                 }
             }
         }
@@ -164,7 +164,7 @@ fn convert_block_from_uastc_result(bytes: &[u8], output: &mut [u8]) -> Result<()
         {
             // Permute endpoints
             let mut permuted_endpoints = [[Color32::default(); 2]; 3];
-            permute(&endpoints, &mut permuted_endpoints, perm);
+            permute(endpoints, &mut permuted_endpoints, perm);
             endpoints[0..bc7_subset_count]
                 .copy_from_slice(&permuted_endpoints[0..bc7_subset_count]);
         }
@@ -413,7 +413,7 @@ fn determine_shared_pbits(
     endpoint_pair: &mut [Color32; 2],
 ) -> [u8; 2] {
     let total_bits = comp_bits + 1;
-    assert!(total_bits >= 4 && total_bits <= 8);
+    assert!((4..=8).contains(&total_bits));
 
     let iscalep = (1 << total_bits) - 1;
     let scalep = iscalep as f32;
@@ -1145,8 +1145,11 @@ mod tests {
         // BC7 777.1
         for c in 0..256i32 {
             for lp in 0..2 {
-                let mut best = OptimalEndpoint::default();
-                best.err = u16::MAX;
+                let mut best = OptimalEndpoint {
+                    lo: 0,
+                    hi: 0,
+                    err: u16::MAX,
+                };
 
                 for l in 0..128i32 {
                     let low = (l << 1) | lp;
@@ -1175,8 +1178,11 @@ mod tests {
 
         // BC7 777
         for c in 0..256 {
-            let mut best = OptimalEndpoint::default();
-            best.err = u16::MAX;
+            let mut best = OptimalEndpoint {
+                lo: 0,
+                hi: 0,
+                err: u16::MAX,
+            };
 
             for l in 0..128 {
                 let low = (l << 1) | (l >> 6);

@@ -253,10 +253,11 @@ impl Color32 {
         result
     }
 
-    pub fn to_rgba_u32(&self) -> u32 {
+    pub fn to_rgba_u32(self) -> u32 {
         u32::from_le_bytes(self.0)
     }
 
+    #[allow(dead_code)]
     pub fn from_rgba_u32(rgba: u32) -> Self {
         Color32(rgba.to_le_bytes())
     }

@@ -84,19 +84,17 @@ fn convert_block_from_uastc_result(bytes: &[u8], output: &mut [u8], alpha: bool)
         }
     }
 
-    let block_colors: [[Color32; 4]; 2];
-
     let c0 = apply_etc1_bias(avg_colors[0], trans_flags.etc1bias, limit, 0);
     let c1 = apply_etc1_bias(avg_colors[1], trans_flags.etc1bias, limit, 1);
 
-    if !trans_flags.etc1d {
+    let block_colors = if !trans_flags.etc1d {
         writer.write_u8(8, c0[0] << 4 | c1[0]);
         writer.write_u8(8, c0[1] << 4 | c1[1]);
         writer.write_u8(8, c0[2] << 4 | c1[2]);
-        block_colors = [
+        [
             apply_mod_to_base_color(color_4_to_8(c0), trans_flags.etc1i0),
             apply_mod_to_base_color(color_4_to_8(c1), trans_flags.etc1i1),
-        ];
+        ]
     } else {
         let d = [
             (c1[0] as i16 - c0[0] as i16).max(-4).min(3),
@@ -112,11 +110,11 @@ fn convert_block_from_uastc_result(bytes: &[u8], output: &mut [u8], alpha: bool)
             (c0[2] as i16 + d[2]) as u8,
             255,
         );
-        block_colors = [
+        [
             apply_mod_to_base_color(color_5_to_8(c0), trans_flags.etc1i0),
             apply_mod_to_base_color(color_5_to_8(c1), trans_flags.etc1i1),
-        ];
-    }
+        ]
+    };
 
     {
         // Write codebooks, diff and flip bits
@@ -346,7 +344,7 @@ impl Selector {
         // Pack the two-bit value into the byte for the appropriate row
         let shift = 2 * x;
         self.selectors[y] &= !(0b11 << shift);
-        self.selectors[y] |= (val as u8) << shift;
+        self.selectors[y] |= val << shift;
 
         // Convert to ETC1 format according to the spec
         let mod_id: u8 = SELECTOR_ID_TO_ETC1[val as usize];
