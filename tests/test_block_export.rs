@@ -184,7 +184,6 @@ fn collect_blocks(case: &TestCase, collected_blocks: &mut [Vec<TestBlock>]) -> R
             w: info.width,
             h: info.height,
             stride,
-            y_flipped: false,
             data: vec![0u8; len as usize],
         };
 

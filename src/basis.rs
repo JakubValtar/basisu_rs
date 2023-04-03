@@ -253,6 +253,12 @@ impl SliceDesc {
         (self.flags & SliceDescFlags::HasAlpha as u8) != 0
     }
 
+    pub fn data<'a>(&self, buf: &'a [u8]) -> &'a [u8] {
+        let start = self.file_ofs as usize;
+        let len = self.file_size as usize;
+        &buf[start..start + len]
+    }
+
     pub fn from_file_bytes(buf: &[u8]) -> Self {
         assert!(Self::check_size(buf));
         let mut r = ByteReaderLE::new(buf);

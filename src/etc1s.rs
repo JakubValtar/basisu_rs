@@ -1,9 +1,8 @@
 use crate::{
-    basis::{Header, SliceDesc, TextureType},
     bitreader::BitReaderLsb,
     etc::{self, Selector},
     huffman::{self, HuffmanDecodingTable},
-    mask, Color32, Image, Result,
+    mask, Color32, Result,
 };
 use std::ops::{Index, IndexMut};
 
@@ -34,6 +33,8 @@ const COLOR5_PAL2_PREV_HI: u8 = 31;
 const _COLOR5_PAL2_DELTA_LO: i32 = -31;
 const _COLOR5_PAL2_DELTA_HI: i32 = 9;
 
+pub const BLOCK_SIZE: usize = 8;
+
 pub struct DecodedBlock {
     block_x: u32,
     block_y: u32,
@@ -49,32 +50,26 @@ pub struct Decoder {
 
     selector_history_buffer_size: u32,
     is_video: bool,
-    y_flipped: bool,
 
     endpoints: Vec<Endpoint>,
     selectors: Vec<Selector>,
 }
 
 impl Decoder {
-    pub(crate) fn from_file_bytes(header: &Header, bytes: &[u8]) -> Result<Self> {
-        let endpoints = {
-            let num_endpoints = header.total_endpoints as usize;
-            let start = header.endpoint_cb_file_ofs as usize;
-            let len = header.endpoint_cb_file_size as usize;
-            decode_endpoints(num_endpoints, &bytes[start..start + len])?
-        };
+    pub(crate) fn new(
+        endpoint_count: u16,
+        selector_count: u16,
+        endpoints_data: &[u8],
+        selector_data: &[u8],
+        tables_data: &[u8],
+        _extended_data: &[u8],
+        is_video: bool,
+    ) -> Result<Self> {
+        let endpoints = { decode_endpoints(endpoint_count, endpoints_data)? };
 
-        let selectors = {
-            let num_selectors = header.total_selectors as usize;
-            let start = header.selector_cb_file_ofs as usize;
-            let len = header.selector_cb_file_size as usize;
-            decode_selectors(num_selectors, &bytes[start..start + len])?
-        };
+        let selectors = { decode_selectors(selector_count, selector_data)? };
 
-        let start = header.tables_file_ofs as usize;
-        let len = header.tables_file_size as usize;
-
-        let reader = &mut BitReaderLsb::new(&bytes[start..start + len]);
+        let reader = &mut BitReaderLsb::new(tables_data);
 
         let endpoint_pred_model = huffman::read_huffman_table(reader)?;
         let delta_endpoint_model = huffman::read_huffman_table(reader)?;
@@ -90,50 +85,32 @@ impl Decoder {
             selector_history_buffer_size,
             endpoints,
             selectors,
-            is_video: header.tex_type == TextureType::VideoFrames as u8,
-            y_flipped: header.has_y_flipped(),
+            is_video,
         })
     }
 
     pub(crate) fn decode_to_rgba(
         &self,
-        rgb_desc: &SliceDesc,
-        alpha_desc: Option<&SliceDesc>,
-        bytes: &[u8],
-    ) -> Result<Image<Color32>> {
-        if let Some(alpha_desc) = alpha_desc {
-            if !alpha_desc.has_alpha() {
-                return Err("Expected slice with alpha".into());
-            }
-            if alpha_desc.num_blocks_x != rgb_desc.num_blocks_x
-                || alpha_desc.num_blocks_y != rgb_desc.num_blocks_y
-            {
-                return Err("RGB slice and Alpha slice have different dimensions".into());
-            }
+        num_blocks_x: u16,
+        num_blocks_y: u16,
+        rgb_data: &[u8],
+        alpha_data: Option<&[u8]>,
+    ) -> Result<Vec<Color32>> {
+        let mut rgba = vec![Color32::default(); num_blocks_x as usize * num_blocks_y as usize * 16];
+
+        self.decode_to_rgba_internal(num_blocks_x, num_blocks_y, rgb_data, &mut rgba, false)?;
+        if let Some(alpha_data) = alpha_data {
+            self.decode_to_rgba_internal(num_blocks_x, num_blocks_y, alpha_data, &mut rgba, true)?;
         }
 
-        let num_blocks_x = rgb_desc.num_blocks_x as u32;
-        let num_blocks_y = rgb_desc.num_blocks_y as u32;
-        let mut rgba = vec![Color32::default(); (num_blocks_x * num_blocks_y) as usize * 16];
-
-        self.decode_to_rgba_internal(rgb_desc, bytes, &mut rgba, false)?;
-        if let Some(alpha_desc) = alpha_desc {
-            self.decode_to_rgba_internal(alpha_desc, bytes, &mut rgba, true)?;
-        }
-
-        Ok(Image {
-            w: rgb_desc.orig_width as u32,
-            h: rgb_desc.orig_height as u32,
-            stride: rgb_desc.num_blocks_x as u32 * 4,
-            y_flipped: self.y_flipped,
-            data: rgba,
-        })
+        Ok(rgba)
     }
 
     fn decode_to_rgba_internal(
         &self,
-        slice_desc: &SliceDesc,
-        bytes: &[u8],
+        num_blocks_x: u16,
+        num_blocks_y: u16,
+        block_data: &[u8],
         pixels: &mut [Color32],
         alpha: bool,
     ) -> Result<()> {
@@ -144,9 +121,9 @@ impl Decoder {
             let colors: [Color32; 4] =
                 etc::apply_mod_to_base_color(etc::color_5_to_8(endpoint.color5), endpoint.inten5);
 
-            let block_pos_x = (block.block_x * 4) as usize;
-            let block_pos_y = (block.block_y * 4) as usize;
-            let stride = (slice_desc.num_blocks_x as u32 * 4) as usize;
+            let block_pos_x = block.block_x as usize * 4;
+            let block_pos_y = block.block_y as usize * 4;
+            let stride = num_blocks_x as usize * 4;
 
             for y in 0..4 {
                 for x in 0..4 {
@@ -163,22 +140,18 @@ impl Decoder {
             }
         };
 
-        self.decode_blocks(slice_desc, bytes, block_to_rgba)?;
+        self.decode_blocks(num_blocks_x, num_blocks_y, block_data, block_to_rgba)?;
 
         Ok(())
     }
 
     pub(crate) fn transcode_to_etc1(
         &self,
-        slice_desc: &SliceDesc,
-        bytes: &[u8],
-    ) -> Result<Image<u8>> {
-        let num_blocks_x = slice_desc.num_blocks_x as u32;
-        let num_blocks_y = slice_desc.num_blocks_y as u32;
-
-        const BLOCK_SIZE: usize = 8;
-
-        let block_count = (num_blocks_x * num_blocks_y) as usize;
+        num_blocks_x: u16,
+        num_blocks_y: u16,
+        block_data: &[u8],
+    ) -> Result<Vec<u8>> {
+        let block_count = num_blocks_x as usize * num_blocks_y as usize;
 
         let mut blocks = vec![0u8; BLOCK_SIZE * block_count];
 
@@ -186,7 +159,7 @@ impl Decoder {
             let endpoint: Endpoint = self.endpoints[block.endpoint_index as usize];
             let selector: Selector = self.selectors[block.selector_index as usize];
 
-            let block_id = (block.block_y * num_blocks_x + block.block_x) as usize;
+            let block_id = (block.block_y * num_blocks_x as u32 + block.block_x) as usize;
             let block_start = BLOCK_SIZE * block_id;
             let block = &mut blocks[block_start..block_start + BLOCK_SIZE];
 
@@ -202,34 +175,30 @@ impl Decoder {
             block[4..].copy_from_slice(&selector.etc1_bytes);
         };
 
-        self.decode_blocks(slice_desc, bytes, block_to_etc1)?;
+        self.decode_blocks(num_blocks_x, num_blocks_y, block_data, block_to_etc1)?;
 
-        Ok(Image {
-            w: slice_desc.orig_width as u32,
-            h: slice_desc.orig_height as u32,
-            stride: BLOCK_SIZE as u32 * slice_desc.num_blocks_x as u32,
-            y_flipped: self.y_flipped,
-            data: blocks,
-        })
+        Ok(blocks)
     }
 
-    fn decode_blocks<F>(&self, slice_desc: &SliceDesc, bytes: &[u8], mut f: F) -> Result<()>
+    fn decode_blocks<F>(
+        &self,
+        num_blocks_x: u16,
+        num_blocks_y: u16,
+        block_data: &[u8],
+        mut f: F,
+    ) -> Result<()>
     where
         F: FnMut(DecodedBlock),
     {
-        let reader = {
-            let start = slice_desc.file_ofs as usize;
-            let len = slice_desc.file_size as usize;
-            &mut BitReaderLsb::new(&bytes[start..start + len])
-        };
+        let reader = &mut BitReaderLsb::new(block_data);
 
         let num_endpoints = self.endpoints.len() as u16;
         let num_selectors = self.selectors.len() as u16;
 
         // Endpoint/selector codebooks - decoded previously. See sections 7.0 and 8.0.
 
-        let num_blocks_x = slice_desc.num_blocks_x as u32;
-        let num_blocks_y = slice_desc.num_blocks_y as u32;
+        let num_blocks_x = num_blocks_x as u32;
+        let num_blocks_y = num_blocks_y as u32;
 
         #[derive(Clone, Copy, Default)]
         struct BlockPreds {
@@ -484,7 +453,7 @@ impl Decoder {
     }
 }
 
-fn decode_endpoints(num_endpoints: usize, bytes: &[u8]) -> Result<Vec<Endpoint>> {
+fn decode_endpoints(num_endpoints: u16, bytes: &[u8]) -> Result<Vec<Endpoint>> {
     let reader = &mut BitReaderLsb::new(bytes);
 
     let color5_delta_model0 = huffman::read_huffman_table(reader)?;
@@ -497,7 +466,7 @@ fn decode_endpoints(num_endpoints: usize, bytes: &[u8]) -> Result<Vec<Endpoint>>
     let mut prev_color5 = Color32::new(16, 16, 16, 0);
     let mut prev_inten: u32 = 0;
 
-    let mut endpoints: Vec<Endpoint> = vec![Endpoint::default(); num_endpoints];
+    let mut endpoints: Vec<Endpoint> = vec![Endpoint::default(); num_endpoints as usize];
 
     // For each endpoint codebook entry
     for endpoint in &mut endpoints {
@@ -547,7 +516,7 @@ struct Endpoint {
     color5: Color32,
 }
 
-fn decode_selectors(num_selectors: usize, bytes: &[u8]) -> Result<Vec<Selector>> {
+fn decode_selectors(num_selectors: u16, bytes: &[u8]) -> Result<Vec<Selector>> {
     let reader = &mut BitReaderLsb::new(bytes);
 
     let global = reader.read_bool();
@@ -562,7 +531,7 @@ fn decode_selectors(num_selectors: usize, bytes: &[u8]) -> Result<Vec<Selector>>
         return Err("Hybrid selector codebooks are not supported".into());
     }
 
-    let mut selectors = vec![Selector::default(); num_selectors];
+    let mut selectors = vec![Selector::default(); num_selectors as usize];
 
     if !raw {
         let delta_selector_pal_model = huffman::read_huffman_table(reader)?;

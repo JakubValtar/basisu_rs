@@ -50,32 +50,23 @@ impl TranscodingFlags {
     pub const ETC1BIAS_NONE: u8 = 0xFF;
 }
 
-pub struct Decoder {
-    y_flipped: bool,
-}
+pub struct Decoder {}
 
 impl Decoder {
-    pub(crate) fn from_file_bytes(header: &Header, _bytes: &[u8]) -> Result<Self> {
+    pub(crate) fn from_file_bytes(_header: &Header, _bytes: &[u8]) -> Result<Self> {
         // TODO: LUTs
-        Ok(Self {
-            y_flipped: header.has_y_flipped(),
-        })
+        Ok(Self {})
     }
 
     pub(crate) fn read_to_uastc(&self, slice_desc: &SliceDesc, bytes: &[u8]) -> Result<Image<u8>> {
         const UASTC_BLOCK_SIZE: usize = 16;
 
-        let block_bytes = {
-            let start = slice_desc.file_ofs as usize;
-            let len = slice_desc.file_size as usize;
-            &bytes[start..start + len]
-        };
+        let block_bytes = slice_desc.data(bytes);
 
         let image = Image {
             w: slice_desc.orig_width as u32,
             h: slice_desc.orig_height as u32,
             stride: UASTC_BLOCK_SIZE as u32 * slice_desc.num_blocks_x as u32,
-            y_flipped: self.y_flipped,
             data: block_bytes.to_vec(),
         };
 
@@ -91,7 +82,6 @@ impl Decoder {
             w: slice_desc.orig_width as u32,
             h: slice_desc.orig_height as u32,
             stride: 4 * slice_desc.num_blocks_x as u32,
-            y_flipped: self.y_flipped,
             data: vec![
                 Color32::default();
                 slice_desc.num_blocks_x as usize * slice_desc.num_blocks_y as usize * 16
@@ -125,7 +115,6 @@ impl Decoder {
             w: slice_desc.orig_width as u32,
             h: slice_desc.orig_height as u32,
             stride: ASTC_BLOCK_SIZE as u32 * slice_desc.num_blocks_x as u32,
-            y_flipped: self.y_flipped,
             data: vec![
                 0u8;
                 slice_desc.num_blocks_x as usize
@@ -156,7 +145,6 @@ impl Decoder {
             w: slice_desc.orig_width as u32,
             h: slice_desc.orig_height as u32,
             stride: BC7_BLOCK_SIZE as u32 * slice_desc.num_blocks_x as u32,
-            y_flipped: self.y_flipped,
             data: vec![
                 0u8;
                 slice_desc.num_blocks_x as usize
@@ -187,7 +175,6 @@ impl Decoder {
             w: slice_desc.orig_width as u32,
             h: slice_desc.orig_height as u32,
             stride: ETC1_BLOCK_SIZE as u32 * slice_desc.num_blocks_x as u32,
-            y_flipped: self.y_flipped,
             data: vec![
                 0u8;
                 slice_desc.num_blocks_x as usize
@@ -218,7 +205,6 @@ impl Decoder {
             w: slice_desc.orig_width as u32,
             h: slice_desc.orig_height as u32,
             stride: ETC2_BLOCK_SIZE as u32 * slice_desc.num_blocks_x as u32,
-            y_flipped: self.y_flipped,
             data: vec![
                 0u8;
                 slice_desc.num_blocks_x as usize
@@ -245,11 +231,7 @@ impl Decoder {
         let num_blocks_x = slice_desc.num_blocks_x as u32;
         let num_blocks_y = slice_desc.num_blocks_y as u32;
 
-        let bytes = {
-            let start = slice_desc.file_ofs as usize;
-            let len = slice_desc.file_size as usize;
-            &bytes[start..start + len]
-        };
+        let bytes = slice_desc.data(bytes);
 
         let mut block_offset = 0;
 

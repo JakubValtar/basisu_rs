@@ -115,7 +115,11 @@ pub fn open_png<P: AsRef<Path>>(path: P) -> Result<png::Decoder<BufReader<File>>
     Ok(decoder)
 }
 
-pub fn compare_png<P: AsRef<Path>>(path: P, image: &basisu::Image<u8>) -> Result<()> {
+pub fn compare_png<P: AsRef<Path>>(
+    path: P,
+    image: &basisu::Image<u8>,
+    y_flipped: bool,
+) -> Result<()> {
     let decoder = open_png(path)?;
 
     let mut reader = decoder.read_info()?;
@@ -125,7 +129,7 @@ pub fn compare_png<P: AsRef<Path>>(path: P, image: &basisu::Image<u8>) -> Result
     assert_eq!(info.width, image.w);
     assert_eq!(info.height, image.h);
 
-    let mut actual_rows = rgba_rows(image);
+    let mut actual_rows = rgba_rows(image, y_flipped);
 
     match info.color_type {
         png::ColorType::Rgba => {
@@ -178,7 +182,11 @@ pub fn compare_png<P: AsRef<Path>>(path: P, image: &basisu::Image<u8>) -> Result
     Ok(())
 }
 
-pub fn compare_png_rgb<P: AsRef<Path>>(path: P, image: &basisu::Image<u8>) -> Result<()> {
+pub fn compare_png_rgb<P: AsRef<Path>>(
+    path: P,
+    image: &basisu::Image<u8>,
+    y_flipped: bool,
+) -> Result<()> {
     let decoder = open_png(path)?;
 
     let mut reader = decoder.read_info()?;
@@ -188,7 +196,7 @@ pub fn compare_png_rgb<P: AsRef<Path>>(path: P, image: &basisu::Image<u8>) -> Re
     assert_eq!(info.width, image.w);
     assert_eq!(info.height, image.h);
 
-    let mut actual_rows = rgba_rows(image);
+    let mut actual_rows = rgba_rows(image, y_flipped);
 
     match info.color_type {
         png::ColorType::Rgb => {
@@ -220,7 +228,11 @@ pub fn compare_png_rgb<P: AsRef<Path>>(path: P, image: &basisu::Image<u8>) -> Re
     Ok(())
 }
 
-pub fn compare_png_alpha<P: AsRef<Path>>(path: P, image: &basisu::Image<u8>) -> Result<()> {
+pub fn compare_png_alpha<P: AsRef<Path>>(
+    path: P,
+    image: &basisu::Image<u8>,
+    y_flipped: bool,
+) -> Result<()> {
     let decoder = open_png(path)?;
 
     let mut reader = decoder.read_info()?;
@@ -230,7 +242,7 @@ pub fn compare_png_alpha<P: AsRef<Path>>(path: P, image: &basisu::Image<u8>) -> 
     assert_eq!(info.width, image.w);
     assert_eq!(info.height, image.h);
 
-    let mut actual_rows = rgba_rows(image);
+    let mut actual_rows = rgba_rows(image, y_flipped);
 
     match info.color_type {
         png::ColorType::Grayscale => {
@@ -265,7 +277,10 @@ pub fn compare_ktx<P: AsRef<Path>>(path: P, image: &basisu::Image<u8>) -> Result
     }
 }
 
-pub fn rgba_rows<'a>(image: &'a basisu::Image<u8>) -> Box<dyn Iterator<Item = &'a [u8]> + 'a> {
+pub fn rgba_rows<'a>(
+    image: &'a basisu::Image<u8>,
+    y_flipped: bool,
+) -> Box<dyn Iterator<Item = &'a [u8]> + 'a> {
     // TODO: Is texture with y flipped aligned to the top or to the bottom? This code assumes to the top.
     let bytes_per_pixel = 4;
     let res = image
@@ -274,7 +289,7 @@ pub fn rgba_rows<'a>(image: &'a basisu::Image<u8>) -> Box<dyn Iterator<Item = &'
         .take(image.h as usize)
         .map(move |r| &r[0..(image.w * bytes_per_pixel) as usize]);
 
-    if image.y_flipped {
+    if y_flipped {
         Box::new(res.rev())
     } else {
         Box::new(res)
