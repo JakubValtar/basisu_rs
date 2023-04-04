@@ -1,3 +1,5 @@
+use std::convert::TryInto;
+
 use crate::{astc, bc7, bitreader::BitReaderLsb, etc, Color32, Result};
 
 #[cfg(test)]
@@ -50,6 +52,36 @@ impl TranscodingFlags {
     pub const ETC1BIAS_NONE: u8 = 0xFF;
 }
 
+struct Blocks<'a> {
+    data: &'a [u8],
+}
+
+impl<'a> Blocks<'a> {
+    fn new(data: &'a [u8]) -> Result<Self> {
+        if data.len() % UASTC_BLOCK_SIZE != 0 {
+            return Err("data length is not divisible by UASTC block size (16)".into());
+        }
+        Ok(Self { data })
+    }
+
+    fn len(&self) -> usize {
+        self.data.len() / UASTC_BLOCK_SIZE
+    }
+
+    fn iter(&self) -> Iter {
+        self.data.chunks_exact(UASTC_BLOCK_SIZE).map(|c| Block {
+            data: c.try_into().unwrap(),
+        })
+    }
+}
+
+type Iter<'a> = std::iter::Map<std::slice::ChunksExact<'a, u8>, fn(&[u8]) -> Block>;
+
+#[repr(transparent)]
+struct Block<'a> {
+    data: &'a [u8; UASTC_BLOCK_SIZE],
+}
+
 pub struct Decoder {}
 
 impl Decoder {
@@ -58,152 +90,83 @@ impl Decoder {
         Self {}
     }
 
-    pub(crate) fn read_to_uastc(
-        &self,
-        num_blocks_x: u16,
-        num_blocks_y: u16,
-        block_data: &[u8],
-    ) -> Result<Vec<u8>> {
-        let block_count = num_blocks_x as usize * num_blocks_y as usize;
-        let data = block_data
-            .get(0..block_count * UASTC_BLOCK_SIZE)
-            .ok_or("not enough data")?
-            .to_vec();
-
-        Ok(data)
+    pub(crate) fn read_to_uastc(&self, data: &[u8]) -> Result<Vec<u8>> {
+        Ok(data.to_vec())
     }
 
     pub(crate) fn decode_to_rgba(
         &self,
-        num_blocks_x: u16,
-        num_blocks_y: u16,
-        block_data: &[u8],
+        data: &[u8],
+        blocks_per_row: usize,
     ) -> Result<Vec<Color32>> {
-        let mut data = vec![Color32::default(); num_blocks_x as usize * num_blocks_y as usize * 16];
-        let stride = 4 * num_blocks_x as usize;
+        let blocks = Blocks::new(data)?;
+        let mut data = vec![Color32::default(); blocks.len() * 16];
+        let stride = 4 * blocks_per_row;
 
-        let block_to_rgba =
-            |block_x: u32, block_y: u32, _block_offset: usize, block_bytes: &[u8]| {
-                let rgba = decode_block_to_rgba(block_bytes);
-                for y in 0..4 {
-                    let x_start = 4 * block_x as usize;
-                    let image_start = (4 * block_y as usize + y) * stride + x_start;
-                    data[image_start..image_start + 4].copy_from_slice(&rgba[4 * y..4 * y + 4]);
-                }
-            };
-
-        self.iterate_blocks(num_blocks_x, num_blocks_y, block_data, block_to_rgba)?;
-
-        Ok(data)
-    }
-
-    pub(crate) fn transcode_to_astc(
-        &self,
-        num_blocks_x: u16,
-        num_blocks_y: u16,
-        block_data: &[u8],
-    ) -> Result<Vec<u8>> {
-        let mut data = vec![0u8; num_blocks_x as usize * num_blocks_y as usize * ASTC_BLOCK_SIZE];
-
-        let block_to_astc =
-            |_block_x: u32, _block_y: u32, block_offset: usize, block_bytes: &[u8]| {
-                let output = &mut data[block_offset..block_offset + ASTC_BLOCK_SIZE];
-                astc::convert_block_from_uastc(block_bytes, output);
-            };
-
-        self.iterate_blocks(num_blocks_x, num_blocks_y, block_data, block_to_astc)?;
-
-        Ok(data)
-    }
-
-    pub(crate) fn transcode_to_bc7(
-        &self,
-        num_blocks_x: u16,
-        num_blocks_y: u16,
-        block_data: &[u8],
-    ) -> Result<Vec<u8>> {
-        let mut data = vec![0u8; num_blocks_x as usize * num_blocks_y as usize * BC7_BLOCK_SIZE];
-
-        let block_to_bc7 =
-            |_block_x: u32, _block_y: u32, block_offset: usize, block_bytes: &[u8]| {
-                let output = &mut data[block_offset..block_offset + BC7_BLOCK_SIZE];
-                bc7::convert_block_from_uastc(block_bytes, output);
-            };
-
-        self.iterate_blocks(num_blocks_x, num_blocks_y, block_data, block_to_bc7)?;
-
-        Ok(data)
-    }
-
-    pub(crate) fn transcode_to_etc1(
-        &self,
-        num_blocks_x: u16,
-        num_blocks_y: u16,
-        block_data: &[u8],
-    ) -> Result<Vec<u8>> {
-        let mut data = vec![0u8; num_blocks_x as usize * num_blocks_y as usize * ETC1_BLOCK_SIZE];
-
-        let block_to_etc1 =
-            |_block_x: u32, _block_y: u32, block_offset: usize, block_bytes: &[u8]| {
-                let output = &mut data[block_offset / 2..block_offset / 2 + ETC1_BLOCK_SIZE];
-                etc::convert_block_from_uastc(block_bytes, output, false);
-            };
-
-        self.iterate_blocks(num_blocks_x, num_blocks_y, block_data, block_to_etc1)?;
-
-        Ok(data)
-    }
-
-    pub(crate) fn transcode_to_etc2(
-        &self,
-        num_blocks_x: u16,
-        num_blocks_y: u16,
-        block_data: &[u8],
-    ) -> Result<Vec<u8>> {
-        let mut data = vec![0u8; num_blocks_x as usize * num_blocks_y as usize * ETC2_BLOCK_SIZE];
-
-        let block_to_etc1 =
-            |_block_x: u32, _block_y: u32, block_offset: usize, block_bytes: &[u8]| {
-                let output = &mut data[block_offset..block_offset + ETC2_BLOCK_SIZE];
-                etc::convert_block_from_uastc(block_bytes, output, true);
-            };
-
-        self.iterate_blocks(num_blocks_x, num_blocks_y, block_data, block_to_etc1)?;
-
-        Ok(data)
-    }
-
-    fn iterate_blocks<F>(
-        &self,
-        num_blocks_x: u16,
-        num_blocks_y: u16,
-        block_data: &[u8],
-        mut f: F,
-    ) -> Result<()>
-    where
-        F: FnMut(u32, u32, usize, &[u8]),
-    {
-        let bytes = block_data;
-
-        let mut block_offset = 0;
-
-        if bytes.len() < UASTC_BLOCK_SIZE * num_blocks_x as usize * num_blocks_y as usize {
-            return Err("Not enough bytes for all blocks".into());
-        }
-
-        for block_y in 0..num_blocks_y as u32 {
-            for block_x in 0..num_blocks_x as u32 {
-                f(
-                    block_x,
-                    block_y,
-                    block_offset,
-                    &bytes[block_offset..block_offset + UASTC_BLOCK_SIZE],
-                );
-                block_offset += UASTC_BLOCK_SIZE;
+        for (i, block) in blocks.iter().enumerate() {
+            let rgba = decode_block_to_rgba(block.data);
+            let block_x = i % blocks_per_row;
+            let block_y = i / blocks_per_row;
+            for y in 0..4 {
+                let x_start = 4 * block_x;
+                let image_start = (4 * block_y + y) * stride + x_start;
+                data[image_start..image_start + 4].copy_from_slice(&rgba[4 * y..4 * y + 4]);
             }
         }
 
-        Ok(())
+        Ok(data)
+    }
+
+    pub(crate) fn transcode_to_astc(&self, data: &[u8]) -> Result<Vec<u8>> {
+        let blocks = Blocks::new(data)?;
+        let mut data = vec![0u8; blocks.len() * ASTC_BLOCK_SIZE];
+
+        for (i, block) in blocks.iter().enumerate() {
+            let offset = i * ASTC_BLOCK_SIZE;
+            let output = &mut data[offset..offset + ASTC_BLOCK_SIZE];
+            astc::convert_block_from_uastc(block.data, output);
+        }
+
+        Ok(data)
+    }
+
+    pub(crate) fn transcode_to_bc7(&self, data: &[u8]) -> Result<Vec<u8>> {
+        let blocks = Blocks::new(data)?;
+        let mut data = vec![0u8; blocks.len() * BC7_BLOCK_SIZE];
+
+        for (i, block) in blocks.iter().enumerate() {
+            let offset = i * BC7_BLOCK_SIZE;
+            let output = &mut data[offset..offset + BC7_BLOCK_SIZE];
+            bc7::convert_block_from_uastc(block.data, output);
+        }
+
+        Ok(data)
+    }
+
+    pub(crate) fn transcode_to_etc1(&self, data: &[u8]) -> Result<Vec<u8>> {
+        let blocks = Blocks::new(data)?;
+        let mut data = vec![0u8; blocks.len() * ETC1_BLOCK_SIZE];
+
+        for (i, block) in blocks.iter().enumerate() {
+            let offset = i * ETC1_BLOCK_SIZE;
+            let output = &mut data[offset..offset + ETC1_BLOCK_SIZE];
+            etc::convert_block_from_uastc(block.data, output, false);
+        }
+
+        Ok(data)
+    }
+
+    pub(crate) fn transcode_to_etc2(&self, data: &[u8]) -> Result<Vec<u8>> {
+        let blocks = Blocks::new(data)?;
+        let mut data = vec![0u8; blocks.len() * ETC2_BLOCK_SIZE];
+
+        for (i, block) in blocks.iter().enumerate() {
+            let offset = i * ETC2_BLOCK_SIZE;
+            let output = &mut data[offset..offset + ETC2_BLOCK_SIZE];
+            etc::convert_block_from_uastc(block.data, output, true);
+        }
+
+        Ok(data)
     }
 }
 

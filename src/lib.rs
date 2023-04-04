@@ -90,11 +90,8 @@ pub fn read_to_rgba<P: AsRef<Path>>(path: P) -> Result<(Header, Vec<Image<u8>>)>
 
         let mut images = Vec::with_capacity(header.total_slices as usize);
         for slice_desc in &slice_descs {
-            let data = decoder.decode_to_rgba(
-                slice_desc.num_blocks_x,
-                slice_desc.num_blocks_y,
-                slice_desc.data(&buf),
-            )?;
+            let data =
+                decoder.decode_to_rgba(slice_desc.data(&buf), slice_desc.num_blocks_x as usize)?;
             let image = Image {
                 w: slice_desc.orig_width as u32,
                 h: slice_desc.orig_height as u32,
@@ -149,11 +146,7 @@ pub fn read_to_etc1<P: AsRef<Path>>(path: P) -> Result<Vec<Image<u8>>> {
 
         let mut images = Vec::with_capacity(header.total_slices as usize);
         for slice_desc in &slice_descs {
-            let data = decoder.transcode_to_etc1(
-                slice_desc.num_blocks_x,
-                slice_desc.num_blocks_y,
-                slice_desc.data(&buf),
-            )?;
+            let data = decoder.transcode_to_etc1(slice_desc.data(&buf))?;
             let image = Image {
                 w: slice_desc.orig_width as u32,
                 h: slice_desc.orig_height as u32,
@@ -185,11 +178,7 @@ pub fn read_to_etc2<P: AsRef<Path>>(path: P) -> Result<Vec<Image<u8>>> {
 
         let mut images = Vec::with_capacity(header.total_slices as usize);
         for slice_desc in &slice_descs {
-            let data = decoder.transcode_to_etc2(
-                slice_desc.num_blocks_x,
-                slice_desc.num_blocks_y,
-                slice_desc.data(&buf),
-            )?;
+            let data = decoder.transcode_to_etc2(slice_desc.data(&buf))?;
             let image = Image {
                 w: slice_desc.orig_width as u32,
                 h: slice_desc.orig_height as u32,
@@ -220,11 +209,7 @@ pub fn read_to_uastc<P: AsRef<Path>>(path: P) -> Result<Vec<Image<u8>>> {
 
         let mut images = Vec::with_capacity(header.total_slices as usize);
         for slice_desc in &slice_descs {
-            let data = decoder.read_to_uastc(
-                slice_desc.num_blocks_x,
-                slice_desc.num_blocks_y,
-                slice_desc.data(&buf),
-            )?;
+            let data = decoder.read_to_uastc(slice_desc.data(&buf))?;
             let image = Image {
                 w: slice_desc.orig_width as u32,
                 h: slice_desc.orig_height as u32,
@@ -255,11 +240,7 @@ pub fn read_to_astc<P: AsRef<Path>>(path: P) -> Result<Vec<Image<u8>>> {
 
         let mut images = Vec::with_capacity(header.total_slices as usize);
         for slice_desc in &slice_descs {
-            let data = decoder.transcode_to_astc(
-                slice_desc.num_blocks_x,
-                slice_desc.num_blocks_y,
-                slice_desc.data(&buf),
-            )?;
+            let data = decoder.transcode_to_astc(slice_desc.data(&buf))?;
             let image = Image {
                 w: slice_desc.orig_width as u32,
                 h: slice_desc.orig_height as u32,
@@ -290,11 +271,7 @@ pub fn read_to_bc7<P: AsRef<Path>>(path: P) -> Result<Vec<Image<u8>>> {
 
         let mut images = Vec::with_capacity(header.total_slices as usize);
         for slice_desc in &slice_descs {
-            let data = decoder.transcode_to_bc7(
-                slice_desc.num_blocks_x,
-                slice_desc.num_blocks_y,
-                slice_desc.data(&buf),
-            )?;
+            let data = decoder.transcode_to_bc7(slice_desc.data(&buf))?;
             let image = Image {
                 w: slice_desc.orig_width as u32,
                 h: slice_desc.orig_height as u32,
