@@ -1,10 +1,4 @@
-use crate::{
-    astc,
-    basis::{Header, SliceDesc},
-    bc7,
-    bitreader::BitReaderLsb,
-    etc, Color32, Image, Result,
-};
+use crate::{astc, bc7, bitreader::BitReaderLsb, etc, Color32, Result};
 
 #[cfg(test)]
 mod tests_to_rgba;
@@ -23,6 +17,12 @@ mod tests_to_etc2;
 
 const MAX_ENDPOINT_COUNT: usize = 18;
 const MAX_WEIGHT_COUNT: usize = 32;
+
+pub const UASTC_BLOCK_SIZE: usize = 16;
+pub const ASTC_BLOCK_SIZE: usize = 16;
+pub const ETC1_BLOCK_SIZE: usize = 8;
+pub const ETC2_BLOCK_SIZE: usize = 16;
+pub const BC7_BLOCK_SIZE: usize = 16;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Mode8Etc1Flags {
@@ -53,203 +53,153 @@ impl TranscodingFlags {
 pub struct Decoder {}
 
 impl Decoder {
-    pub(crate) fn from_file_bytes(_header: &Header, _bytes: &[u8]) -> Result<Self> {
+    pub(crate) fn new() -> Self {
         // TODO: LUTs
-        Ok(Self {})
+        Self {}
     }
 
-    pub(crate) fn read_to_uastc(&self, slice_desc: &SliceDesc, bytes: &[u8]) -> Result<Image<u8>> {
-        const UASTC_BLOCK_SIZE: usize = 16;
+    pub(crate) fn read_to_uastc(
+        &self,
+        num_blocks_x: u16,
+        num_blocks_y: u16,
+        block_data: &[u8],
+    ) -> Result<Vec<u8>> {
+        let block_count = num_blocks_x as usize * num_blocks_y as usize;
+        let data = block_data
+            .get(0..block_count * UASTC_BLOCK_SIZE)
+            .ok_or("not enough data")?
+            .to_vec();
 
-        let block_bytes = slice_desc.data(bytes);
-
-        let image = Image {
-            w: slice_desc.orig_width as u32,
-            h: slice_desc.orig_height as u32,
-            stride: UASTC_BLOCK_SIZE as u32 * slice_desc.num_blocks_x as u32,
-            data: block_bytes.to_vec(),
-        };
-
-        Ok(image)
+        Ok(data)
     }
 
     pub(crate) fn decode_to_rgba(
         &self,
-        slice_desc: &SliceDesc,
-        bytes: &[u8],
-    ) -> Result<Image<Color32>> {
-        let mut image = Image {
-            w: slice_desc.orig_width as u32,
-            h: slice_desc.orig_height as u32,
-            stride: 4 * slice_desc.num_blocks_x as u32,
-            data: vec![
-                Color32::default();
-                slice_desc.num_blocks_x as usize * slice_desc.num_blocks_y as usize * 16
-            ],
-        };
+        num_blocks_x: u16,
+        num_blocks_y: u16,
+        block_data: &[u8],
+    ) -> Result<Vec<Color32>> {
+        let mut data = vec![Color32::default(); num_blocks_x as usize * num_blocks_y as usize * 16];
+        let stride = 4 * num_blocks_x as usize;
 
         let block_to_rgba =
             |block_x: u32, block_y: u32, _block_offset: usize, block_bytes: &[u8]| {
                 let rgba = decode_block_to_rgba(block_bytes);
                 for y in 0..4 {
                     let x_start = 4 * block_x as usize;
-                    let image_start = (4 * block_y as usize + y) * image.stride as usize + x_start;
-                    image.data[image_start..image_start + 4]
-                        .copy_from_slice(&rgba[4 * y..4 * y + 4]);
+                    let image_start = (4 * block_y as usize + y) * stride + x_start;
+                    data[image_start..image_start + 4].copy_from_slice(&rgba[4 * y..4 * y + 4]);
                 }
             };
 
-        self.iterate_blocks(slice_desc, bytes, block_to_rgba)?;
+        self.iterate_blocks(num_blocks_x, num_blocks_y, block_data, block_to_rgba)?;
 
-        Ok(image)
+        Ok(data)
     }
 
     pub(crate) fn transcode_to_astc(
         &self,
-        slice_desc: &SliceDesc,
-        bytes: &[u8],
-    ) -> Result<Image<u8>> {
-        const ASTC_BLOCK_SIZE: usize = 16;
-
-        let mut image = Image {
-            w: slice_desc.orig_width as u32,
-            h: slice_desc.orig_height as u32,
-            stride: ASTC_BLOCK_SIZE as u32 * slice_desc.num_blocks_x as u32,
-            data: vec![
-                0u8;
-                slice_desc.num_blocks_x as usize
-                    * slice_desc.num_blocks_y as usize
-                    * ASTC_BLOCK_SIZE
-            ],
-        };
+        num_blocks_x: u16,
+        num_blocks_y: u16,
+        block_data: &[u8],
+    ) -> Result<Vec<u8>> {
+        let mut data = vec![0u8; num_blocks_x as usize * num_blocks_y as usize * ASTC_BLOCK_SIZE];
 
         let block_to_astc =
             |_block_x: u32, _block_y: u32, block_offset: usize, block_bytes: &[u8]| {
-                let output = &mut image.data[block_offset..block_offset + ASTC_BLOCK_SIZE];
+                let output = &mut data[block_offset..block_offset + ASTC_BLOCK_SIZE];
                 astc::convert_block_from_uastc(block_bytes, output);
             };
 
-        self.iterate_blocks(slice_desc, bytes, block_to_astc)?;
+        self.iterate_blocks(num_blocks_x, num_blocks_y, block_data, block_to_astc)?;
 
-        Ok(image)
+        Ok(data)
     }
 
     pub(crate) fn transcode_to_bc7(
         &self,
-        slice_desc: &SliceDesc,
-        bytes: &[u8],
-    ) -> Result<Image<u8>> {
-        const BC7_BLOCK_SIZE: usize = 16;
-
-        let mut image = Image {
-            w: slice_desc.orig_width as u32,
-            h: slice_desc.orig_height as u32,
-            stride: BC7_BLOCK_SIZE as u32 * slice_desc.num_blocks_x as u32,
-            data: vec![
-                0u8;
-                slice_desc.num_blocks_x as usize
-                    * slice_desc.num_blocks_y as usize
-                    * BC7_BLOCK_SIZE
-            ],
-        };
+        num_blocks_x: u16,
+        num_blocks_y: u16,
+        block_data: &[u8],
+    ) -> Result<Vec<u8>> {
+        let mut data = vec![0u8; num_blocks_x as usize * num_blocks_y as usize * BC7_BLOCK_SIZE];
 
         let block_to_bc7 =
             |_block_x: u32, _block_y: u32, block_offset: usize, block_bytes: &[u8]| {
-                let output = &mut image.data[block_offset..block_offset + BC7_BLOCK_SIZE];
+                let output = &mut data[block_offset..block_offset + BC7_BLOCK_SIZE];
                 bc7::convert_block_from_uastc(block_bytes, output);
             };
 
-        self.iterate_blocks(slice_desc, bytes, block_to_bc7)?;
+        self.iterate_blocks(num_blocks_x, num_blocks_y, block_data, block_to_bc7)?;
 
-        Ok(image)
+        Ok(data)
     }
 
     pub(crate) fn transcode_to_etc1(
         &self,
-        slice_desc: &SliceDesc,
-        bytes: &[u8],
-    ) -> Result<Image<u8>> {
-        const ETC1_BLOCK_SIZE: usize = 8;
-
-        let mut image = Image {
-            w: slice_desc.orig_width as u32,
-            h: slice_desc.orig_height as u32,
-            stride: ETC1_BLOCK_SIZE as u32 * slice_desc.num_blocks_x as u32,
-            data: vec![
-                0u8;
-                slice_desc.num_blocks_x as usize
-                    * slice_desc.num_blocks_y as usize
-                    * ETC1_BLOCK_SIZE
-            ],
-        };
+        num_blocks_x: u16,
+        num_blocks_y: u16,
+        block_data: &[u8],
+    ) -> Result<Vec<u8>> {
+        let mut data = vec![0u8; num_blocks_x as usize * num_blocks_y as usize * ETC1_BLOCK_SIZE];
 
         let block_to_etc1 =
             |_block_x: u32, _block_y: u32, block_offset: usize, block_bytes: &[u8]| {
-                let output = &mut image.data[block_offset / 2..block_offset / 2 + ETC1_BLOCK_SIZE];
+                let output = &mut data[block_offset / 2..block_offset / 2 + ETC1_BLOCK_SIZE];
                 etc::convert_block_from_uastc(block_bytes, output, false);
             };
 
-        self.iterate_blocks(slice_desc, bytes, block_to_etc1)?;
+        self.iterate_blocks(num_blocks_x, num_blocks_y, block_data, block_to_etc1)?;
 
-        Ok(image)
+        Ok(data)
     }
 
     pub(crate) fn transcode_to_etc2(
         &self,
-        slice_desc: &SliceDesc,
-        bytes: &[u8],
-    ) -> Result<Image<u8>> {
-        const ETC2_BLOCK_SIZE: usize = 16;
-
-        let mut image = Image {
-            w: slice_desc.orig_width as u32,
-            h: slice_desc.orig_height as u32,
-            stride: ETC2_BLOCK_SIZE as u32 * slice_desc.num_blocks_x as u32,
-            data: vec![
-                0u8;
-                slice_desc.num_blocks_x as usize
-                    * slice_desc.num_blocks_y as usize
-                    * ETC2_BLOCK_SIZE
-            ],
-        };
+        num_blocks_x: u16,
+        num_blocks_y: u16,
+        block_data: &[u8],
+    ) -> Result<Vec<u8>> {
+        let mut data = vec![0u8; num_blocks_x as usize * num_blocks_y as usize * ETC2_BLOCK_SIZE];
 
         let block_to_etc1 =
             |_block_x: u32, _block_y: u32, block_offset: usize, block_bytes: &[u8]| {
-                let output = &mut image.data[block_offset..block_offset + ETC2_BLOCK_SIZE];
+                let output = &mut data[block_offset..block_offset + ETC2_BLOCK_SIZE];
                 etc::convert_block_from_uastc(block_bytes, output, true);
             };
 
-        self.iterate_blocks(slice_desc, bytes, block_to_etc1)?;
+        self.iterate_blocks(num_blocks_x, num_blocks_y, block_data, block_to_etc1)?;
 
-        Ok(image)
+        Ok(data)
     }
 
-    fn iterate_blocks<F>(&self, slice_desc: &SliceDesc, bytes: &[u8], mut f: F) -> Result<()>
+    fn iterate_blocks<F>(
+        &self,
+        num_blocks_x: u16,
+        num_blocks_y: u16,
+        block_data: &[u8],
+        mut f: F,
+    ) -> Result<()>
     where
         F: FnMut(u32, u32, usize, &[u8]),
     {
-        let num_blocks_x = slice_desc.num_blocks_x as u32;
-        let num_blocks_y = slice_desc.num_blocks_y as u32;
-
-        let bytes = slice_desc.data(bytes);
+        let bytes = block_data;
 
         let mut block_offset = 0;
 
-        const BLOCK_SIZE: usize = 16;
-
-        if bytes.len() < BLOCK_SIZE * num_blocks_x as usize * num_blocks_y as usize {
+        if bytes.len() < UASTC_BLOCK_SIZE * num_blocks_x as usize * num_blocks_y as usize {
             return Err("Not enough bytes for all blocks".into());
         }
 
-        for block_y in 0..num_blocks_y {
-            for block_x in 0..num_blocks_x {
+        for block_y in 0..num_blocks_y as u32 {
+            for block_x in 0..num_blocks_x as u32 {
                 f(
                     block_x,
                     block_y,
                     block_offset,
-                    &bytes[block_offset..block_offset + BLOCK_SIZE],
+                    &bytes[block_offset..block_offset + UASTC_BLOCK_SIZE],
                 );
-                block_offset += BLOCK_SIZE;
+                block_offset += UASTC_BLOCK_SIZE;
             }
         }
 

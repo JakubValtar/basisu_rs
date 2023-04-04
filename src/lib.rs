@@ -86,11 +86,21 @@ pub fn read_to_rgba<P: AsRef<Path>>(path: P) -> Result<(Header, Vec<Image<u8>>)>
             Ok((header, images))
         }
     } else if header.texture_format()? == TexFormat::UASTC4x4 {
-        let decoder = uastc::Decoder::from_file_bytes(&header, &buf)?;
+        let decoder = uastc::Decoder::new();
 
         let mut images = Vec::with_capacity(header.total_slices as usize);
         for slice_desc in &slice_descs {
-            let image = decoder.decode_to_rgba(slice_desc, &buf)?;
+            let data = decoder.decode_to_rgba(
+                slice_desc.num_blocks_x,
+                slice_desc.num_blocks_y,
+                slice_desc.data(&buf),
+            )?;
+            let image = Image {
+                w: slice_desc.orig_width as u32,
+                h: slice_desc.orig_height as u32,
+                stride: 4 * slice_desc.num_blocks_x as u32,
+                data,
+            };
             images.push(image.into_rgba_bytes());
         }
         Ok((header, images))
@@ -135,11 +145,21 @@ pub fn read_to_etc1<P: AsRef<Path>>(path: P) -> Result<Vec<Image<u8>>> {
         }
         Ok(images)
     } else if format == TexFormat::UASTC4x4 {
-        let decoder = uastc::Decoder::from_file_bytes(&header, &buf)?;
+        let decoder = uastc::Decoder::new();
 
         let mut images = Vec::with_capacity(header.total_slices as usize);
         for slice_desc in &slice_descs {
-            let image = decoder.transcode_to_etc1(slice_desc, &buf)?;
+            let data = decoder.transcode_to_etc1(
+                slice_desc.num_blocks_x,
+                slice_desc.num_blocks_y,
+                slice_desc.data(&buf),
+            )?;
+            let image = Image {
+                w: slice_desc.orig_width as u32,
+                h: slice_desc.orig_height as u32,
+                stride: uastc::ETC1_BLOCK_SIZE as u32 * slice_desc.num_blocks_x as u32,
+                data,
+            };
             images.push(image);
         }
         Ok(images)
@@ -161,11 +181,21 @@ pub fn read_to_etc2<P: AsRef<Path>>(path: P) -> Result<Vec<Image<u8>>> {
 
     let format = header.texture_format()?;
     if format == TexFormat::UASTC4x4 {
-        let decoder = uastc::Decoder::from_file_bytes(&header, &buf)?;
+        let decoder = uastc::Decoder::new();
 
         let mut images = Vec::with_capacity(header.total_slices as usize);
         for slice_desc in &slice_descs {
-            let image = decoder.transcode_to_etc2(slice_desc, &buf)?;
+            let data = decoder.transcode_to_etc2(
+                slice_desc.num_blocks_x,
+                slice_desc.num_blocks_y,
+                slice_desc.data(&buf),
+            )?;
+            let image = Image {
+                w: slice_desc.orig_width as u32,
+                h: slice_desc.orig_height as u32,
+                stride: uastc::ETC2_BLOCK_SIZE as u32 * slice_desc.num_blocks_x as u32,
+                data,
+            };
             images.push(image);
         }
         Ok(images)
@@ -186,11 +216,21 @@ pub fn read_to_uastc<P: AsRef<Path>>(path: P) -> Result<Vec<Image<u8>>> {
     let slice_descs = basis::read_slice_descs(&buf, &header)?;
 
     if header.texture_format()? == TexFormat::UASTC4x4 {
-        let decoder = uastc::Decoder::from_file_bytes(&header, &buf)?;
+        let decoder = uastc::Decoder::new();
 
         let mut images = Vec::with_capacity(header.total_slices as usize);
         for slice_desc in &slice_descs {
-            let image = decoder.read_to_uastc(slice_desc, &buf)?;
+            let data = decoder.read_to_uastc(
+                slice_desc.num_blocks_x,
+                slice_desc.num_blocks_y,
+                slice_desc.data(&buf),
+            )?;
+            let image = Image {
+                w: slice_desc.orig_width as u32,
+                h: slice_desc.orig_height as u32,
+                stride: uastc::UASTC_BLOCK_SIZE as u32 * slice_desc.num_blocks_x as u32,
+                data,
+            };
             images.push(image);
         }
         Ok(images)
@@ -211,11 +251,21 @@ pub fn read_to_astc<P: AsRef<Path>>(path: P) -> Result<Vec<Image<u8>>> {
     let slice_descs = basis::read_slice_descs(&buf, &header)?;
 
     if header.texture_format()? == TexFormat::UASTC4x4 {
-        let decoder = uastc::Decoder::from_file_bytes(&header, &buf)?;
+        let decoder = uastc::Decoder::new();
 
         let mut images = Vec::with_capacity(header.total_slices as usize);
         for slice_desc in &slice_descs {
-            let image = decoder.transcode_to_astc(slice_desc, &buf)?;
+            let data = decoder.transcode_to_astc(
+                slice_desc.num_blocks_x,
+                slice_desc.num_blocks_y,
+                slice_desc.data(&buf),
+            )?;
+            let image = Image {
+                w: slice_desc.orig_width as u32,
+                h: slice_desc.orig_height as u32,
+                stride: uastc::ASTC_BLOCK_SIZE as u32 * slice_desc.num_blocks_x as u32,
+                data,
+            };
             images.push(image);
         }
         Ok(images)
@@ -236,11 +286,21 @@ pub fn read_to_bc7<P: AsRef<Path>>(path: P) -> Result<Vec<Image<u8>>> {
     let slice_descs = basis::read_slice_descs(&buf, &header)?;
 
     if header.texture_format()? == TexFormat::UASTC4x4 {
-        let decoder = uastc::Decoder::from_file_bytes(&header, &buf)?;
+        let decoder = uastc::Decoder::new();
 
         let mut images = Vec::with_capacity(header.total_slices as usize);
         for slice_desc in &slice_descs {
-            let image = decoder.transcode_to_bc7(slice_desc, &buf)?;
+            let data = decoder.transcode_to_bc7(
+                slice_desc.num_blocks_x,
+                slice_desc.num_blocks_y,
+                slice_desc.data(&buf),
+            )?;
+            let image = Image {
+                w: slice_desc.orig_width as u32,
+                h: slice_desc.orig_height as u32,
+                stride: uastc::BC7_BLOCK_SIZE as u32 * slice_desc.num_blocks_x as u32,
+                data,
+            };
             images.push(image);
         }
         Ok(images)
