@@ -121,7 +121,7 @@ impl Decoder {
         let stride = 4 * blocks_per_row;
 
         for (i, block) in blocks.iter().enumerate() {
-            let rgba = decode_block_to_rgba(block);
+            let rgba = decode_block_to_rgba(block)?;
             let block_x = i % blocks_per_row;
             let block_y = i / blocks_per_row;
             for y in 0..4 {
@@ -143,30 +143,28 @@ impl Decoder {
             TargetTextureFormat::Astc => {
                 blocks
                     .zip_with_output(&mut data)
-                    .for_each(|(block, output)| {
-                        astc::convert_block_from_uastc(block, output);
-                    });
+                    .try_for_each(|(block, output)| {
+                        astc::convert_block_from_uastc(block, output)
+                    })?;
             }
             TargetTextureFormat::Bc7 => {
                 blocks
                     .zip_with_output(&mut data)
-                    .for_each(|(block, output)| {
-                        bc7::convert_block_from_uastc(block, output);
-                    });
+                    .try_for_each(|(block, output)| bc7::convert_block_from_uastc(block, output))?;
             }
             TargetTextureFormat::Etc1 => {
                 blocks
                     .zip_with_output(&mut data)
-                    .for_each(|(block, output)| {
-                        etc::convert_etc1_block_from_uastc(block, output);
-                    });
+                    .try_for_each(|(block, output)| {
+                        etc::convert_etc1_block_from_uastc(block, output)
+                    })?;
             }
             TargetTextureFormat::Etc2 => {
                 blocks
                     .zip_with_output(&mut data)
-                    .for_each(|(block, output)| {
-                        etc::convert_etc2_block_from_uastc(block, output);
-                    });
+                    .try_for_each(|(block, output)| {
+                        etc::convert_etc2_block_from_uastc(block, output)
+                    })?;
             }
         }
 
@@ -238,14 +236,7 @@ fn astc_interpolate(mut l: u32, mut h: u32, w: u32, srgb: bool) -> u8 {
     (k >> 8) as u8
 }
 
-pub(crate) fn decode_block_to_rgba(bytes: &[u8]) -> [Color32; 16] {
-    match decode_block_to_rgba_result(bytes) {
-        Ok(rgba) => rgba,
-        _ => [INVALID_BLOCK_COLOR; 16],
-    }
-}
-
-fn decode_block_to_rgba_result(bytes: &[u8]) -> Result<[Color32; 16]> {
+pub(crate) fn decode_block_to_rgba(bytes: &[u8]) -> Result<[Color32; 16]> {
     let reader = &mut BitReaderLsb::new(bytes);
 
     let mode = decode_mode(reader)?;
@@ -444,8 +435,6 @@ pub fn skip_trans_flags(reader: &mut BitReaderLsb, mode: Mode) {
     assert_ne!(mode.id, 8);
     reader.remove(mode.trans_flags_bits as usize);
 }
-
-const INVALID_BLOCK_COLOR: Color32 = Color32::new(0xFF, 0, 0xFF, 0xFF);
 
 #[derive(Clone, Copy, Debug)]
 pub struct Mode {

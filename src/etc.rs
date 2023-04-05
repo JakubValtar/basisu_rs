@@ -11,30 +11,23 @@ use crate::{
 pub fn convert_etc1_block_from_uastc(
     bytes: &[u8; UASTC_BLOCK_SIZE],
     output: &mut [u8; ETC1_BLOCK_SIZE],
-) {
-    match convert_block_from_uastc_result(bytes, output, None) {
-        Ok(_) => (),
-        _ => output.fill(0), // TODO: purple or black?
-    }
+) -> Result<()> {
+    convert_block_from_uastc(bytes, output, None)
 }
 
 pub fn convert_etc2_block_from_uastc(
     bytes: &[u8; UASTC_BLOCK_SIZE],
     output: &mut [u8; ETC2_BLOCK_SIZE],
-) {
+) -> Result<()> {
     let (alpha, rgb) = output.split_at_mut(8);
-    let res = convert_block_from_uastc_result(
+    convert_block_from_uastc(
         bytes,
         rgb.try_into().unwrap(),
         Some(alpha.try_into().unwrap()),
-    );
-    match res {
-        Ok(_) => (),
-        _ => output.fill(0), // TODO: purple or black?
-    }
+    )
 }
 
-fn convert_block_from_uastc_result(
+fn convert_block_from_uastc(
     bytes: &[u8],
     output: &mut [u8; 8],
     alpha: Option<&mut [u8; 8]>,
@@ -82,7 +75,7 @@ fn convert_block_from_uastc_result(
 
     let trans_flags = uastc::decode_trans_flags(reader, mode);
 
-    let mut rgba = uastc::decode_block_to_rgba(bytes);
+    let mut rgba = uastc::decode_block_to_rgba(bytes)?;
 
     if let Some(alpha) = alpha {
         write_etc2_alpha_block(alpha, trans_flags.etc2tm, &rgba);

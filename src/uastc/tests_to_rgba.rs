@@ -3,7 +3,7 @@ use super::*;
 fn test_uastc_mode(mode: usize) {
     let test_blocks = TEST_DATA_UASTC_RGBA[mode];
     for (uastc, rgba) in test_blocks.iter() {
-        let decoded_rgba = decode_block_to_rgba(uastc);
+        let decoded_rgba = decode_block_to_rgba(uastc).unwrap();
         let mut decoded_rgba_u32 = [0u32; 16];
         for i in 0..16 {
             decoded_rgba_u32[i] = decoded_rgba[i].to_rgba_u32();

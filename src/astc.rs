@@ -8,16 +8,6 @@ use crate::{
 pub fn convert_block_from_uastc(
     bytes: &[u8; UASTC_BLOCK_SIZE],
     output: &mut [u8; ASTC_BLOCK_SIZE],
-) {
-    match convert_block_from_uastc_result(bytes, output) {
-        Ok(_) => (),
-        _ => output.copy_from_slice(&[0; 16]),
-    }
-}
-
-fn convert_block_from_uastc_result(
-    bytes: &[u8; UASTC_BLOCK_SIZE],
-    output: &mut [u8; ASTC_BLOCK_SIZE],
 ) -> Result<()> {
     let reader = &mut BitReaderLsb::new(bytes);
 

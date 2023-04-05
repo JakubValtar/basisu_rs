@@ -18,7 +18,7 @@ fn test_uastc_mode(mode: usize) {
     let test_data = TEST_DATA_UASTC_BC7[mode];
     for (uastc, expected_bc7) in test_data.iter() {
         let mut actual_bc7 = [0; 16];
-        bc7::convert_block_from_uastc(uastc, &mut actual_bc7);
+        bc7::convert_block_from_uastc(uastc, &mut actual_bc7).unwrap();
         assert_eq!(
             &actual_bc7,
             expected_bc7,
