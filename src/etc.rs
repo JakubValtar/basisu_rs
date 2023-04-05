@@ -1,13 +1,44 @@
-use crate::{bitreader::BitReaderLsb, bitwriter::BitWriterLsb, mask, uastc, Color32, Result};
+use std::convert::TryInto;
 
-pub fn convert_block_from_uastc(bytes: &[u8], output: &mut [u8], alpha: bool) {
-    match convert_block_from_uastc_result(bytes, output, alpha) {
+use crate::{
+    bitreader::BitReaderLsb,
+    bitwriter::BitWriterLsb,
+    mask,
+    uastc::{self, ETC1_BLOCK_SIZE, ETC2_BLOCK_SIZE, UASTC_BLOCK_SIZE},
+    Color32, Result,
+};
+
+pub fn convert_etc1_block_from_uastc(
+    bytes: &[u8; UASTC_BLOCK_SIZE],
+    output: &mut [u8; ETC1_BLOCK_SIZE],
+) {
+    match convert_block_from_uastc_result(bytes, output, None) {
         Ok(_) => (),
-        _ => output.copy_from_slice(&[0; 8]), // TODO: purple or black?
+        _ => output.fill(0), // TODO: purple or black?
     }
 }
 
-fn convert_block_from_uastc_result(bytes: &[u8], output: &mut [u8], alpha: bool) -> Result<()> {
+pub fn convert_etc2_block_from_uastc(
+    bytes: &[u8; UASTC_BLOCK_SIZE],
+    output: &mut [u8; ETC2_BLOCK_SIZE],
+) {
+    let (alpha, rgb) = output.split_at_mut(8);
+    let res = convert_block_from_uastc_result(
+        bytes,
+        rgb.try_into().unwrap(),
+        Some(alpha.try_into().unwrap()),
+    );
+    match res {
+        Ok(_) => (),
+        _ => output.fill(0), // TODO: purple or black?
+    }
+}
+
+fn convert_block_from_uastc_result(
+    bytes: &[u8],
+    output: &mut [u8; 8],
+    alpha: Option<&mut [u8; 8]>,
+) -> Result<()> {
     let reader = &mut BitReaderLsb::new(bytes);
 
     let mode = uastc::decode_mode(reader)?;
@@ -15,9 +46,9 @@ fn convert_block_from_uastc_result(bytes: &[u8], output: &mut [u8], alpha: bool)
     let writer = &mut BitWriterLsb::new(output);
 
     if mode.id == 8 {
-        if alpha {
+        if let Some(alpha) = alpha {
             let rgba = uastc::decode_mode8_rgba(reader);
-            write_solid_etc2_alpha_block(writer, rgba[3]);
+            write_solid_etc2_alpha_block(alpha, rgba[3]);
         } else {
             uastc::skip_mode8_rgba(reader);
         }
@@ -53,8 +84,8 @@ fn convert_block_from_uastc_result(bytes: &[u8], output: &mut [u8], alpha: bool)
 
     let mut rgba = uastc::decode_block_to_rgba(bytes);
 
-    if alpha {
-        write_etc2_alpha_block(writer, trans_flags.etc2tm, &rgba);
+    if let Some(alpha) = alpha {
+        write_etc2_alpha_block(alpha, trans_flags.etc2tm, &rgba);
     }
 
     if !trans_flags.etc1f {
@@ -230,25 +261,25 @@ fn apply_etc1_bias(mut block_color: Color32, bias: u8, limit: u32, subblock: u32
     block_color
 }
 
-fn write_solid_etc2_alpha_block(writer: &mut BitWriterLsb, value: u8) {
-    writer.write_u8(8, value);
-
-    // Multiplier, doesn't matter, but has to be non-zero, so choosing 1
-    // Modifier table index: choosing 13 (only one with 0 in it)
-    writer.write_u8(8, (1 << 4) | 13);
-
-    // Weight indices, 16x 3 bits, value 4 (0b100)
-    writer.write_u8(8, 0b10010010);
-    writer.write_u8(8, 0b01001001);
-    writer.write_u8(8, 0b00100100);
-    writer.write_u8(8, 0b10010010);
-    writer.write_u8(8, 0b01001001);
-    writer.write_u8(8, 0b00100100);
+fn write_solid_etc2_alpha_block(output: &mut [u8; 8], value: u8) {
+    *output = [
+        value,
+        // Multiplier, doesn't matter, but has to be non-zero, so choosing 1
+        // Modifier table index: choosing 13 (only one with 0 in it)
+        (1 << 4) | 13,
+        // Weight indices, 16x 3 bits, value 4 (0b100)
+        0b10010010,
+        0b01001001,
+        0b00100100,
+        0b10010010,
+        0b01001001,
+        0b00100100,
+    ];
 }
 
-fn write_etc2_alpha_block(writer: &mut BitWriterLsb, etc2tm: u8, rgba: &[Color32; 16]) {
+fn write_etc2_alpha_block(output: &mut [u8; 8], etc2tm: u8, rgba: &[Color32; 16]) {
     if etc2tm == 0 {
-        write_solid_etc2_alpha_block(writer, 255);
+        write_solid_etc2_alpha_block(output, 255);
     } else {
         let mut min_alpha = 255;
         let mut max_alpha = 0;
@@ -259,7 +290,7 @@ fn write_etc2_alpha_block(writer: &mut BitWriterLsb, etc2tm: u8, rgba: &[Color32
         }
 
         if min_alpha == max_alpha {
-            write_solid_etc2_alpha_block(writer, min_alpha);
+            write_solid_etc2_alpha_block(output, min_alpha);
         } else {
             let table_index = (etc2tm & mask!(4u8)) as usize;
             let multiplier = (etc2tm >> 4) as u32;
@@ -303,15 +334,13 @@ fn write_etc2_alpha_block(writer: &mut BitWriterLsb, etc2tm: u8, rgba: &[Color32
                 selectors |= best_selector << (45 - id * 3);
             }
 
-            writer.write_u8(8, center as u8);
+            output[0] = center as u8;
             // Multiplier, doesn't matter, but has to be non-zero, so choosing 1
             // Modifier table index: choosing 13 (only one with 0 in it)
-            writer.write_u8(8, etc2tm);
+            output[1] = etc2tm;
 
             // Weight indices, 16x 3 bits, value 4 (0b100)
-            for &byte in selectors.to_be_bytes().iter().skip(2) {
-                writer.write_u8(8, byte);
-            }
+            output[2..8].copy_from_slice(&selectors.to_be_bytes()[2..8]);
         }
     }
 }

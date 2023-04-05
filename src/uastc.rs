@@ -52,6 +52,25 @@ impl TranscodingFlags {
     pub const ETC1BIAS_NONE: u8 = 0xFF;
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TargetTextureFormat {
+    Astc,
+    Bc7,
+    Etc1,
+    Etc2,
+}
+
+impl TargetTextureFormat {
+    const fn block_size(&self) -> usize {
+        match self {
+            TargetTextureFormat::Astc => ASTC_BLOCK_SIZE,
+            TargetTextureFormat::Bc7 => BC7_BLOCK_SIZE,
+            TargetTextureFormat::Etc1 => ETC1_BLOCK_SIZE,
+            TargetTextureFormat::Etc2 => ETC2_BLOCK_SIZE,
+        }
+    }
+}
+
 struct Blocks<'a> {
     data: &'a [u8],
 }
@@ -68,18 +87,16 @@ impl<'a> Blocks<'a> {
         self.data.len() / UASTC_BLOCK_SIZE
     }
 
-    fn iter(&self) -> Iter {
-        self.data.chunks_exact(UASTC_BLOCK_SIZE).map(|c| Block {
-            data: c.try_into().unwrap(),
-        })
+    fn iter(&self) -> impl Iterator<Item = &'a [u8; UASTC_BLOCK_SIZE]> {
+        block_iter(self.data)
     }
-}
 
-type Iter<'a> = std::iter::Map<std::slice::ChunksExact<'a, u8>, fn(&[u8]) -> Block>;
-
-#[repr(transparent)]
-struct Block<'a> {
-    data: &'a [u8; UASTC_BLOCK_SIZE],
+    fn zip_with_output<'b, const N: usize>(
+        &self,
+        output: &'b mut [u8],
+    ) -> impl Iterator<Item = (&'a [u8; UASTC_BLOCK_SIZE], &'b mut [u8; N])> {
+        std::iter::zip(self.iter(), block_iter_mut(output))
+    }
 }
 
 pub struct Decoder {}
@@ -104,7 +121,7 @@ impl Decoder {
         let stride = 4 * blocks_per_row;
 
         for (i, block) in blocks.iter().enumerate() {
-            let rgba = decode_block_to_rgba(block.data);
+            let rgba = decode_block_to_rgba(block);
             let block_x = i % blocks_per_row;
             let block_y = i / blocks_per_row;
             for y in 0..4 {
@@ -117,57 +134,52 @@ impl Decoder {
         Ok(data)
     }
 
-    pub(crate) fn transcode_to_astc(&self, data: &[u8]) -> Result<Vec<u8>> {
+    pub(crate) fn transcode(&self, format: TargetTextureFormat, data: &[u8]) -> Result<Vec<u8>> {
         let blocks = Blocks::new(data)?;
-        let mut data = vec![0u8; blocks.len() * ASTC_BLOCK_SIZE];
 
-        for (i, block) in blocks.iter().enumerate() {
-            let offset = i * ASTC_BLOCK_SIZE;
-            let output = &mut data[offset..offset + ASTC_BLOCK_SIZE];
-            astc::convert_block_from_uastc(block.data, output);
+        let mut data = vec![0u8; blocks.len() * format.block_size()];
+
+        match format {
+            TargetTextureFormat::Astc => {
+                blocks
+                    .zip_with_output(&mut data)
+                    .for_each(|(block, output)| {
+                        astc::convert_block_from_uastc(block, output);
+                    });
+            }
+            TargetTextureFormat::Bc7 => {
+                blocks
+                    .zip_with_output(&mut data)
+                    .for_each(|(block, output)| {
+                        bc7::convert_block_from_uastc(block, output);
+                    });
+            }
+            TargetTextureFormat::Etc1 => {
+                blocks
+                    .zip_with_output(&mut data)
+                    .for_each(|(block, output)| {
+                        etc::convert_etc1_block_from_uastc(block, output);
+                    });
+            }
+            TargetTextureFormat::Etc2 => {
+                blocks
+                    .zip_with_output(&mut data)
+                    .for_each(|(block, output)| {
+                        etc::convert_etc2_block_from_uastc(block, output);
+                    });
+            }
         }
 
         Ok(data)
     }
+}
 
-    pub(crate) fn transcode_to_bc7(&self, data: &[u8]) -> Result<Vec<u8>> {
-        let blocks = Blocks::new(data)?;
-        let mut data = vec![0u8; blocks.len() * BC7_BLOCK_SIZE];
+fn block_iter<const N: usize>(data: &[u8]) -> impl Iterator<Item = &[u8; N]> {
+    data.chunks_exact(N).map(|c| c.try_into().unwrap())
+}
 
-        for (i, block) in blocks.iter().enumerate() {
-            let offset = i * BC7_BLOCK_SIZE;
-            let output = &mut data[offset..offset + BC7_BLOCK_SIZE];
-            bc7::convert_block_from_uastc(block.data, output);
-        }
-
-        Ok(data)
-    }
-
-    pub(crate) fn transcode_to_etc1(&self, data: &[u8]) -> Result<Vec<u8>> {
-        let blocks = Blocks::new(data)?;
-        let mut data = vec![0u8; blocks.len() * ETC1_BLOCK_SIZE];
-
-        for (i, block) in blocks.iter().enumerate() {
-            let offset = i * ETC1_BLOCK_SIZE;
-            let output = &mut data[offset..offset + ETC1_BLOCK_SIZE];
-            etc::convert_block_from_uastc(block.data, output, false);
-        }
-
-        Ok(data)
-    }
-
-    pub(crate) fn transcode_to_etc2(&self, data: &[u8]) -> Result<Vec<u8>> {
-        let blocks = Blocks::new(data)?;
-        let mut data = vec![0u8; blocks.len() * ETC2_BLOCK_SIZE];
-
-        for (i, block) in blocks.iter().enumerate() {
-            let offset = i * ETC2_BLOCK_SIZE;
-            let output = &mut data[offset..offset + ETC2_BLOCK_SIZE];
-            etc::convert_block_from_uastc(block.data, output, true);
-        }
-
-        Ok(data)
-    }
+fn block_iter_mut<const N: usize>(data: &mut [u8]) -> impl Iterator<Item = &mut [u8; N]> {
+    data.chunks_exact_mut(N).map(|c| c.try_into().unwrap())
 }
 
 pub(crate) fn assemble_endpoint_pairs(mode: Mode, endpoint_bytes: &[u8]) -> [[Color32; 2]; 3] {
