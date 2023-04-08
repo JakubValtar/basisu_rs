@@ -1,6 +1,10 @@
 use std::convert::TryInto;
 
-use crate::{astc, bc7, bitreader::BitReaderLsb, etc, Color32, Result};
+use crate::{
+    bitreader::BitReaderLsb,
+    target_formats::{astc, bc7, etc},
+    Color32, Result,
+};
 
 #[cfg(test)]
 mod tests_to_rgba;

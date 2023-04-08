@@ -4,15 +4,12 @@ use std::fmt;
 use std::ops::{Index, IndexMut};
 use std::path::Path;
 
-mod astc;
 mod basis;
-mod bc7;
+mod basis_lz;
 mod bitreader;
 mod bitwriter;
 mod bytereader;
-mod etc;
-mod etc1s;
-mod huffman;
+mod target_formats;
 mod uastc;
 
 use basis::{Header, TexFormat, TextureType};
@@ -36,7 +33,7 @@ pub fn read_to_rgba<P: AsRef<Path>>(path: P) -> Result<(Header, Vec<Image<u8>>)>
             return Err("File has alpha, but slice count is odd".into());
         }
 
-        let decoder = make_etc1s_decoder(&header, &buf)?;
+        let decoder = make_basis_lz_decoder(&header, &buf)?;
 
         if header.has_alpha() {
             let mut images = Vec::with_capacity(header.total_slices as usize / 2);
@@ -123,7 +120,7 @@ pub fn read_to_etc1<P: AsRef<Path>>(path: P) -> Result<Vec<Image<u8>>> {
             return Err("File has alpha, but slice count is odd".into());
         }
 
-        let decoder = make_etc1s_decoder(&header, &buf)?;
+        let decoder = make_basis_lz_decoder(&header, &buf)?;
 
         let mut images = Vec::with_capacity(header.total_slices as usize);
         for slice_desc in &slice_descs {
@@ -135,7 +132,7 @@ pub fn read_to_etc1<P: AsRef<Path>>(path: P) -> Result<Vec<Image<u8>>> {
             let image = Image {
                 w: slice_desc.orig_width as u32,
                 h: slice_desc.orig_height as u32,
-                stride: etc1s::BLOCK_SIZE as u32 * slice_desc.num_blocks_x as u32,
+                stride: basis_lz::ETC1S_BLOCK_SIZE as u32 * slice_desc.num_blocks_x as u32,
                 data,
             };
             images.push(image);
@@ -289,7 +286,7 @@ pub fn read_to_bc7<P: AsRef<Path>>(path: P) -> Result<Vec<Image<u8>>> {
     }
 }
 
-fn make_etc1s_decoder(header: &Header, bytes: &[u8]) -> Result<etc1s::Decoder> {
+fn make_basis_lz_decoder(header: &Header, bytes: &[u8]) -> Result<basis_lz::Decoder> {
     let endpoints = {
         let start = header.endpoint_cb_file_ofs as usize;
         let len = header.endpoint_cb_file_size as usize;
@@ -316,7 +313,7 @@ fn make_etc1s_decoder(header: &Header, bytes: &[u8]) -> Result<etc1s::Decoder> {
 
     let is_video = header.tex_type == TextureType::VideoFrames as u8;
 
-    etc1s::Decoder::new(
+    basis_lz::Decoder::new(
         header.total_selectors,
         header.total_selectors,
         endpoints,

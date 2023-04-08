@@ -1,10 +1,14 @@
 use crate::{
     bitreader::BitReaderLsb,
-    etc::{self, Selector},
-    huffman::{self, HuffmanDecodingTable},
-    mask, Color32, Result,
+    mask,
+    target_formats::etc::{self, Selector},
+    Color32, Result,
 };
 use std::ops::{Index, IndexMut};
+
+mod huffman;
+
+use self::huffman::HuffmanDecodingTable;
 
 const ENDPOINT_PRED_TOTAL_SYMBOLS: u16 = (4 * 4 * 4 * 4) + 1;
 const ENDPOINT_PRED_REPEAT_LAST_SYMBOL: u16 = ENDPOINT_PRED_TOTAL_SYMBOLS - 1;
@@ -33,7 +37,7 @@ const COLOR5_PAL2_PREV_HI: u8 = 31;
 const _COLOR5_PAL2_DELTA_LO: i32 = -31;
 const _COLOR5_PAL2_DELTA_HI: i32 = 9;
 
-pub const BLOCK_SIZE: usize = 8;
+pub const ETC1S_BLOCK_SIZE: usize = 8;
 
 pub struct DecodedBlock {
     block_x: u32,
@@ -153,15 +157,15 @@ impl Decoder {
     ) -> Result<Vec<u8>> {
         let block_count = num_blocks_x as usize * num_blocks_y as usize;
 
-        let mut blocks = vec![0u8; BLOCK_SIZE * block_count];
+        let mut blocks = vec![0u8; ETC1S_BLOCK_SIZE * block_count];
 
         let block_to_etc1 = |block: DecodedBlock| {
             let endpoint: Endpoint = self.endpoints[block.endpoint_index as usize];
             let selector: Selector = self.selectors[block.selector_index as usize];
 
             let block_id = (block.block_y * num_blocks_x as u32 + block.block_x) as usize;
-            let block_start = BLOCK_SIZE * block_id;
-            let block = &mut blocks[block_start..block_start + BLOCK_SIZE];
+            let block_start = ETC1S_BLOCK_SIZE * block_id;
+            let block = &mut blocks[block_start..block_start + ETC1S_BLOCK_SIZE];
 
             // color_r: 5 | delta: 3
             block[0] = endpoint.color5[0] << 3;
