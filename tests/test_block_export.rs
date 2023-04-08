@@ -169,7 +169,7 @@ fn uastc_block_export() {
 }
 
 fn collect_blocks(case: &TestCase, collected_blocks: &mut [Vec<TestBlock>]) -> Result<()> {
-    let uastc_data = basisu::read_to_uastc(&case.basis)?.remove(0);
+    let uastc_data = basisu::read_to_uastc(&case.read_basis()?)?.remove(0);
     let astc_data = open_ktx(&case.astc_rgba)?.read_textures().next().unwrap();
     let bc7_data = open_ktx(&case.bc7_rgba)?.read_textures().next().unwrap();
     let etc1_data = open_ktx(&case.etc1_rgb)?.read_textures().next().unwrap();

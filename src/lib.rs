@@ -2,7 +2,6 @@
 
 use std::fmt;
 use std::ops::{Index, IndexMut};
-use std::path::Path;
 
 mod basis;
 mod basis_lz;
@@ -17,23 +16,21 @@ use basis::{Header, TexFormat, TextureType};
 type Error = Box<dyn std::error::Error>;
 type Result<T> = std::result::Result<T, Error>;
 
-pub fn read_to_rgba<P: AsRef<Path>>(path: P) -> Result<(Header, Vec<Image<u8>>)> {
-    let buf = std::fs::read(path)?;
+pub fn read_to_rgba(buf: &[u8]) -> Result<(Header, Vec<Image<u8>>)> {
+    let header = basis::read_header(buf)?;
 
-    let header = basis::read_header(&buf)?;
-
-    if !basis::check_file_checksum(&buf, &header) {
+    if !basis::check_file_checksum(buf, &header) {
         return Err("Data CRC16 failed".into());
     }
 
-    let slice_descs = basis::read_slice_descs(&buf, &header)?;
+    let slice_descs = basis::read_slice_descs(buf, &header)?;
 
     if header.texture_format()? == TexFormat::ETC1S {
         if header.has_alpha() && (header.total_slices % 2) != 0 {
             return Err("File has alpha, but slice count is odd".into());
         }
 
-        let decoder = make_basis_lz_decoder(&header, &buf)?;
+        let decoder = make_basis_lz_decoder(&header, buf)?;
 
         if header.has_alpha() {
             let mut images = Vec::with_capacity(header.total_slices as usize / 2);
@@ -51,8 +48,8 @@ pub fn read_to_rgba<P: AsRef<Path>>(path: P) -> Result<(Header, Vec<Image<u8>>)>
                 let data = decoder.decode_to_rgba(
                     rgb_desc.num_blocks_x,
                     rgb_desc.num_blocks_y,
-                    rgb_desc.data(&buf),
-                    Some(alpha_desc.data(&buf)),
+                    rgb_desc.data(buf),
+                    Some(alpha_desc.data(buf)),
                 )?;
                 let image = Image {
                     w: rgb_desc.orig_width as u32,
@@ -69,7 +66,7 @@ pub fn read_to_rgba<P: AsRef<Path>>(path: P) -> Result<(Header, Vec<Image<u8>>)>
                 let data = decoder.decode_to_rgba(
                     slice_desc.num_blocks_x,
                     slice_desc.num_blocks_y,
-                    slice_desc.data(&buf),
+                    slice_desc.data(buf),
                     None,
                 )?;
                 let image = Image {
@@ -88,7 +85,7 @@ pub fn read_to_rgba<P: AsRef<Path>>(path: P) -> Result<(Header, Vec<Image<u8>>)>
         let mut images = Vec::with_capacity(header.total_slices as usize);
         for slice_desc in &slice_descs {
             let data =
-                decoder.decode_to_rgba(slice_desc.data(&buf), slice_desc.num_blocks_x as usize)?;
+                decoder.decode_to_rgba(slice_desc.data(buf), slice_desc.num_blocks_x as usize)?;
             let image = Image {
                 w: slice_desc.orig_width as u32,
                 h: slice_desc.orig_height as u32,
@@ -103,16 +100,14 @@ pub fn read_to_rgba<P: AsRef<Path>>(path: P) -> Result<(Header, Vec<Image<u8>>)>
     }
 }
 
-pub fn read_to_etc1<P: AsRef<Path>>(path: P) -> Result<Vec<Image<u8>>> {
-    let buf = std::fs::read(path)?;
+pub fn read_to_etc1(buf: &[u8]) -> Result<Vec<Image<u8>>> {
+    let header = basis::read_header(buf)?;
 
-    let header = basis::read_header(&buf)?;
-
-    if !basis::check_file_checksum(&buf, &header) {
+    if !basis::check_file_checksum(buf, &header) {
         return Err("Data CRC16 failed".into());
     }
 
-    let slice_descs = basis::read_slice_descs(&buf, &header)?;
+    let slice_descs = basis::read_slice_descs(buf, &header)?;
 
     let format = header.texture_format()?;
     if format == TexFormat::ETC1S {
@@ -120,14 +115,14 @@ pub fn read_to_etc1<P: AsRef<Path>>(path: P) -> Result<Vec<Image<u8>>> {
             return Err("File has alpha, but slice count is odd".into());
         }
 
-        let decoder = make_basis_lz_decoder(&header, &buf)?;
+        let decoder = make_basis_lz_decoder(&header, buf)?;
 
         let mut images = Vec::with_capacity(header.total_slices as usize);
         for slice_desc in &slice_descs {
             let data = decoder.transcode_to_etc1(
                 slice_desc.num_blocks_x,
                 slice_desc.num_blocks_y,
-                slice_desc.data(&buf),
+                slice_desc.data(buf),
             )?;
             let image = Image {
                 w: slice_desc.orig_width as u32,
@@ -143,8 +138,7 @@ pub fn read_to_etc1<P: AsRef<Path>>(path: P) -> Result<Vec<Image<u8>>> {
 
         let mut images = Vec::with_capacity(header.total_slices as usize);
         for slice_desc in &slice_descs {
-            let data =
-                decoder.transcode(uastc::TargetTextureFormat::Etc1, slice_desc.data(&buf))?;
+            let data = decoder.transcode(uastc::TargetTextureFormat::Etc1, slice_desc.data(buf))?;
             let image = Image {
                 w: slice_desc.orig_width as u32,
                 h: slice_desc.orig_height as u32,
@@ -159,16 +153,14 @@ pub fn read_to_etc1<P: AsRef<Path>>(path: P) -> Result<Vec<Image<u8>>> {
     }
 }
 
-pub fn read_to_etc2<P: AsRef<Path>>(path: P) -> Result<Vec<Image<u8>>> {
-    let buf = std::fs::read(path)?;
+pub fn read_to_etc2(buf: &[u8]) -> Result<Vec<Image<u8>>> {
+    let header = basis::read_header(buf)?;
 
-    let header = basis::read_header(&buf)?;
-
-    if !basis::check_file_checksum(&buf, &header) {
+    if !basis::check_file_checksum(buf, &header) {
         return Err("Data CRC16 failed".into());
     }
 
-    let slice_descs = basis::read_slice_descs(&buf, &header)?;
+    let slice_descs = basis::read_slice_descs(buf, &header)?;
 
     let format = header.texture_format()?;
     if format == TexFormat::UASTC4x4 {
@@ -176,8 +168,7 @@ pub fn read_to_etc2<P: AsRef<Path>>(path: P) -> Result<Vec<Image<u8>>> {
 
         let mut images = Vec::with_capacity(header.total_slices as usize);
         for slice_desc in &slice_descs {
-            let data =
-                decoder.transcode(uastc::TargetTextureFormat::Etc2, slice_desc.data(&buf))?;
+            let data = decoder.transcode(uastc::TargetTextureFormat::Etc2, slice_desc.data(buf))?;
             let image = Image {
                 w: slice_desc.orig_width as u32,
                 h: slice_desc.orig_height as u32,
@@ -192,23 +183,21 @@ pub fn read_to_etc2<P: AsRef<Path>>(path: P) -> Result<Vec<Image<u8>>> {
     }
 }
 
-pub fn read_to_uastc<P: AsRef<Path>>(path: P) -> Result<Vec<Image<u8>>> {
-    let buf = std::fs::read(path)?;
+pub fn read_to_uastc(buf: &[u8]) -> Result<Vec<Image<u8>>> {
+    let header = basis::read_header(buf)?;
 
-    let header = basis::read_header(&buf)?;
-
-    if !basis::check_file_checksum(&buf, &header) {
+    if !basis::check_file_checksum(buf, &header) {
         return Err("Data CRC16 failed".into());
     }
 
-    let slice_descs = basis::read_slice_descs(&buf, &header)?;
+    let slice_descs = basis::read_slice_descs(buf, &header)?;
 
     if header.texture_format()? == TexFormat::UASTC4x4 {
         let decoder = uastc::Decoder::new();
 
         let mut images = Vec::with_capacity(header.total_slices as usize);
         for slice_desc in &slice_descs {
-            let data = decoder.read_to_uastc(slice_desc.data(&buf))?;
+            let data = decoder.read_to_uastc(slice_desc.data(buf))?;
             let image = Image {
                 w: slice_desc.orig_width as u32,
                 h: slice_desc.orig_height as u32,
@@ -223,24 +212,21 @@ pub fn read_to_uastc<P: AsRef<Path>>(path: P) -> Result<Vec<Image<u8>>> {
     }
 }
 
-pub fn read_to_astc<P: AsRef<Path>>(path: P) -> Result<Vec<Image<u8>>> {
-    let buf = std::fs::read(path)?;
+pub fn read_to_astc(buf: &[u8]) -> Result<Vec<Image<u8>>> {
+    let header = basis::read_header(buf)?;
 
-    let header = basis::read_header(&buf)?;
-
-    if !basis::check_file_checksum(&buf, &header) {
+    if !basis::check_file_checksum(buf, &header) {
         return Err("Data CRC16 failed".into());
     }
 
-    let slice_descs = basis::read_slice_descs(&buf, &header)?;
+    let slice_descs = basis::read_slice_descs(buf, &header)?;
 
     if header.texture_format()? == TexFormat::UASTC4x4 {
         let decoder = uastc::Decoder::new();
 
         let mut images = Vec::with_capacity(header.total_slices as usize);
         for slice_desc in &slice_descs {
-            let data =
-                decoder.transcode(uastc::TargetTextureFormat::Astc, slice_desc.data(&buf))?;
+            let data = decoder.transcode(uastc::TargetTextureFormat::Astc, slice_desc.data(buf))?;
             let image = Image {
                 w: slice_desc.orig_width as u32,
                 h: slice_desc.orig_height as u32,
@@ -255,23 +241,21 @@ pub fn read_to_astc<P: AsRef<Path>>(path: P) -> Result<Vec<Image<u8>>> {
     }
 }
 
-pub fn read_to_bc7<P: AsRef<Path>>(path: P) -> Result<Vec<Image<u8>>> {
-    let buf = std::fs::read(path)?;
+pub fn read_to_bc7(buf: &[u8]) -> Result<Vec<Image<u8>>> {
+    let header = basis::read_header(buf)?;
 
-    let header = basis::read_header(&buf)?;
-
-    if !basis::check_file_checksum(&buf, &header) {
+    if !basis::check_file_checksum(buf, &header) {
         return Err("Data CRC16 failed".into());
     }
 
-    let slice_descs = basis::read_slice_descs(&buf, &header)?;
+    let slice_descs = basis::read_slice_descs(buf, &header)?;
 
     if header.texture_format()? == TexFormat::UASTC4x4 {
         let decoder = uastc::Decoder::new();
 
         let mut images = Vec::with_capacity(header.total_slices as usize);
         for slice_desc in &slice_descs {
-            let data = decoder.transcode(uastc::TargetTextureFormat::Bc7, slice_desc.data(&buf))?;
+            let data = decoder.transcode(uastc::TargetTextureFormat::Bc7, slice_desc.data(buf))?;
             let image = Image {
                 w: slice_desc.orig_width as u32,
                 h: slice_desc.orig_height as u32,

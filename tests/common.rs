@@ -48,6 +48,10 @@ impl TestCase {
             etc2_rgba: base.join(format!("{}{}", name, EXT_ETC2_RGBA)),
         }
     }
+
+    pub fn read_basis(&self) -> std::io::Result<Vec<u8>> {
+        std::fs::read(&self.basis)
+    }
 }
 
 pub fn iterate_textures_etc1s<F>(f: F)
