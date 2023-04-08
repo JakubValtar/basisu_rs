@@ -3,8 +3,7 @@ use super::*;
 fn test_uastc_mode(mode: usize) {
     let test_data = TEST_DATA_UASTC_ASTC[mode];
     for (uastc, expected_astc) in test_data.iter() {
-        let mut actual_astc = [0; 16];
-        astc::convert_block_from_uastc(uastc, &mut actual_astc).unwrap();
+        let actual_astc = astc::convert_block_from_uastc(*uastc).unwrap();
         assert_eq!(
             &actual_astc, expected_astc,
             "\n{:02X?}\n{:02X?}\n{:02X?}",

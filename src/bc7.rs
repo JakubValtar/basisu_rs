@@ -6,18 +6,17 @@ use crate::{
     Color32, Result,
 };
 
-pub fn convert_block_from_uastc(
-    bytes: &[u8; UASTC_BLOCK_SIZE],
-    output: &mut [u8; BC7_BLOCK_SIZE],
-) -> Result<()> {
-    let reader = &mut BitReaderLsb::new(bytes);
+pub fn convert_block_from_uastc(bytes: [u8; UASTC_BLOCK_SIZE]) -> Result<[u8; BC7_BLOCK_SIZE]> {
+    let mut reader = BitReaderLsb::new(&bytes);
 
-    let mode = uastc::decode_mode(reader)?;
+    let mode = uastc::decode_mode(&mut reader)?;
 
-    let writer = &mut BitWriterLsb::new(output);
+    let mut output = [0; BC7_BLOCK_SIZE];
+
+    let mut writer = BitWriterLsb::new(&mut output);
 
     if mode.id == 8 {
-        let rgba = uastc::decode_mode8_rgba(reader);
+        let rgba = uastc::decode_mode8_rgba(&mut reader);
 
         let (mode, endpoint, p_bits, weights) =
             convert_mode_8_to_bc7_mode_endpoint_p_bits_weights(rgba);
@@ -56,16 +55,16 @@ pub fn convert_block_from_uastc(
                 }
             }
         }
-        return Ok(());
+        return Ok(output);
     }
 
     let bc7_mode_index = UASTC_TO_BC7_MODES[mode.id as usize];
     let bc7_mode = BC7_MODES[bc7_mode_index as usize];
 
-    uastc::skip_trans_flags(reader, mode);
+    uastc::skip_trans_flags(&mut reader, mode);
 
-    let compsel = uastc::decode_compsel(reader, mode);
-    let uastc_pat = uastc::decode_pattern_index(reader, mode)?;
+    let compsel = uastc::decode_compsel(&mut reader, mode);
+    let uastc_pat = uastc::decode_pattern_index(&mut reader, mode)?;
 
     let bc7_plane_count = bc7_mode.plane_count as usize;
     let bc7_subset_count = bc7_mode.subset_count as usize;
@@ -75,7 +74,7 @@ pub fn convert_block_from_uastc(
     let mut endpoints = {
         let endpoint_count = mode.endpoint_count();
         let quant_endpoints =
-            uastc::decode_endpoints(reader, mode.endpoint_range_index, endpoint_count);
+            uastc::decode_endpoints(&mut reader, mode.endpoint_range_index, endpoint_count);
         let mut unquant_endpoints = [0; 18];
         for (quant, unquant) in quant_endpoints
             .iter()
@@ -90,12 +89,12 @@ pub fn convert_block_from_uastc(
     let mut weights = [[0; 16]; 2];
     {
         if mode.plane_count == 1 {
-            uastc::decode_weights(reader, mode, uastc_pat, |i, w| {
+            uastc::decode_weights(&mut reader, mode, uastc_pat, |i, w| {
                 weights[0][i] = w;
             });
             convert_weights_to_bc7(&mut weights[0], mode.weight_bits, bc7_mode.weight_bits);
         } else {
-            uastc::decode_weights(reader, mode, uastc_pat, |i, w| {
+            uastc::decode_weights(&mut reader, mode, uastc_pat, |i, w| {
                 let plane = i & 1;
                 let wi = i >> 1;
                 weights[plane][wi] = w;
@@ -308,7 +307,7 @@ pub fn convert_block_from_uastc(
         }
     }
 
-    Ok(())
+    Ok(output)
 }
 
 fn convert_mode_8_to_bc7_mode_endpoint_p_bits_weights(

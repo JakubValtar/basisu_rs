@@ -9,44 +9,46 @@ use crate::{
 };
 
 pub fn convert_etc1_block_from_uastc(
-    bytes: &[u8; UASTC_BLOCK_SIZE],
-    output: &mut [u8; ETC1_BLOCK_SIZE],
-) -> Result<()> {
-    convert_block_from_uastc(bytes, output, None)
+    bytes: [u8; UASTC_BLOCK_SIZE],
+) -> Result<[u8; ETC1_BLOCK_SIZE]> {
+    let mut output = [0; ETC1_BLOCK_SIZE];
+    convert_block_from_uastc(bytes, &mut output, None)?;
+    Ok(output)
 }
 
 pub fn convert_etc2_block_from_uastc(
-    bytes: &[u8; UASTC_BLOCK_SIZE],
-    output: &mut [u8; ETC2_BLOCK_SIZE],
-) -> Result<()> {
+    bytes: [u8; UASTC_BLOCK_SIZE],
+) -> Result<[u8; ETC2_BLOCK_SIZE]> {
+    let mut output = [0; ETC2_BLOCK_SIZE];
     let (alpha, rgb) = output.split_at_mut(8);
     convert_block_from_uastc(
         bytes,
         rgb.try_into().unwrap(),
         Some(alpha.try_into().unwrap()),
-    )
+    )?;
+    Ok(output)
 }
 
 fn convert_block_from_uastc(
-    bytes: &[u8],
+    bytes: [u8; UASTC_BLOCK_SIZE],
     output: &mut [u8; 8],
     alpha: Option<&mut [u8; 8]>,
 ) -> Result<()> {
-    let reader = &mut BitReaderLsb::new(bytes);
+    let mut reader = BitReaderLsb::new(&bytes);
 
-    let mode = uastc::decode_mode(reader)?;
+    let mode = uastc::decode_mode(&mut reader)?;
 
-    let writer = &mut BitWriterLsb::new(output);
+    let mut writer = BitWriterLsb::new(output);
 
     if mode.id == 8 {
         if let Some(alpha) = alpha {
-            let rgba = uastc::decode_mode8_rgba(reader);
+            let rgba = uastc::decode_mode8_rgba(&mut reader);
             write_solid_etc2_alpha_block(alpha, rgba[3]);
         } else {
-            uastc::skip_mode8_rgba(reader);
+            uastc::skip_mode8_rgba(&mut reader);
         }
 
-        let trans_flags = uastc::decode_mode8_etc1_flags(reader);
+        let trans_flags = uastc::decode_mode8_etc1_flags(&mut reader);
 
         if !trans_flags.etc1d {
             writer.write_u8(8, trans_flags.etc1r << 4 | trans_flags.etc1r);
@@ -73,7 +75,7 @@ fn convert_block_from_uastc(
         return Ok(());
     }
 
-    let trans_flags = uastc::decode_trans_flags(reader, mode);
+    let trans_flags = uastc::decode_trans_flags(&mut reader, mode);
 
     let mut rgba = uastc::decode_block_to_rgba(bytes)?;
 

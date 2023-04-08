@@ -17,8 +17,7 @@ impl<'a> fmt::Display for U8ArrayBinPrint<'a> {
 fn test_uastc_mode(mode: usize) {
     let test_data = TEST_DATA_UASTC_ETC1[mode];
     for (uastc, expected_etc1) in test_data.iter() {
-        let mut actual_etc1 = [0; 8];
-        etc::convert_etc1_block_from_uastc(uastc, &mut actual_etc1).unwrap();
+        let actual_etc1 = etc::convert_etc1_block_from_uastc(*uastc).unwrap();
         assert_eq!(
             &actual_etc1,
             expected_etc1,

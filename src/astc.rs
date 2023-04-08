@@ -5,18 +5,17 @@ use crate::{
     Result,
 };
 
-pub fn convert_block_from_uastc(
-    bytes: &[u8; UASTC_BLOCK_SIZE],
-    output: &mut [u8; ASTC_BLOCK_SIZE],
-) -> Result<()> {
-    let reader = &mut BitReaderLsb::new(bytes);
+pub fn convert_block_from_uastc(bytes: [u8; UASTC_BLOCK_SIZE]) -> Result<[u8; ASTC_BLOCK_SIZE]> {
+    let mut reader = BitReaderLsb::new(&bytes);
 
-    let mode = uastc::decode_mode(reader)?;
+    let mode = uastc::decode_mode(&mut reader)?;
 
-    let writer = &mut BitWriterLsb::new(output);
+    let mut output = [0; ASTC_BLOCK_SIZE];
+
+    let mut writer = BitWriterLsb::new(&mut output);
 
     if mode.id == 8 {
-        let rgba = uastc::decode_mode8_rgba(reader);
+        let rgba = uastc::decode_mode8_rgba(&mut reader);
 
         // 0..=8: void-extent signature
         // 9: 0 means endpoints are UNORM16, 1 means FP16
@@ -40,18 +39,18 @@ pub fn convert_block_from_uastc(
         writer.write_u16(16, b << 8 | b);
         writer.write_u16(16, a << 8 | a);
 
-        return Ok(());
+        return Ok(output);
     }
 
-    uastc::skip_trans_flags(reader, mode);
+    uastc::skip_trans_flags(&mut reader, mode);
 
-    let compsel = uastc::decode_compsel(reader, mode);
-    let pat = uastc::decode_pattern_index(reader, mode)?;
+    let compsel = uastc::decode_compsel(&mut reader, mode);
+    let pat = uastc::decode_pattern_index(&mut reader, mode)?;
 
     let endpoint_count = mode.endpoint_count();
 
     let mut quant_endpoints =
-        uastc::decode_endpoints(reader, mode.endpoint_range_index, endpoint_count);
+        uastc::decode_endpoints(&mut reader, mode.endpoint_range_index, endpoint_count);
 
     let mut invert_subset_weights = [false, false, false];
 
@@ -144,19 +143,19 @@ pub fn convert_block_from_uastc(
 
     {
         // Write the weights and CCS which is filled from the end
-        let writer_rev = &mut BitWriterMsbRevBytes::new(output);
+        let mut writer_rev = BitWriterMsbRevBytes::new(&mut output);
 
         if mode.subset_count == 1 {
             if invert_subset_weights[0] {
                 let weight_consumer = |_, weight: u8| {
                     writer_rev.write_u8_rev_bits(mode.weight_bits as usize, !weight);
                 };
-                uastc::decode_weights(reader, mode, pat, weight_consumer);
+                uastc::decode_weights(&mut reader, mode, pat, weight_consumer);
             } else {
                 let weight_consumer = |_, weight: u8| {
                     writer_rev.write_u8_rev_bits(mode.weight_bits as usize, weight);
                 };
-                uastc::decode_weights(reader, mode, pat, weight_consumer);
+                uastc::decode_weights(&mut reader, mode, pat, weight_consumer);
             };
         } else {
             let pattern = uastc::get_pattern(mode, pat);
@@ -170,7 +169,7 @@ pub fn convert_block_from_uastc(
                     writer_rev.write_u8_rev_bits(mode.weight_bits as usize, weight);
                 }
             };
-            uastc::decode_weights(reader, mode, pat, weight_consumer);
+            uastc::decode_weights(&mut reader, mode, pat, weight_consumer);
         }
 
         if mode.plane_count > 1 {
@@ -179,7 +178,7 @@ pub fn convert_block_from_uastc(
         }
     }
 
-    Ok(())
+    Ok(output)
 }
 
 static PATTERNS_2_ASTC_INDEX_10: [u16; uastc::TOTAL_ASTC_BC7_COMMON_PARTITIONS2] = [
