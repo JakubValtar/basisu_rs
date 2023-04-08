@@ -31,3 +31,4 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - run: cargo test --lib
+      - run: cd tests/no_std && cargo test

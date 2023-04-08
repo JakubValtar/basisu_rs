@@ -1,14 +1,15 @@
+use alloc::{vec, vec::Vec};
+use core::ops::{Index, IndexMut};
+
+mod huffman;
+
+use self::huffman::HuffmanDecodingTable;
 use crate::{
     bitreader::BitReaderLsb,
     mask,
     target_formats::etc::{self, Selector},
     Color32, Result,
 };
-use std::ops::{Index, IndexMut};
-
-mod huffman;
-
-use self::huffman::HuffmanDecodingTable;
 
 const ENDPOINT_PRED_TOTAL_SYMBOLS: u16 = (4 * 4 * 4 * 4) + 1;
 const ENDPOINT_PRED_REPEAT_LAST_SYMBOL: u16 = ENDPOINT_PRED_TOTAL_SYMBOLS - 1;

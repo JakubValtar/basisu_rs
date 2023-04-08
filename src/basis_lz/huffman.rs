@@ -1,8 +1,8 @@
 #![allow(non_upper_case_globals)]
 
-use crate::bitreader::BitReaderLsb;
+use alloc::{format, vec, vec::Vec};
 
-use crate::Result;
+use crate::{bitreader::BitReaderLsb, Result};
 
 // Max supported Huffman code size is 16-bits
 const MaxSupportedCodeSize: usize = 16;
@@ -72,11 +72,11 @@ pub fn read_huffman_table(reader: &mut BitReaderLsb) -> Result<HuffmanDecodingTa
             }
             SmallZeroRunCode => {
                 let count = SmallZeroRunSizeMin + reader.read_u32(SmallZeroRunExtraBits) as usize;
-                symbol_code_sizes.extend(std::iter::repeat(0).take(count));
+                symbol_code_sizes.extend(core::iter::repeat(0).take(count));
             }
             BigZeroRunCode => {
                 let count = BigZeroRunSizeMin + reader.read_u32(BigZeroRunExtraBits) as usize;
-                symbol_code_sizes.extend(std::iter::repeat(0).take(count));
+                symbol_code_sizes.extend(core::iter::repeat(0).take(count));
             }
             SmallRepeatCode => {
                 let prev_sym_code_size = symbol_code_sizes
@@ -150,7 +150,7 @@ impl HuffmanDecodingTable {
 
         let mut lookup = vec![HuffmanTableEntry::default(); 1 << max_code_size];
 
-        let code_width = std::mem::size_of_val(&next_code[0]) * 8;
+        let code_width = core::mem::size_of_val(&next_code[0]) * 8;
 
         for (symbol, code_size) in code_sizes
             .iter()
@@ -193,8 +193,7 @@ impl HuffmanDecodingTable {
             Err(format!(
                 "No matching code found in the decoding table, bits: {:016b}",
                 bits
-            )
-            .into())
+            ))
         }
     }
 }

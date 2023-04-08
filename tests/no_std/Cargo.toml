@@ -1,0 +1,12 @@
+[package]
+name = "basisu_no_std_test"
+version = "0.0.0"
+authors = ["Jakub Valtar <jakub.valtar@gmail.com>"]
+edition = "2021"
+publish = false
+
+[lib]
+path = "test.rs"
+
+[dependencies]
+basisu = { path = "../..", default-features = false }

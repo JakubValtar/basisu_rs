@@ -226,7 +226,7 @@ pub fn convert_block_from_uastc(bytes: [u8; UASTC_BLOCK_SIZE]) -> Result<[u8; BC
             }
             if invert_plane[0] != invert_plane[1] {
                 let [e0, e1] = endpoint_pair;
-                std::mem::swap(&mut e0[ALPHA_CHANNEL], &mut e1[ALPHA_CHANNEL]);
+                core::mem::swap(&mut e0[ALPHA_CHANNEL], &mut e1[ALPHA_CHANNEL]);
             }
 
             for (&inv, weight_plane) in invert_plane.iter().zip(weights.iter_mut()) {

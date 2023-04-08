@@ -1,4 +1,5 @@
-use std::convert::TryInto;
+use alloc::{vec, vec::Vec};
+use core::convert::TryInto;
 
 use crate::{
     bitreader::BitReaderLsb,
@@ -88,7 +89,7 @@ impl<'a> Blocks<'a> {
         &'s self,
         output: &'b mut [u8],
     ) -> impl Iterator<Item = ([u8; UASTC_BLOCK_SIZE], &'b mut [u8; N])> + 's {
-        std::iter::zip(self.iter(), block_iter_mut(output))
+        core::iter::zip(self.iter(), block_iter_mut(output))
     }
 }
 

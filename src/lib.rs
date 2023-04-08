@@ -1,7 +1,13 @@
 #![forbid(unsafe_code)]
+#![cfg_attr(not(feature = "std"), no_std)]
 
-use std::fmt;
-use std::ops::{Index, IndexMut};
+extern crate alloc;
+
+use alloc::{vec, vec::Vec};
+use core::{
+    fmt,
+    ops::{Index, IndexMut},
+};
 
 mod basis;
 mod basis_lz;
@@ -11,10 +17,10 @@ mod bytereader;
 mod target_formats;
 mod uastc;
 
-use basis::{Header, TexFormat, TextureType};
+use self::basis::{Header, TexFormat, TextureType};
 
-type Error = Box<dyn std::error::Error>;
-type Result<T> = std::result::Result<T, Error>;
+type Error = alloc::string::String;
+type Result<T> = core::result::Result<T, Error>;
 
 pub fn read_to_rgba(buf: &[u8]) -> Result<(Header, Vec<Image<u8>>)> {
     let header = basis::read_header(buf)?;

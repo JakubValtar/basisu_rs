@@ -1,7 +1,9 @@
-use crate::{bytereader::ByteReaderLE, Error, Result};
+use alloc::{format, vec::Vec};
+use core::convert::TryFrom;
 
 use byteorder::{ByteOrder, LE};
-use std::convert::TryFrom;
+
+use crate::{bytereader::ByteReaderLE, Error, Result};
 
 pub const SIG: u16 = 0x4273;
 
@@ -20,8 +22,7 @@ pub fn read_header(bytes: &[u8]) -> Result<Header> {
             "Expected at least {} byte header, got {} bytes",
             Header::FILE_SIZE,
             bytes.len()
-        )
-        .into());
+        ));
     }
 
     let header = Header::from_file_bytes(bytes);
@@ -31,8 +32,7 @@ pub fn read_header(bytes: &[u8]) -> Result<Header> {
             "File specified unexpected header size, expected {}, got {}",
             Header::FILE_SIZE,
             header.header_size
-        )
-        .into());
+        ));
     }
 
     let header_crc16 = crc16(&bytes[8..Header::FILE_SIZE], 0);
@@ -61,7 +61,7 @@ pub fn read_slice_descs(bytes: &[u8], header: &Header) -> Result<Vec<SliceDesc>>
                 slice_start,
                 bytes.len() - slice_start
             );
-            return Err(message.into());
+            return Err(message);
         }
         let slice_desc = SliceDesc::from_file_bytes(&bytes[slice_start..]);
         res.push(slice_desc);
