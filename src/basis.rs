@@ -3,7 +3,299 @@ use core::convert::TryFrom;
 
 use byteorder::{ByteOrder, LE};
 
-use crate::{bytereader::ByteReaderLE, Error, Result};
+use crate::{basis_lz, bytereader::ByteReaderLE, uastc, Error, Image, Result};
+
+pub fn read_to_rgba(buf: &[u8]) -> Result<(Header, Vec<Image<u8>>)> {
+    let header = read_header(buf)?;
+
+    if !check_file_checksum(buf, &header) {
+        return Err("Data CRC16 failed".into());
+    }
+
+    let slice_descs = read_slice_descs(buf, &header)?;
+
+    if header.texture_format()? == TexFormat::ETC1S {
+        if header.has_alpha() && (header.total_slices % 2) != 0 {
+            return Err("File has alpha, but slice count is odd".into());
+        }
+
+        let decoder = make_basis_lz_decoder(&header, buf)?;
+
+        if header.has_alpha() {
+            let mut images = Vec::with_capacity(header.total_slices as usize / 2);
+            for slice_desc in slice_descs.chunks_exact(2) {
+                let rgb_desc = &slice_desc[0];
+                let alpha_desc = &slice_desc[1];
+                if !alpha_desc.has_alpha() {
+                    return Err("Expected slice with alpha".into());
+                }
+                if alpha_desc.num_blocks_x != rgb_desc.num_blocks_x
+                    || alpha_desc.num_blocks_y != rgb_desc.num_blocks_y
+                {
+                    return Err("RGB slice and Alpha slice have different dimensions".into());
+                }
+                let data = decoder.decode_to_rgba(
+                    rgb_desc.num_blocks_x,
+                    rgb_desc.num_blocks_y,
+                    rgb_desc.data(buf),
+                    Some(alpha_desc.data(buf)),
+                )?;
+                let image = Image {
+                    w: rgb_desc.orig_width as u32,
+                    h: rgb_desc.orig_height as u32,
+                    stride: 4 * rgb_desc.orig_width as u32,
+                    data,
+                };
+                images.push(image.into_rgba_bytes());
+            }
+            Ok((header, images))
+        } else {
+            let mut images = Vec::with_capacity(header.total_slices as usize);
+            for slice_desc in &slice_descs {
+                let data = decoder.decode_to_rgba(
+                    slice_desc.num_blocks_x,
+                    slice_desc.num_blocks_y,
+                    slice_desc.data(buf),
+                    None,
+                )?;
+                let image = Image {
+                    w: slice_desc.orig_width as u32,
+                    h: slice_desc.orig_height as u32,
+                    stride: 4 * slice_desc.orig_width as u32,
+                    data,
+                };
+                images.push(image.into_rgba_bytes());
+            }
+            Ok((header, images))
+        }
+    } else if header.texture_format()? == TexFormat::UASTC4x4 {
+        let decoder = uastc::Decoder::new();
+
+        let mut images = Vec::with_capacity(header.total_slices as usize);
+        for slice_desc in &slice_descs {
+            let data =
+                decoder.decode_to_rgba(slice_desc.data(buf), slice_desc.num_blocks_x as usize)?;
+            let image = Image {
+                w: slice_desc.orig_width as u32,
+                h: slice_desc.orig_height as u32,
+                stride: 4 * slice_desc.num_blocks_x as u32,
+                data,
+            };
+            images.push(image.into_rgba_bytes());
+        }
+        Ok((header, images))
+    } else {
+        unimplemented!();
+    }
+}
+
+pub fn read_to_etc1(buf: &[u8]) -> Result<Vec<Image<u8>>> {
+    let header = read_header(buf)?;
+
+    if !check_file_checksum(buf, &header) {
+        return Err("Data CRC16 failed".into());
+    }
+
+    let slice_descs = read_slice_descs(buf, &header)?;
+
+    let format = header.texture_format()?;
+    if format == TexFormat::ETC1S {
+        if header.has_alpha() && (header.total_slices % 2) != 0 {
+            return Err("File has alpha, but slice count is odd".into());
+        }
+
+        let decoder = make_basis_lz_decoder(&header, buf)?;
+
+        let mut images = Vec::with_capacity(header.total_slices as usize);
+        for slice_desc in &slice_descs {
+            let data = decoder.transcode_to_etc1(
+                slice_desc.num_blocks_x,
+                slice_desc.num_blocks_y,
+                slice_desc.data(buf),
+            )?;
+            let image = Image {
+                w: slice_desc.orig_width as u32,
+                h: slice_desc.orig_height as u32,
+                stride: basis_lz::ETC1S_BLOCK_SIZE as u32 * slice_desc.num_blocks_x as u32,
+                data,
+            };
+            images.push(image);
+        }
+        Ok(images)
+    } else if format == TexFormat::UASTC4x4 {
+        let decoder = uastc::Decoder::new();
+
+        let mut images = Vec::with_capacity(header.total_slices as usize);
+        for slice_desc in &slice_descs {
+            let data = decoder.transcode(uastc::TargetTextureFormat::Etc1, slice_desc.data(buf))?;
+            let image = Image {
+                w: slice_desc.orig_width as u32,
+                h: slice_desc.orig_height as u32,
+                stride: uastc::ETC1_BLOCK_SIZE as u32 * slice_desc.num_blocks_x as u32,
+                data,
+            };
+            images.push(image);
+        }
+        Ok(images)
+    } else {
+        unimplemented!();
+    }
+}
+
+pub fn read_to_etc2(buf: &[u8]) -> Result<Vec<Image<u8>>> {
+    let header = read_header(buf)?;
+
+    if !check_file_checksum(buf, &header) {
+        return Err("Data CRC16 failed".into());
+    }
+
+    let slice_descs = read_slice_descs(buf, &header)?;
+
+    let format = header.texture_format()?;
+    if format == TexFormat::UASTC4x4 {
+        let decoder = uastc::Decoder::new();
+
+        let mut images = Vec::with_capacity(header.total_slices as usize);
+        for slice_desc in &slice_descs {
+            let data = decoder.transcode(uastc::TargetTextureFormat::Etc2, slice_desc.data(buf))?;
+            let image = Image {
+                w: slice_desc.orig_width as u32,
+                h: slice_desc.orig_height as u32,
+                stride: uastc::ETC2_BLOCK_SIZE as u32 * slice_desc.num_blocks_x as u32,
+                data,
+            };
+            images.push(image);
+        }
+        Ok(images)
+    } else {
+        unimplemented!();
+    }
+}
+
+pub fn read_to_uastc(buf: &[u8]) -> Result<Vec<Image<u8>>> {
+    let header = read_header(buf)?;
+
+    if !check_file_checksum(buf, &header) {
+        return Err("Data CRC16 failed".into());
+    }
+
+    let slice_descs = read_slice_descs(buf, &header)?;
+
+    if header.texture_format()? == TexFormat::UASTC4x4 {
+        let decoder = uastc::Decoder::new();
+
+        let mut images = Vec::with_capacity(header.total_slices as usize);
+        for slice_desc in &slice_descs {
+            let data = decoder.read_to_uastc(slice_desc.data(buf))?;
+            let image = Image {
+                w: slice_desc.orig_width as u32,
+                h: slice_desc.orig_height as u32,
+                stride: uastc::UASTC_BLOCK_SIZE as u32 * slice_desc.num_blocks_x as u32,
+                data,
+            };
+            images.push(image);
+        }
+        Ok(images)
+    } else {
+        unimplemented!();
+    }
+}
+
+pub fn read_to_astc(buf: &[u8]) -> Result<Vec<Image<u8>>> {
+    let header = read_header(buf)?;
+
+    if !check_file_checksum(buf, &header) {
+        return Err("Data CRC16 failed".into());
+    }
+
+    let slice_descs = read_slice_descs(buf, &header)?;
+
+    if header.texture_format()? == TexFormat::UASTC4x4 {
+        let decoder = uastc::Decoder::new();
+
+        let mut images = Vec::with_capacity(header.total_slices as usize);
+        for slice_desc in &slice_descs {
+            let data = decoder.transcode(uastc::TargetTextureFormat::Astc, slice_desc.data(buf))?;
+            let image = Image {
+                w: slice_desc.orig_width as u32,
+                h: slice_desc.orig_height as u32,
+                stride: uastc::ASTC_BLOCK_SIZE as u32 * slice_desc.num_blocks_x as u32,
+                data,
+            };
+            images.push(image);
+        }
+        Ok(images)
+    } else {
+        unimplemented!();
+    }
+}
+
+pub fn read_to_bc7(buf: &[u8]) -> Result<Vec<Image<u8>>> {
+    let header = read_header(buf)?;
+
+    if !check_file_checksum(buf, &header) {
+        return Err("Data CRC16 failed".into());
+    }
+
+    let slice_descs = read_slice_descs(buf, &header)?;
+
+    if header.texture_format()? == TexFormat::UASTC4x4 {
+        let decoder = uastc::Decoder::new();
+
+        let mut images = Vec::with_capacity(header.total_slices as usize);
+        for slice_desc in &slice_descs {
+            let data = decoder.transcode(uastc::TargetTextureFormat::Bc7, slice_desc.data(buf))?;
+            let image = Image {
+                w: slice_desc.orig_width as u32,
+                h: slice_desc.orig_height as u32,
+                stride: uastc::BC7_BLOCK_SIZE as u32 * slice_desc.num_blocks_x as u32,
+                data,
+            };
+            images.push(image);
+        }
+        Ok(images)
+    } else {
+        unimplemented!();
+    }
+}
+
+fn make_basis_lz_decoder(header: &Header, bytes: &[u8]) -> Result<basis_lz::Decoder> {
+    let endpoints = {
+        let start = header.endpoint_cb_file_ofs as usize;
+        let len = header.endpoint_cb_file_size as usize;
+        &bytes[start..start + len]
+    };
+
+    let selectors = {
+        let start = header.selector_cb_file_ofs as usize;
+        let len = header.selector_cb_file_size as usize;
+        &bytes[start..start + len]
+    };
+
+    let tables = {
+        let start = header.tables_file_ofs as usize;
+        let len = header.tables_file_size as usize;
+        &bytes[start..start + len]
+    };
+
+    let extended = {
+        let start = header.extended_file_ofs as usize;
+        let len = header.extended_file_size as usize;
+        &bytes[start..start + len]
+    };
+
+    let is_video = header.tex_type == TextureType::VideoFrames as u8;
+
+    basis_lz::Decoder::new(
+        header.total_selectors,
+        header.total_selectors,
+        endpoints,
+        selectors,
+        tables,
+        extended,
+        is_video,
+    )
+}
 
 pub const SIG: u16 = 0x4273;
 
