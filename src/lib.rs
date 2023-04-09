@@ -18,9 +18,36 @@ pub use basis::{
     read_to_astc, read_to_bc7, read_to_etc1, read_to_etc2, read_to_rgba, read_to_uastc, Header,
 };
 use color::Color32;
+use uastc::{ASTC_BLOCK_SIZE, BC7_BLOCK_SIZE, ETC1_BLOCK_SIZE, ETC2_BLOCK_SIZE, UASTC_BLOCK_SIZE};
 
 type Error = alloc::string::String;
 type Result<T> = core::result::Result<T, Error>;
+
+pub fn unpack_uastc_block_to_rgba(data: [u8; UASTC_BLOCK_SIZE]) -> Result<[u32; 16]> {
+    uastc::decode_block_to_rgba(data).map(|b| b.map(|c| c.to_rgba_u32()))
+}
+
+pub fn transcode_uastc_block_to_astc(
+    data: [u8; UASTC_BLOCK_SIZE],
+) -> Result<[u8; ASTC_BLOCK_SIZE]> {
+    target_formats::astc::convert_block_from_uastc(data)
+}
+
+pub fn transcode_uastc_block_to_bc7(data: [u8; UASTC_BLOCK_SIZE]) -> Result<[u8; BC7_BLOCK_SIZE]> {
+    target_formats::bc7::convert_block_from_uastc(data)
+}
+
+pub fn transcode_uastc_block_to_etc1(
+    data: [u8; UASTC_BLOCK_SIZE],
+) -> Result<[u8; ETC1_BLOCK_SIZE]> {
+    target_formats::etc::convert_etc1_block_from_uastc(data)
+}
+
+pub fn transcode_uastc_block_to_etc2(
+    data: [u8; UASTC_BLOCK_SIZE],
+) -> Result<[u8; ETC2_BLOCK_SIZE]> {
+    target_formats::etc::convert_etc2_block_from_uastc(data)
+}
 
 #[doc(hidden)]
 #[macro_export]

@@ -7,21 +7,6 @@ use crate::{
     Color32, Result,
 };
 
-#[cfg(test)]
-mod tests_to_rgba;
-
-#[cfg(test)]
-mod tests_to_astc;
-
-#[cfg(test)]
-mod tests_to_bc7;
-
-#[cfg(test)]
-mod tests_to_etc1;
-
-#[cfg(test)]
-mod tests_to_etc2;
-
 const MAX_ENDPOINT_COUNT: usize = 18;
 const MAX_WEIGHT_COUNT: usize = 32;
 
