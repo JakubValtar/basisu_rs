@@ -33,24 +33,24 @@ pub const BC7_BLOCK_SIZE: usize = 16;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Mode8Etc1Flags {
-    pub etc1d: bool,
-    pub etc1i: u8,
-    pub etc1s: u8,
-    pub etc1r: u8,
-    pub etc1g: u8,
-    pub etc1b: u8,
+    pub etc1d: bool, // 1 bit
+    pub etc1i: u8,   // 3 bits
+    pub etc1s: u8,   // 2 bits
+    pub etc1r: u8,   // 5 bits
+    pub etc1g: u8,   // 5 bits
+    pub etc1b: u8,   // 5 bits
 }
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct TranscodingFlags {
-    pub bc1h0: bool,
-    pub bc1h1: bool,
-    pub etc1f: bool,
-    pub etc1d: bool,
-    pub etc1i0: u8,
-    pub etc1i1: u8,
-    pub etc1bias: Option<u8>,
-    pub etc2tm: u8,
+    pub bc1h0: bool,          // 1 bit
+    pub bc1h1: bool,          // 1 bit
+    pub etc1f: bool,          // 1 bit
+    pub etc1d: bool,          // 1 bit
+    pub etc1i0: u8,           // 3 bits
+    pub etc1i1: u8,           // 3 bits
+    pub etc1bias: Option<u8>, // 5 bits
+    pub etc2tm: u8,           // 8 bits
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
