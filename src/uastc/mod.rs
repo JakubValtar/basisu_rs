@@ -41,7 +41,7 @@ pub struct Mode8Etc1Flags {
     pub etc1b: u8,   // 5 bits
 }
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug)]
 pub struct TranscodingFlags {
     pub bc1h0: bool,          // 1 bit
     pub bc1h1: bool,          // 1 bit
