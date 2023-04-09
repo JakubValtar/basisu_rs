@@ -333,11 +333,10 @@ pub fn decode_mode(reader: &mut BitReaderLsb) -> Result<Mode> {
     let mode_code = reader.peek(7) as usize;
     let mode_index = MODE_LUT[mode_code] as usize;
 
-    if mode_index >= 19 {
-        return Err("invalid mode index".into());
-    }
-
-    let mode = MODES[mode_index];
+    let mode = MODES
+        .get(mode_index)
+        .copied()
+        .ok_or_else(|| String::from("invalid mode index"))?;
 
     reader.remove(mode.code_size as usize);
 
@@ -500,7 +499,7 @@ pub enum Format {
 }
 
 #[rustfmt::skip]
-static MODES: [Mode; 20] = [
+static MODES: [Mode; 19] = [
     // RGB
     Mode { id:  0, code_size: 4, endpoint_range_index: 19, format: Format::Rgb,  weight_bits: 4, plane_count: 1, subset_count: 1, trans_flags_bits: 15 },
     Mode { id:  1, code_size: 6, endpoint_range_index: 20, format: Format::Rgb,  weight_bits: 2, plane_count: 1, subset_count: 1, trans_flags_bits: 15 },
@@ -529,8 +528,6 @@ static MODES: [Mode; 20] = [
 
     // RGB
     Mode { id: 18, code_size: 4, endpoint_range_index: 11, format: Format::Rgb,  weight_bits: 5, plane_count: 1, subset_count: 1, trans_flags_bits: 15 },
-
-    Mode { id: 19, code_size: 7, endpoint_range_index:  0, format: Format::Rgb,  weight_bits: 0, plane_count: 0, subset_count: 0, trans_flags_bits:  0 }, // reserved
 ];
 
 #[rustfmt::skip]
