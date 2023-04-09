@@ -110,8 +110,14 @@ fn convert_block_from_uastc(
         }
     }
 
-    let c0 = apply_etc1_bias(avg_colors[0], trans_flags.etc1bias, limit, 0);
-    let c1 = apply_etc1_bias(avg_colors[1], trans_flags.etc1bias, limit, 1);
+    let [c0, c1] = if let Some(bias) = trans_flags.etc1bias {
+        [
+            apply_etc1_bias(avg_colors[0], bias, limit, 0),
+            apply_etc1_bias(avg_colors[1], bias, limit, 1),
+        ]
+    } else {
+        avg_colors
+    };
 
     let block_colors = if !trans_flags.etc1d {
         writer.write_u8(8, c0[0] << 4 | c1[0]);
@@ -195,10 +201,6 @@ fn convert_block_from_uastc(
 }
 
 fn apply_etc1_bias(mut block_color: Color32, bias: u8, limit: u32, subblock: u32) -> Color32 {
-    if bias == uastc::TranscodingFlags::ETC1BIAS_NONE {
-        return block_color;
-    }
-
     const S_DIVS: [u8; 3] = [1, 3, 9];
 
     for c in 0..3 {

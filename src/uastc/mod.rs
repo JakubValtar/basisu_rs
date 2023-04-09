@@ -49,12 +49,8 @@ pub struct TranscodingFlags {
     pub etc1d: bool,
     pub etc1i0: u8,
     pub etc1i1: u8,
-    pub etc1bias: u8,
+    pub etc1bias: Option<u8>,
     pub etc2tm: u8,
-}
-
-impl TranscodingFlags {
-    pub const ETC1BIAS_NONE: u8 = 0xFF;
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -430,9 +426,9 @@ pub fn decode_trans_flags(reader: &mut BitReaderLsb, mode: Mode) -> TranscodingF
         etc1i0: reader.read_u8(3),
         etc1i1: reader.read_u8(3),
         etc1bias: if (10..=12).contains(&mode.id) {
-            TranscodingFlags::ETC1BIAS_NONE
+            None
         } else {
-            reader.read_u8(5)
+            Some(reader.read_u8(5))
         },
         etc2tm: if mode.has_alpha() {
             reader.read_u8(8)
