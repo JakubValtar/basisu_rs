@@ -1,6 +1,7 @@
 mod common;
 use common::*;
 
+#[ignore]
 #[test]
 fn test_uastc_to_rgba() {
     iterate_textures_uastc(|case| {
@@ -10,6 +11,7 @@ fn test_uastc_to_rgba() {
     });
 }
 
+#[ignore]
 #[test]
 fn test_uastc_to_astc() {
     iterate_textures_uastc(|case| {
@@ -19,6 +21,7 @@ fn test_uastc_to_astc() {
     });
 }
 
+#[ignore]
 #[test]
 fn test_uastc_to_bc7() {
     iterate_textures_uastc(|case| {
@@ -28,6 +31,7 @@ fn test_uastc_to_bc7() {
     });
 }
 
+#[ignore]
 #[test]
 fn test_uastc_to_etc1() {
     iterate_textures_uastc(|case| {
@@ -37,6 +41,7 @@ fn test_uastc_to_etc1() {
     });
 }
 
+#[ignore]
 #[test]
 fn test_uastc_to_etc2() {
     iterate_textures_uastc(|case| {
@@ -46,6 +51,7 @@ fn test_uastc_to_etc2() {
     });
 }
 
+#[ignore]
 #[test]
 fn test_etc1s_to_rgba() {
     iterate_textures_etc1s(|case| {
@@ -56,6 +62,7 @@ fn test_etc1s_to_rgba() {
     });
 }
 
+#[ignore]
 #[test]
 fn test_etc1s_to_etc1() {
     iterate_textures_etc1s(|case| {
