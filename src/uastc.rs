@@ -240,7 +240,8 @@ pub(crate) fn decode_block_to_rgba(bytes: [u8; UASTC_BLOCK_SIZE]) -> Result<[Col
     let mode = decode_mode(reader)?;
 
     if mode.id == 8 {
-        return Ok([decode_mode8_rgba(reader); 16]);
+        let block = Mode8Block::decode(reader);
+        return Ok([block.rgba(); 16]);
     }
 
     skip_trans_flags(reader, mode);
@@ -378,16 +379,7 @@ fn get_anchor_weight_indices(mode: Mode, pat: u8) -> &'static [u8] {
 }
 
 pub(crate) fn decode_mode8_rgba(reader: &mut BitReaderLsb) -> Color32 {
-    Color32::new(
-        reader.read_u8(8), // R
-        reader.read_u8(8), // G
-        reader.read_u8(8), // B
-        reader.read_u8(8), // A
-    )
-}
-
-pub fn skip_mode8_rgba(reader: &mut BitReaderLsb) {
-    reader.remove(32);
+    Color32::from_rgba_u32(reader.read_u32(32))
 }
 
 pub fn decode_mode8_etc1_flags(reader: &mut BitReaderLsb) -> Mode8Etc1Flags {
@@ -437,6 +429,8 @@ pub fn skip_trans_flags(reader: &mut BitReaderLsb, mode: Mode) {
 pub struct Mode {
     pub id: u8,
     code_size: u8,
+    #[allow(dead_code)]
+    code: u8,
     pub endpoint_range_index: u8,
     pub format: Format,
     pub weight_bits: u8,
@@ -487,33 +481,33 @@ pub enum Format {
 #[rustfmt::skip]
 static MODES: [Mode; 19] = [
     // RGB
-    Mode { id:  0, code_size: 4, endpoint_range_index: 19, format: Format::Rgb,  weight_bits: 4, plane_count: 1, subset_count: 1, trans_flags_bits: 15 },
-    Mode { id:  1, code_size: 6, endpoint_range_index: 20, format: Format::Rgb,  weight_bits: 2, plane_count: 1, subset_count: 1, trans_flags_bits: 15 },
-    Mode { id:  2, code_size: 5, endpoint_range_index:  8, format: Format::Rgb,  weight_bits: 3, plane_count: 1, subset_count: 2, trans_flags_bits: 15 },
-    Mode { id:  3, code_size: 5, endpoint_range_index:  7, format: Format::Rgb,  weight_bits: 2, plane_count: 1, subset_count: 3, trans_flags_bits: 15 },
-    Mode { id:  4, code_size: 5, endpoint_range_index: 12, format: Format::Rgb,  weight_bits: 2, plane_count: 1, subset_count: 2, trans_flags_bits: 15 },
-    Mode { id:  5, code_size: 5, endpoint_range_index: 20, format: Format::Rgb,  weight_bits: 3, plane_count: 1, subset_count: 1, trans_flags_bits: 15 },
-    Mode { id:  6, code_size: 5, endpoint_range_index: 18, format: Format::Rgb,  weight_bits: 2, plane_count: 2, subset_count: 1, trans_flags_bits: 15 },
-    Mode { id:  7, code_size: 5, endpoint_range_index: 12, format: Format::Rgb,  weight_bits: 2, plane_count: 1, subset_count: 2, trans_flags_bits: 15 },
+    Mode { id:  0, code: 0x01, code_size: 4, endpoint_range_index: 19, format: Format::Rgb,  weight_bits: 4, plane_count: 1, subset_count: 1, trans_flags_bits: 15 },
+    Mode { id:  1, code: 0x35, code_size: 6, endpoint_range_index: 20, format: Format::Rgb,  weight_bits: 2, plane_count: 1, subset_count: 1, trans_flags_bits: 15 },
+    Mode { id:  2, code: 0x1d, code_size: 5, endpoint_range_index:  8, format: Format::Rgb,  weight_bits: 3, plane_count: 1, subset_count: 2, trans_flags_bits: 15 },
+    Mode { id:  3, code: 0x03, code_size: 5, endpoint_range_index:  7, format: Format::Rgb,  weight_bits: 2, plane_count: 1, subset_count: 3, trans_flags_bits: 15 },
+    Mode { id:  4, code: 0x13, code_size: 5, endpoint_range_index: 12, format: Format::Rgb,  weight_bits: 2, plane_count: 1, subset_count: 2, trans_flags_bits: 15 },
+    Mode { id:  5, code: 0x0b, code_size: 5, endpoint_range_index: 20, format: Format::Rgb,  weight_bits: 3, plane_count: 1, subset_count: 1, trans_flags_bits: 15 },
+    Mode { id:  6, code: 0x1b, code_size: 5, endpoint_range_index: 18, format: Format::Rgb,  weight_bits: 2, plane_count: 2, subset_count: 1, trans_flags_bits: 15 },
+    Mode { id:  7, code: 0x07, code_size: 5, endpoint_range_index: 12, format: Format::Rgb,  weight_bits: 2, plane_count: 1, subset_count: 2, trans_flags_bits: 15 },
 
     // Void-Extent (RGBA)
-    Mode { id:  8, code_size: 5, endpoint_range_index:  0, format: Format::Rgba, weight_bits: 0, plane_count: 0, subset_count: 0, trans_flags_bits:  0 },
+    Mode { id:  8, code: 0x17, code_size: 5, endpoint_range_index:  0, format: Format::Rgba, weight_bits: 0, plane_count: 0, subset_count: 0, trans_flags_bits:  0 },
 
     // RGBA
-    Mode { id:  9, code_size: 5, endpoint_range_index:  8, format: Format::Rgba, weight_bits: 2, plane_count: 1, subset_count: 2, trans_flags_bits: 23 },
-    Mode { id: 10, code_size: 3, endpoint_range_index: 13, format: Format::Rgba, weight_bits: 4, plane_count: 1, subset_count: 1, trans_flags_bits: 17 },
-    Mode { id: 11, code_size: 2, endpoint_range_index: 13, format: Format::Rgba, weight_bits: 2, plane_count: 2, subset_count: 1, trans_flags_bits: 17 },
-    Mode { id: 12, code_size: 3, endpoint_range_index: 19, format: Format::Rgba, weight_bits: 3, plane_count: 1, subset_count: 1, trans_flags_bits: 17 },
-    Mode { id: 13, code_size: 5, endpoint_range_index: 20, format: Format::Rgba, weight_bits: 1, plane_count: 2, subset_count: 1, trans_flags_bits: 23 },
-    Mode { id: 14, code_size: 5, endpoint_range_index: 20, format: Format::Rgba, weight_bits: 2, plane_count: 1, subset_count: 1, trans_flags_bits: 23 },
+    Mode { id:  9, code: 0x0f, code_size: 5, endpoint_range_index:  8, format: Format::Rgba, weight_bits: 2, plane_count: 1, subset_count: 2, trans_flags_bits: 23 },
+    Mode { id: 10, code: 0x02, code_size: 3, endpoint_range_index: 13, format: Format::Rgba, weight_bits: 4, plane_count: 1, subset_count: 1, trans_flags_bits: 17 },
+    Mode { id: 11, code: 0x00, code_size: 2, endpoint_range_index: 13, format: Format::Rgba, weight_bits: 2, plane_count: 2, subset_count: 1, trans_flags_bits: 17 },
+    Mode { id: 12, code: 0x06, code_size: 3, endpoint_range_index: 19, format: Format::Rgba, weight_bits: 3, plane_count: 1, subset_count: 1, trans_flags_bits: 17 },
+    Mode { id: 13, code: 0x1f, code_size: 5, endpoint_range_index: 20, format: Format::Rgba, weight_bits: 1, plane_count: 2, subset_count: 1, trans_flags_bits: 23 },
+    Mode { id: 14, code: 0x0d, code_size: 5, endpoint_range_index: 20, format: Format::Rgba, weight_bits: 2, plane_count: 1, subset_count: 1, trans_flags_bits: 23 },
 
     // LA
-    Mode { id: 15, code_size: 7, endpoint_range_index: 20, format: Format::La,   weight_bits: 4, plane_count: 1, subset_count: 1, trans_flags_bits: 23 },
-    Mode { id: 16, code_size: 6, endpoint_range_index: 20, format: Format::La,   weight_bits: 2, plane_count: 1, subset_count: 2, trans_flags_bits: 23 },
-    Mode { id: 17, code_size: 6, endpoint_range_index: 20, format: Format::La,   weight_bits: 2, plane_count: 2, subset_count: 1, trans_flags_bits: 23 },
+    Mode { id: 15, code: 0x05, code_size: 7, endpoint_range_index: 20, format: Format::La,   weight_bits: 4, plane_count: 1, subset_count: 1, trans_flags_bits: 23 },
+    Mode { id: 16, code: 0x15, code_size: 6, endpoint_range_index: 20, format: Format::La,   weight_bits: 2, plane_count: 1, subset_count: 2, trans_flags_bits: 23 },
+    Mode { id: 17, code: 0x25, code_size: 6, endpoint_range_index: 20, format: Format::La,   weight_bits: 2, plane_count: 2, subset_count: 1, trans_flags_bits: 23 },
 
     // RGB
-    Mode { id: 18, code_size: 4, endpoint_range_index: 11, format: Format::Rgb,  weight_bits: 5, plane_count: 1, subset_count: 1, trans_flags_bits: 15 },
+    Mode { id: 18, code: 0x09, code_size: 4, endpoint_range_index: 11, format: Format::Rgb,  weight_bits: 5, plane_count: 1, subset_count: 1, trans_flags_bits: 15 },
 ];
 
 #[rustfmt::skip]
@@ -769,3 +763,105 @@ static PATTERNS_2_3_ANCHORS: [[u8; 2]; TOTAL_BC7_3_ASTC2_COMMON_PARTITIONS] = [
     [ 0, 1 ], [ 2, 0 ], [ 0, 1 ], [ 0, 8 ], [ 2, 0 ], [ 0, 1 ], [ 0, 7 ],
     [ 12, 0 ], [ 2, 0 ], [ 9, 0 ], [ 0, 2 ], [ 4, 0 ]
 ];
+
+pub struct Mode8Block {
+    rgba: Color32,
+    etc1_flags: Mode8Etc1Flags,
+}
+
+impl Mode8Block {
+    #[cfg(test)]
+    pub fn new(rgba: Color32, etc1_flags: Mode8Etc1Flags) -> Self {
+        Self { rgba, etc1_flags }
+    }
+
+    pub fn rgba(&self) -> Color32 {
+        self.rgba
+    }
+
+    pub fn etc1_flags(&self) -> Mode8Etc1Flags {
+        self.etc1_flags
+    }
+
+    pub fn decode(reader: &mut BitReaderLsb) -> Self {
+        Self {
+            rgba: decode_mode8_rgba(reader),
+            etc1_flags: decode_mode8_etc1_flags(reader),
+        }
+    }
+
+    #[cfg(test)]
+    pub fn encode(&self) -> [u8; UASTC_BLOCK_SIZE] {
+        use crate::bitwriter::BitWriterLsb;
+
+        let mut block = [0u8; UASTC_BLOCK_SIZE];
+        let mut writer = BitWriterLsb::new(&mut block);
+
+        let mode = MODES[8];
+        writer.write_u8(mode.code_size as usize, mode.code);
+        writer.write_u32(32, self.rgba.to_rgba_u32());
+
+        writer.write_u8(1, self.etc1_flags.etc1d as u8);
+        writer.write_u8(3, self.etc1_flags.etc1i);
+        writer.write_u8(2, self.etc1_flags.etc1s);
+        writer.write_u8(5, self.etc1_flags.etc1r);
+        writer.write_u8(5, self.etc1_flags.etc1g);
+        writer.write_u8(5, self.etc1_flags.etc1b);
+
+        block
+    }
+}
+
+#[cfg(test)]
+mod proptests {
+    use alloc::format;
+
+    use basis_universal::{
+        DecodeFlags, LowLevelUastcTranscoder, SliceParametersUastc, TranscodeError,
+        TranscoderBlockFormat,
+    };
+    use proptest::prelude::*;
+
+    use super::*;
+
+    #[test]
+    fn mode8_unpacks_correctly() {
+        proptest!(ProptestConfig::with_cases(1_000_000),
+            |(rgba in 0u32.., d: bool, i in 0u8..8, s in 0u8..4, r in 0u8..32, g in 0u8..32, b in 0u8..32)| {
+                let flags = Mode8Etc1Flags {
+                    etc1d: d,
+                    etc1i: i,
+                    etc1s: s,
+                    etc1r: r,
+                    etc1g: g,
+                    etc1b: b,
+                };
+
+                let block = Mode8Block::new(Color32::from_rgba_u32(rgba), flags).encode();
+
+                let reference = reference_transcode(block, TranscoderBlockFormat::ETC2_RGBA).map_err(drop);
+
+                let ours = crate::transcode_uastc_block_to_etc2(block).map(|c| c.into_iter().flat_map(|c| c.to_le_bytes()).collect::<Vec<u8>>()).map_err(drop);
+
+                prop_assert_eq!(reference, ours);
+            }
+        );
+    }
+
+    fn reference_transcode(
+        block: [u8; UASTC_BLOCK_SIZE],
+        format: TranscoderBlockFormat,
+    ) -> std::result::Result<Vec<u8>, TranscodeError> {
+        let transcoder = LowLevelUastcTranscoder::new();
+        let slice_params = SliceParametersUastc {
+            num_blocks_x: 1,
+            num_blocks_y: 1,
+            has_alpha: true,
+            original_width: 4,
+            original_height: 4,
+        };
+        let flags = DecodeFlags::empty();
+
+        transcoder.transcode_slice(&block[..], slice_params, flags, format)
+    }
+}

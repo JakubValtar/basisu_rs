@@ -4,7 +4,7 @@ use crate::{
     bitreader::BitReaderLsb,
     bitwriter::BitWriterLsb,
     mask,
-    uastc::{self, ETC1_BLOCK_SIZE, ETC2_BLOCK_SIZE, UASTC_BLOCK_SIZE},
+    uastc::{self, Mode8Block, ETC1_BLOCK_SIZE, ETC2_BLOCK_SIZE, UASTC_BLOCK_SIZE},
     Color32, Result,
 };
 
@@ -41,14 +41,14 @@ fn convert_block_from_uastc(
     let mut writer = BitWriterLsb::new(output);
 
     if mode.id == 8 {
+        let block = Mode8Block::decode(&mut reader);
+
         if let Some(alpha) = alpha {
-            let rgba = uastc::decode_mode8_rgba(&mut reader);
+            let rgba = block.rgba();
             write_solid_etc2_alpha_block(alpha, rgba[3]);
-        } else {
-            uastc::skip_mode8_rgba(&mut reader);
         }
 
-        let trans_flags = uastc::decode_mode8_etc1_flags(&mut reader);
+        let trans_flags = block.etc1_flags();
 
         if !trans_flags.etc1d {
             writer.write_u8(8, trans_flags.etc1r << 4 | trans_flags.etc1r);
@@ -65,12 +65,10 @@ fn convert_block_from_uastc(
             trans_flags.etc1i << 5 | trans_flags.etc1i << 2 | (trans_flags.etc1d as u8) << 1,
         );
 
-        let selector = [0b11, 0b10, 0b00, 0b01][trans_flags.etc1s as usize];
-        let s_lo = selector & 1;
-        let s_hi = selector >> 1;
+        let (s_hi, s_lo) = [(1, 1), (1, 0), (0, 0), (0, 1)][trans_flags.etc1s as usize];
 
-        writer.write_u16(16, 0u16.wrapping_sub(s_hi as u16));
-        writer.write_u16(16, 0u16.wrapping_sub(s_lo as u16));
+        writer.write_u16(16, if s_hi == 0 { 0 } else { u16::MAX });
+        writer.write_u16(16, if s_lo == 0 { 0 } else { u16::MAX });
 
         return Ok(());
     }

@@ -1,7 +1,7 @@
 use crate::{
     bitreader::BitReaderLsb,
     bitwriter::{BitWriterLsb, BitWriterMsbRevBytes},
-    uastc::{self, ASTC_BLOCK_SIZE, UASTC_BLOCK_SIZE},
+    uastc::{self, Mode8Block, ASTC_BLOCK_SIZE, UASTC_BLOCK_SIZE},
     Result,
 };
 
@@ -15,7 +15,9 @@ pub fn convert_block_from_uastc(bytes: [u8; UASTC_BLOCK_SIZE]) -> Result<[u8; AS
     let mut writer = BitWriterLsb::new(&mut output);
 
     if mode.id == 8 {
-        let rgba = uastc::decode_mode8_rgba(&mut reader);
+        let block = Mode8Block::decode(&mut reader);
+
+        let rgba = block.rgba();
 
         // 0..=8: void-extent signature
         // 9: 0 means endpoints are UNORM16, 1 means FP16

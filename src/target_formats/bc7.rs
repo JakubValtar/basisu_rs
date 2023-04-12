@@ -2,7 +2,7 @@ use crate::{
     bitreader::BitReaderLsb,
     bitwriter::BitWriterLsb,
     mask,
-    uastc::{self, BC7_BLOCK_SIZE, UASTC_BLOCK_SIZE},
+    uastc::{self, Mode8Block, BC7_BLOCK_SIZE, UASTC_BLOCK_SIZE},
     Color32, Result,
 };
 
@@ -16,7 +16,8 @@ pub fn convert_block_from_uastc(bytes: [u8; UASTC_BLOCK_SIZE]) -> Result<[u8; BC
     let mut writer = BitWriterLsb::new(&mut output);
 
     if mode.id == 8 {
-        let rgba = uastc::decode_mode8_rgba(&mut reader);
+        let block = Mode8Block::decode(&mut reader);
+        let rgba = block.rgba();
 
         let (mode, endpoint, p_bits, weights) =
             convert_mode_8_to_bc7_mode_endpoint_p_bits_weights(rgba);
