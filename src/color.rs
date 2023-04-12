@@ -1,4 +1,4 @@
-use alloc::fmt;
+use alloc::{fmt, vec, vec::Vec};
 use core::ops::{Index, IndexMut};
 
 #[derive(Clone, Copy, Default, PartialEq)]
