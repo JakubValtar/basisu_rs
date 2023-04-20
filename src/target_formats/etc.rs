@@ -129,9 +129,9 @@ fn convert_block_from_uastc(
         ]
     } else {
         let d = [
-            (c1[0] as i16 - c0[0] as i16).max(-4).min(3),
-            (c1[1] as i16 - c0[1] as i16).max(-4).min(3),
-            (c1[2] as i16 - c0[2] as i16).max(-4).min(3),
+            (c1[0] as i16 - c0[0] as i16).clamp(-4, 3),
+            (c1[1] as i16 - c0[1] as i16).clamp(-4, 3),
+            (c1[2] as i16 - c0[2] as i16).clamp(-4, 3),
         ];
         writer.write_u8(8, c0[0] << 3 | (d[0] & 0b111) as u8);
         writer.write_u8(8, c0[1] << 3 | (d[1] & 0b111) as u8);
@@ -308,9 +308,7 @@ fn write_etc2_alpha_block(output: &mut [u8; 8], etc2tm: u8, rgba: &[Color32; 16]
 
             let mut values = [0u8; 8];
             for (val, &modifier) in values.iter_mut().zip(mod_table.iter()) {
-                *val = (center + (modifier as i32 * multiplier as i32))
-                    .max(0)
-                    .min(255) as u8;
+                *val = (center + (modifier as i32 * multiplier as i32)).clamp(0, 255) as u8;
             }
 
             let mut selectors = 0u64;
@@ -423,9 +421,9 @@ pub(crate) fn apply_mod_to_base_color(base: Color32, inten: u8) -> [Color32; 4] 
     let mut colors = [Color32::default(); 4];
     for (color, &modifier) in colors.iter_mut().zip(ETC1_MODIFIERS[inten as usize].iter()) {
         *color = Color32::new(
-            (base[0] as i16 + modifier).max(0).min(255) as u8,
-            (base[1] as i16 + modifier).max(0).min(255) as u8,
-            (base[2] as i16 + modifier).max(0).min(255) as u8,
+            (base[0] as i16 + modifier).clamp(0, 255) as u8,
+            (base[1] as i16 + modifier).clamp(0, 255) as u8,
+            (base[2] as i16 + modifier).clamp(0, 255) as u8,
             255,
         );
     }

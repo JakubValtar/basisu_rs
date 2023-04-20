@@ -440,11 +440,9 @@ fn determine_shared_pbits(
         let mut x_max_col = Color32::default();
         for c in 0..4 {
             x_min_col[c] = (((xl[c] * scalep - p as f32) / 2. + 0.5) as i32 * 2 + p)
-                .max(p)
-                .min(iscalep - 1 + p) as u8;
+                .clamp(p, iscalep - 1 + p) as u8;
             x_max_col[c] = (((xh[c] * scalep - p as f32) / 2. + 0.5) as i32 * 2 + p)
-                .max(p)
-                .min(iscalep - 1 + p) as u8;
+                .clamp(p, iscalep - 1 + p) as u8;
         }
 
         let mut scaled_low = Color32::default();
@@ -512,11 +510,9 @@ fn determine_unique_pbits(
 
         for c in 0..4 {
             x_min_color[c] = (((xl[c] * scalep - p as f32) / 2. + 0.5) as i32 * 2 + p)
-                .max(p)
-                .min(iscalep - 1 + p) as u8;
+                .clamp(p, iscalep - 1 + p) as u8;
             x_max_color[c] = (((xh[c] * scalep - p as f32) / 2. + 0.5) as i32 * 2 + p)
-                .max(p)
-                .min(iscalep - 1 + p) as u8;
+                .clamp(p, iscalep - 1 + p) as u8;
         }
 
         let mut scaled_low = Color32::default();
