@@ -215,7 +215,11 @@ pub(crate) fn assemble_endpoint_pairs(mode: Mode, endpoint_bytes: &[u8]) -> [[Co
     endpoint_pairs
 }
 
-fn astc_interpolate(mut l: u32, mut h: u32, w: u32, srgb: bool) -> u8 {
+fn astc_interpolate(l: u8, h: u8, w: u8, srgb: bool) -> u8 {
+    let mut l = l as u32;
+    let mut h = h as u32;
+    let w = w as u32;
+
     if srgb {
         l = (l << 8) | 0x80;
         h = (h << 8) | 0x80;
@@ -224,6 +228,7 @@ fn astc_interpolate(mut l: u32, mut h: u32, w: u32, srgb: bool) -> u8 {
         h = (h << 8) | h;
     }
 
+    // round(lerp(l, h, w/64.0))
     let k = (l * (64 - w) + h * w + 32) >> 6;
 
     (k >> 8) as u8
@@ -276,16 +281,16 @@ pub(crate) fn decode_block_to_rgba(bytes: [u8; UASTC_BLOCK_SIZE]) -> Result<[Col
         }
 
         for id in 0..16 {
-            let wr = weights[ws_per_texel * id + w_plane_id[0]] as u32;
-            let wg = weights[ws_per_texel * id + w_plane_id[1]] as u32;
-            let wb = weights[ws_per_texel * id + w_plane_id[2]] as u32;
-            let wa = weights[ws_per_texel * id + w_plane_id[3]] as u32;
+            let wr = weights[ws_per_texel * id + w_plane_id[0]];
+            let wg = weights[ws_per_texel * id + w_plane_id[1]];
+            let wb = weights[ws_per_texel * id + w_plane_id[2]];
+            let wa = weights[ws_per_texel * id + w_plane_id[3]];
 
             output[id] = Color32::new(
-                astc_interpolate(e0[0] as u32, e1[0] as u32, wr, srgb),
-                astc_interpolate(e0[1] as u32, e1[1] as u32, wg, srgb),
-                astc_interpolate(e0[2] as u32, e1[2] as u32, wb, srgb),
-                astc_interpolate(e0[3] as u32, e1[3] as u32, wa, false),
+                astc_interpolate(e0[0], e1[0], wr, srgb),
+                astc_interpolate(e0[1], e1[1], wg, srgb),
+                astc_interpolate(e0[2], e1[2], wb, srgb),
+                astc_interpolate(e0[3], e1[3], wa, false),
             );
         }
     } else {
@@ -296,13 +301,13 @@ pub(crate) fn decode_block_to_rgba(bytes: [u8; UASTC_BLOCK_SIZE]) -> Result<[Col
         for id in 0..16 {
             let subset = pattern[id] as usize;
             let [e0, e1] = e[subset];
-            let w = weights[id] as u32;
+            let w = weights[id];
 
             output[id] = Color32::new(
-                astc_interpolate(e0[0] as u32, e1[0] as u32, w, srgb),
-                astc_interpolate(e0[1] as u32, e1[1] as u32, w, srgb),
-                astc_interpolate(e0[2] as u32, e1[2] as u32, w, srgb),
-                astc_interpolate(e0[3] as u32, e1[3] as u32, w, false),
+                astc_interpolate(e0[0], e1[0], w, srgb),
+                astc_interpolate(e0[1], e1[1], w, srgb),
+                astc_interpolate(e0[2], e1[2], w, srgb),
+                astc_interpolate(e0[3], e1[3], w, false),
             );
         }
     }
