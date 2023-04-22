@@ -173,7 +173,7 @@ pub fn convert_block_from_uastc(bytes: [u8; UASTC_BLOCK_SIZE]) -> Result<[u8; AS
 
         if mode.plane_count != PlaneCount::Is1 {
             // Weights have bits reversed, but not CCS
-            writer_rev.write_u8(2, compsel);
+            writer_rev.write_u8(2, compsel as u8);
         }
     }
 

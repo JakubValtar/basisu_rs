@@ -287,14 +287,13 @@ pub(crate) fn decode_block_to_rgba(bytes: [u8; UASTC_BLOCK_SIZE]) -> Result<[Col
                 }
             }
             PlaneCount::Is2 => {
-                assert!((0..4).contains(&compsel));
                 assert_eq!(weights.len(), 32);
                 for (ws, out) in weights.chunks_exact(2).zip(output.iter_mut()) {
                     assert_eq!(ws.len(), 2);
-                    let wr = if compsel == 0 { ws[1] } else { ws[0] };
-                    let wg = if compsel == 1 { ws[1] } else { ws[0] };
-                    let wb = if compsel == 2 { ws[1] } else { ws[0] };
-                    let wa = if compsel == 3 { ws[1] } else { ws[0] };
+                    let wr = if compsel == CompSel::R { ws[1] } else { ws[0] };
+                    let wg = if compsel == CompSel::G { ws[1] } else { ws[0] };
+                    let wb = if compsel == CompSel::B { ws[1] } else { ws[0] };
+                    let wa = if compsel == CompSel::A { ws[1] } else { ws[0] };
 
                     *out = Color32::new(
                         astc_interpolate(e0[0], e1[0], wr, srgb),
@@ -341,12 +340,12 @@ pub fn decode_mode(reader: &mut BitReaderLsb) -> Result<Mode> {
     Ok(mode)
 }
 
-pub fn decode_compsel(reader: &mut BitReaderLsb, mode: Mode) -> u8 {
+pub fn decode_compsel(reader: &mut BitReaderLsb, mode: Mode) -> CompSel {
     match (mode.plane_count, mode.format) {
         // LA modes always have component selector 3 for alpha
-        (PlaneCount::Is2, Format::La) => 3,
-        (PlaneCount::Is2, _) => reader.read_u8(2),
-        _ => 0,
+        (PlaneCount::Is2, Format::La) => CompSel::A,
+        (PlaneCount::Is2, _) => CompSel::from_u2(reader.read_u8(2)),
+        _ => CompSel::R,
     }
 }
 
@@ -503,6 +502,26 @@ pub enum SubsetCount {
     Is1 = 1,
     Is2 = 2,
     Is3 = 3,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CompSel {
+    R = 0,
+    G = 1,
+    B = 2,
+    A = 3,
+}
+
+impl CompSel {
+    fn from_u2(val: u8) -> CompSel {
+        match val {
+            0 => Self::R,
+            1 => Self::G,
+            2 => Self::B,
+            3 => Self::A,
+            _ => unreachable!(),
+        }
+    }
 }
 
 #[rustfmt::skip]

@@ -236,7 +236,7 @@ pub fn convert_block_from_uastc(bytes: [u8; UASTC_BLOCK_SIZE]) -> Result<[u8; BC
                 }
 
                 // Write rotation bits
-                writer.write_u8(2, (compsel + 1) & 0b11);
+                writer.write_u8(2, (compsel as u8 + 1) & 0b11);
 
                 if bc7_mode.id == 4 {
                     // Index selection bit, not used
