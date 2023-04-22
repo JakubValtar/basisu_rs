@@ -2,7 +2,7 @@ use crate::{
     bitreader::BitReaderLsb,
     bitwriter::BitWriterLsb,
     mask,
-    uastc::{self, BC7_BLOCK_SIZE, UASTC_BLOCK_SIZE},
+    uastc::{self, PlaneCount, SubsetCount, BC7_BLOCK_SIZE, UASTC_BLOCK_SIZE},
     Color32, Result,
 };
 
@@ -66,9 +66,7 @@ pub fn convert_block_from_uastc(bytes: [u8; UASTC_BLOCK_SIZE]) -> Result<[u8; BC
     let compsel = uastc::decode_compsel(&mut reader, mode);
     let uastc_pat = uastc::decode_pattern_index(&mut reader, mode)?;
 
-    let bc7_plane_count = bc7_mode.plane_count as usize;
-    let bc7_subset_count = bc7_mode.subset_count as usize;
-    let bc7_endpoints_per_channel = 2 * bc7_subset_count;
+    let bc7_endpoints_per_channel = 2 * bc7_mode.subset_count as usize;
     let bc7_channel_count = bc7_mode.endpoint_count as usize / bc7_endpoints_per_channel;
 
     let mut endpoints = {
@@ -88,7 +86,7 @@ pub fn convert_block_from_uastc(bytes: [u8; UASTC_BLOCK_SIZE]) -> Result<[u8; BC
 
     let mut weights = [[0; 16]; 2];
     {
-        if mode.plane_count == 1 {
+        if mode.plane_count == PlaneCount::Is1 {
             uastc::decode_weights(&mut reader, mode, uastc_pat, |i, w| {
                 weights[0][i] = w;
             });
@@ -104,8 +102,8 @@ pub fn convert_block_from_uastc(bytes: [u8; UASTC_BLOCK_SIZE]) -> Result<[u8; BC
         }
     }
 
-    let endpoints = &mut endpoints[0..bc7_subset_count];
-    let weights = &mut weights[0..bc7_plane_count];
+    let endpoints = &mut endpoints[0..bc7_mode.subset_count as usize];
+    let weights = &mut weights[0..bc7_mode.plane_count as usize];
 
     // Write block mode
     writer.write_u8(bc7_mode_index as usize + 1, 1 << bc7_mode_index);
@@ -115,7 +113,7 @@ pub fn convert_block_from_uastc(bytes: [u8; UASTC_BLOCK_SIZE]) -> Result<[u8; BC
     const ALPHA_CHANNEL: usize = 3;
 
     // Write partition bits
-    if bc7_subset_count > 1 {
+    if bc7_mode.subset_count != SubsetCount::Is1 {
         let (bc7_pat, pattern, anchors, perm): (_, _, &[u8], &[u8]) =
             match (mode.id, mode.subset_count) {
                 (1, _) => {
@@ -137,7 +135,7 @@ pub fn convert_block_from_uastc(bytes: [u8; UASTC_BLOCK_SIZE]) -> Result<[u8; BC
                         perm,
                     )
                 }
-                (_, 2) => {
+                (_, SubsetCount::Is2) => {
                     let (index, inv) = PATTERNS_2_BC7_INDEX_INV[uastc_pat as usize];
                     (
                         index,
@@ -146,7 +144,7 @@ pub fn convert_block_from_uastc(bytes: [u8; UASTC_BLOCK_SIZE]) -> Result<[u8; BC
                         if inv { &[1, 0] } else { &[0, 1] },
                     )
                 }
-                (_, 3) => {
+                (_, SubsetCount::Is3) => {
                     let (index, p) = PATTERNS_3_BC7_INDEX_PERM[uastc_pat as usize];
                     let perm = &PATTERNS_3_BC7_TO_ASTC_PERMUTATIONS[p as usize];
                     (
@@ -166,8 +164,8 @@ pub fn convert_block_from_uastc(bytes: [u8; UASTC_BLOCK_SIZE]) -> Result<[u8; BC
             // Permute endpoints
             let mut permuted_endpoints = [[Color32::default(); 2]; 3];
             permute(endpoints, &mut permuted_endpoints, perm);
-            endpoints[0..bc7_subset_count]
-                .copy_from_slice(&permuted_endpoints[0..bc7_subset_count]);
+            endpoints[0..bc7_mode.subset_count as usize]
+                .copy_from_slice(&permuted_endpoints[0..bc7_mode.subset_count as usize]);
         }
 
         {
@@ -199,50 +197,51 @@ pub fn convert_block_from_uastc(bytes: [u8; UASTC_BLOCK_SIZE]) -> Result<[u8; BC
         let weight_mask = mask!(bc7_mode.weight_bits);
         let weight_msb_mask = 1 << (bc7_mode.weight_bits - 1);
 
-        if mode.plane_count == 1 {
-            if weights[0][0] & weight_msb_mask != 0 {
-                endpoints[0].swap(0, 1);
-                for weight in weights[0].iter_mut() {
-                    *weight = !*weight & weight_mask;
-                }
-            }
-        } else {
-            assert_eq!(mode.plane_count, 2);
-
-            let invert_plane = [
-                weights[0][0] & weight_msb_mask != 0,
-                weights[1][0] & weight_msb_mask != 0,
-            ];
-
-            let endpoint_pair = &mut endpoints[0];
-
-            // Apply channel rotation
-            endpoint_pair[0].0.swap(compsel as usize, ALPHA_CHANNEL);
-            endpoint_pair[1].0.swap(compsel as usize, ALPHA_CHANNEL);
-
-            // Invert planes
-            if invert_plane[0] {
-                endpoint_pair.swap(0, 1);
-            }
-            if invert_plane[0] != invert_plane[1] {
-                let [e0, e1] = endpoint_pair;
-                core::mem::swap(&mut e0[ALPHA_CHANNEL], &mut e1[ALPHA_CHANNEL]);
-            }
-
-            for (&inv, weight_plane) in invert_plane.iter().zip(weights.iter_mut()) {
-                if inv {
-                    for w in weight_plane.iter_mut() {
-                        *w = !*w & weight_mask;
+        match mode.plane_count {
+            PlaneCount::Is1 => {
+                if weights[0][0] & weight_msb_mask != 0 {
+                    endpoints[0].swap(0, 1);
+                    for weight in weights[0].iter_mut() {
+                        *weight = !*weight & weight_mask;
                     }
                 }
             }
+            PlaneCount::Is2 => {
+                let invert_plane = [
+                    weights[0][0] & weight_msb_mask != 0,
+                    weights[1][0] & weight_msb_mask != 0,
+                ];
 
-            // Write rotation bits
-            writer.write_u8(2, (compsel + 1) & 0b11);
+                let endpoint_pair = &mut endpoints[0];
 
-            if bc7_mode.id == 4 {
-                // Index selection bit, not used
-                writer.write_u8(1, 0);
+                // Apply channel rotation
+                endpoint_pair[0].0.swap(compsel as usize, ALPHA_CHANNEL);
+                endpoint_pair[1].0.swap(compsel as usize, ALPHA_CHANNEL);
+
+                // Invert planes
+                if invert_plane[0] {
+                    endpoint_pair.swap(0, 1);
+                }
+                if invert_plane[0] != invert_plane[1] {
+                    let [e0, e1] = endpoint_pair;
+                    core::mem::swap(&mut e0[ALPHA_CHANNEL], &mut e1[ALPHA_CHANNEL]);
+                }
+
+                for (&inv, weight_plane) in invert_plane.iter().zip(weights.iter_mut()) {
+                    if inv {
+                        for w in weight_plane.iter_mut() {
+                            *w = !*w & weight_mask;
+                        }
+                    }
+                }
+
+                // Write rotation bits
+                writer.write_u8(2, (compsel + 1) & 0b11);
+
+                if bc7_mode.id == 4 {
+                    // Index selection bit, not used
+                    writer.write_u8(1, 0);
+                }
             }
         }
     }
@@ -272,7 +271,7 @@ pub fn convert_block_from_uastc(bytes: [u8; UASTC_BLOCK_SIZE]) -> Result<[u8; BC
             }
         }
     }
-    let p_bits = &mut p_bits[0..bc7_subset_count];
+    let p_bits = &mut p_bits[0..bc7_mode.subset_count as usize];
 
     for channel in 0..bc7_channel_count {
         let bit_count = if channel != ALPHA_CHANNEL {
@@ -553,7 +552,7 @@ fn determine_unique_pbits(
     p_bits
 }
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug)]
 struct Bc7Mode {
     id: u8,
     pat_bits: u8,
@@ -561,22 +560,22 @@ struct Bc7Mode {
     color_bits: u8,
     alpha_bits: u8,
     weight_bits: u8,
-    plane_count: u8,
-    subset_count: u8,
+    plane_count: PlaneCount,
+    subset_count: SubsetCount,
     p_bits: u8,
     sp_bits: u8,
 }
 
 #[rustfmt::skip]
 static BC7_MODES: [Bc7Mode; 8] = [
-    Bc7Mode { id: 0, endpoint_count: 18, color_bits: 4, alpha_bits: 0, weight_bits: 3, plane_count: 1, subset_count: 3, pat_bits: 4, p_bits: 1, sp_bits: 0 },
-    Bc7Mode { id: 1, endpoint_count: 12, color_bits: 6, alpha_bits: 0, weight_bits: 3, plane_count: 1, subset_count: 2, pat_bits: 6, p_bits: 0, sp_bits: 1 },
-    Bc7Mode { id: 2, endpoint_count: 18, color_bits: 5, alpha_bits: 0, weight_bits: 2, plane_count: 1, subset_count: 3, pat_bits: 6, p_bits: 0, sp_bits: 0 },
-    Bc7Mode { id: 3, endpoint_count: 12, color_bits: 7, alpha_bits: 0, weight_bits: 2, plane_count: 1, subset_count: 2, pat_bits: 6, p_bits: 1, sp_bits: 0 },
-    Bc7Mode { id: 4, endpoint_count:  8, color_bits: 5, alpha_bits: 6, weight_bits: 2, plane_count: 2, subset_count: 1, pat_bits: 0, p_bits: 0, sp_bits: 0 },
-    Bc7Mode { id: 5, endpoint_count:  8, color_bits: 7, alpha_bits: 8, weight_bits: 2, plane_count: 2, subset_count: 1, pat_bits: 0, p_bits: 0, sp_bits: 0 },
-    Bc7Mode { id: 6, endpoint_count:  8, color_bits: 7, alpha_bits: 7, weight_bits: 4, plane_count: 1, subset_count: 1, pat_bits: 0, p_bits: 1, sp_bits: 0 },
-    Bc7Mode { id: 7, endpoint_count: 16, color_bits: 5, alpha_bits: 5, weight_bits: 2, plane_count: 1, subset_count: 2, pat_bits: 6, p_bits: 1, sp_bits: 0 },
+    Bc7Mode { id: 0, endpoint_count: 18, color_bits: 4, alpha_bits: 0, weight_bits: 3, plane_count: PlaneCount::Is1, subset_count: SubsetCount::Is3, pat_bits: 4, p_bits: 1, sp_bits: 0 },
+    Bc7Mode { id: 1, endpoint_count: 12, color_bits: 6, alpha_bits: 0, weight_bits: 3, plane_count: PlaneCount::Is1, subset_count: SubsetCount::Is2, pat_bits: 6, p_bits: 0, sp_bits: 1 },
+    Bc7Mode { id: 2, endpoint_count: 18, color_bits: 5, alpha_bits: 0, weight_bits: 2, plane_count: PlaneCount::Is1, subset_count: SubsetCount::Is3, pat_bits: 6, p_bits: 0, sp_bits: 0 },
+    Bc7Mode { id: 3, endpoint_count: 12, color_bits: 7, alpha_bits: 0, weight_bits: 2, plane_count: PlaneCount::Is1, subset_count: SubsetCount::Is2, pat_bits: 6, p_bits: 1, sp_bits: 0 },
+    Bc7Mode { id: 4, endpoint_count:  8, color_bits: 5, alpha_bits: 6, weight_bits: 2, plane_count: PlaneCount::Is2, subset_count: SubsetCount::Is1, pat_bits: 0, p_bits: 0, sp_bits: 0 },
+    Bc7Mode { id: 5, endpoint_count:  8, color_bits: 7, alpha_bits: 8, weight_bits: 2, plane_count: PlaneCount::Is2, subset_count: SubsetCount::Is1, pat_bits: 0, p_bits: 0, sp_bits: 0 },
+    Bc7Mode { id: 6, endpoint_count:  8, color_bits: 7, alpha_bits: 7, weight_bits: 4, plane_count: PlaneCount::Is1, subset_count: SubsetCount::Is1, pat_bits: 0, p_bits: 1, sp_bits: 0 },
+    Bc7Mode { id: 7, endpoint_count: 16, color_bits: 5, alpha_bits: 5, weight_bits: 2, plane_count: PlaneCount::Is1, subset_count: SubsetCount::Is2, pat_bits: 6, p_bits: 1, sp_bits: 0 },
 ];
 
 #[rustfmt::skip]

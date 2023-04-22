@@ -1,7 +1,7 @@
 use crate::{
     bitreader::BitReaderLsb,
     bitwriter::{BitWriterLsb, BitWriterMsbRevBytes},
-    uastc::{self, ASTC_BLOCK_SIZE, UASTC_BLOCK_SIZE},
+    uastc::{self, PlaneCount, SubsetCount, ASTC_BLOCK_SIZE, UASTC_BLOCK_SIZE},
     Result,
 };
 
@@ -81,8 +81,7 @@ pub fn convert_block_from_uastc(bytes: [u8; UASTC_BLOCK_SIZE]) -> Result<[u8; AS
         // Write block mode and config bits
         writer.write_u16(13, UASTC_TO_ASTC_BLOCK_MODE_13[mode.id as usize]);
 
-        if mode.subset_count > 1 {
-            let pattern_astc_index_10 = get_pattern_astc_index_10(mode, pat);
+        if let Some(pattern_astc_index_10) = get_pattern_astc_index_10(mode, pat) {
             writer.write_u16(10, pattern_astc_index_10);
             writer.write_u8(2, 0b00); // To specify that all endpoints use the same CEM
         }
@@ -145,7 +144,7 @@ pub fn convert_block_from_uastc(bytes: [u8; UASTC_BLOCK_SIZE]) -> Result<[u8; AS
         // Write the weights and CCS which is filled from the end
         let mut writer_rev = BitWriterMsbRevBytes::new(&mut output);
 
-        if mode.subset_count == 1 {
+        if mode.subset_count == SubsetCount::Is1 {
             if invert_subset_weights[0] {
                 let weight_consumer = |_, weight: u8| {
                     writer_rev.write_u8_rev_bits(mode.weight_bits as usize, !weight);
@@ -172,7 +171,7 @@ pub fn convert_block_from_uastc(bytes: [u8; UASTC_BLOCK_SIZE]) -> Result<[u8; AS
             uastc::decode_weights(&mut reader, mode, pat, weight_consumer);
         }
 
-        if mode.plane_count > 1 {
+        if mode.plane_count != PlaneCount::Is1 {
             // Weights have bits reversed, but not CCS
             writer_rev.write_u8(2, compsel);
         }
@@ -193,13 +192,16 @@ static PATTERNS_2_3_ASTC_INDEX_10: [u16; uastc::TOTAL_BC7_3_ASTC2_COMMON_PARTITI
     36, 48, 61, 137, 161, 183, 226, 281, 302, 307, 479, 495, 593, 594, 605, 799, 812, 988, 993,
 ];
 
-fn get_pattern_astc_index_10(mode: uastc::Mode, pat: u8) -> u16 {
-    match (mode.id, mode.subset_count) {
+fn get_pattern_astc_index_10(mode: uastc::Mode, pat: u8) -> Option<u16> {
+    if mode.id == 7 {
         // Mode 7 has 2 subsets, but needs 2/3 patern table
-        (7, _) => PATTERNS_2_3_ASTC_INDEX_10[pat as usize],
-        (_, 2) => PATTERNS_2_ASTC_INDEX_10[pat as usize],
-        (_, 3) => PATTERNS_3_ASTC_INDEX_10[pat as usize],
-        _ => unreachable!(),
+        Some(PATTERNS_2_3_ASTC_INDEX_10[pat as usize])
+    } else {
+        match mode.subset_count {
+            SubsetCount::Is1 => None,
+            SubsetCount::Is2 => Some(PATTERNS_2_ASTC_INDEX_10[pat as usize]),
+            SubsetCount::Is3 => Some(PATTERNS_3_ASTC_INDEX_10[pat as usize]),
+        }
     }
 }
 

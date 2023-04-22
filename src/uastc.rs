@@ -271,39 +271,51 @@ pub(crate) fn decode_block_to_rgba(bytes: [u8; UASTC_BLOCK_SIZE]) -> Result<[Col
     let srgb = false;
     let mut output = [Color32::default(); 16];
 
-    if mode.subset_count == 1 {
+    if mode.subset_count == SubsetCount::Is1 {
         let [e0, e1] = assemble_endpoint_pairs(mode, endpoints)[0];
 
-        let mut w_plane_id = [0; 4];
-        let ws_per_texel = mode.plane_count as usize;
-        if ws_per_texel > 1 {
-            w_plane_id[compsel as usize] = 1;
-        }
+        match mode.plane_count {
+            PlaneCount::Is1 => {
+                assert_eq!(weights.len(), 16);
+                for (&w, out) in weights.iter().zip(output.iter_mut()) {
+                    *out = Color32::new(
+                        astc_interpolate(e0[0], e1[0], w, srgb),
+                        astc_interpolate(e0[1], e1[1], w, srgb),
+                        astc_interpolate(e0[2], e1[2], w, srgb),
+                        astc_interpolate(e0[3], e1[3], w, false),
+                    );
+                }
+            }
+            PlaneCount::Is2 => {
+                assert!((0..4).contains(&compsel));
+                assert_eq!(weights.len(), 32);
+                for (ws, out) in weights.chunks_exact(2).zip(output.iter_mut()) {
+                    assert_eq!(ws.len(), 2);
+                    let wr = if compsel == 0 { ws[1] } else { ws[0] };
+                    let wg = if compsel == 1 { ws[1] } else { ws[0] };
+                    let wb = if compsel == 2 { ws[1] } else { ws[0] };
+                    let wa = if compsel == 3 { ws[1] } else { ws[0] };
 
-        for id in 0..16 {
-            let wr = weights[ws_per_texel * id + w_plane_id[0]];
-            let wg = weights[ws_per_texel * id + w_plane_id[1]];
-            let wb = weights[ws_per_texel * id + w_plane_id[2]];
-            let wa = weights[ws_per_texel * id + w_plane_id[3]];
-
-            output[id] = Color32::new(
-                astc_interpolate(e0[0], e1[0], wr, srgb),
-                astc_interpolate(e0[1], e1[1], wg, srgb),
-                astc_interpolate(e0[2], e1[2], wb, srgb),
-                astc_interpolate(e0[3], e1[3], wa, false),
-            );
+                    *out = Color32::new(
+                        astc_interpolate(e0[0], e1[0], wr, srgb),
+                        astc_interpolate(e0[1], e1[1], wg, srgb),
+                        astc_interpolate(e0[2], e1[2], wb, srgb),
+                        astc_interpolate(e0[3], e1[3], wa, false),
+                    );
+                }
+            }
         }
     } else {
         let e = assemble_endpoint_pairs(mode, endpoints);
 
         let pattern = get_pattern(mode, pat);
 
-        for id in 0..16 {
-            let subset = pattern[id] as usize;
-            let [e0, e1] = e[subset];
-            let w = weights[id];
+        assert_eq!(weights.len(), 16);
 
-            output[id] = Color32::new(
+        for ((&subset, &w), out) in pattern.iter().zip(weights.iter()).zip(output.iter_mut()) {
+            let [e0, e1] = e[subset as usize];
+
+            *out = Color32::new(
                 astc_interpolate(e0[0], e1[0], w, srgb),
                 astc_interpolate(e0[1], e1[1], w, srgb),
                 astc_interpolate(e0[2], e1[2], w, srgb),
@@ -332,22 +344,18 @@ pub fn decode_mode(reader: &mut BitReaderLsb) -> Result<Mode> {
 pub fn decode_compsel(reader: &mut BitReaderLsb, mode: Mode) -> u8 {
     match (mode.plane_count, mode.format) {
         // LA modes always have component selector 3 for alpha
-        (2, Format::La) => 3,
-        (2, _) => reader.read_u8(2),
+        (PlaneCount::Is2, Format::La) => 3,
+        (PlaneCount::Is2, _) => reader.read_u8(2),
         _ => 0,
     }
 }
 
 pub fn decode_pattern_index(reader: &mut BitReaderLsb, mode: Mode) -> Result<u8> {
-    if mode.subset_count == 1 {
-        return Ok(0);
-    }
-
     let (pattern_index, pattern_count) = match (mode.id, mode.subset_count) {
         (7, _) => (reader.read_u8(5), TOTAL_BC7_3_ASTC2_COMMON_PARTITIONS),
-        (_, 2) => (reader.read_u8(5), TOTAL_ASTC_BC7_COMMON_PARTITIONS2),
-        (_, 3) => (reader.read_u8(4), TOTAL_ASTC_BC7_COMMON_PARTITIONS3),
-        _ => unreachable!(),
+        (_, SubsetCount::Is1) => return Ok(0),
+        (_, SubsetCount::Is2) => (reader.read_u8(5), TOTAL_ASTC_BC7_COMMON_PARTITIONS2),
+        (_, SubsetCount::Is3) => (reader.read_u8(4), TOTAL_ASTC_BC7_COMMON_PARTITIONS3),
     };
 
     // Check pattern bounds
@@ -358,22 +366,22 @@ pub fn decode_pattern_index(reader: &mut BitReaderLsb, mode: Mode) -> Result<u8>
     }
 }
 
-pub fn get_pattern(mode: Mode, pat: u8) -> &'static [u8] {
+pub fn get_pattern(mode: Mode, pat: u8) -> &'static [u8; 16] {
     match (mode.id, mode.subset_count) {
         // Mode 7 has 2 subsets, but needs 2/3 patern table
         (7, _) => &PATTERNS_2_3[pat as usize],
-        (_, 2) => &PATTERNS_2[pat as usize],
-        (_, 3) => &PATTERNS_3[pat as usize],
-        _ => unreachable!(),
+        (_, SubsetCount::Is1) => &[0; 16],
+        (_, SubsetCount::Is2) => &PATTERNS_2[pat as usize],
+        (_, SubsetCount::Is3) => &PATTERNS_3[pat as usize],
     }
 }
 
 fn get_anchor_weight_indices(mode: Mode, pat: u8) -> &'static [u8] {
     match (mode.id, mode.subset_count) {
         (7, _) => &PATTERNS_2_3_ANCHORS[pat as usize],
-        (_, 2) => &PATTERNS_2_ANCHORS[pat as usize],
-        (_, 3) => &PATTERNS_3_ANCHORS[pat as usize],
-        _ => &[0],
+        (_, SubsetCount::Is1) => &[0],
+        (_, SubsetCount::Is2) => &PATTERNS_2_ANCHORS[pat as usize],
+        (_, SubsetCount::Is3) => &PATTERNS_3_ANCHORS[pat as usize],
     }
 }
 
@@ -440,8 +448,8 @@ pub struct Mode {
     pub endpoint_range_index: u8,
     pub format: Format,
     pub weight_bits: u8,
-    pub plane_count: u8,
-    pub subset_count: u8,
+    pub plane_count: PlaneCount,
+    pub subset_count: SubsetCount,
     trans_flags_bits: u8,
 }
 
@@ -484,36 +492,49 @@ pub enum Format {
     La,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PlaneCount {
+    Is1 = 1,
+    Is2 = 2,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SubsetCount {
+    Is1 = 1,
+    Is2 = 2,
+    Is3 = 3,
+}
+
 #[rustfmt::skip]
 static MODES: [Mode; 19] = [
     // RGB
-    Mode { id:  0, code_size: 4, endpoint_range_index: 19, format: Format::Rgb,  weight_bits: 4, plane_count: 1, subset_count: 1, trans_flags_bits: 15 },
-    Mode { id:  1, code_size: 6, endpoint_range_index: 20, format: Format::Rgb,  weight_bits: 2, plane_count: 1, subset_count: 1, trans_flags_bits: 15 },
-    Mode { id:  2, code_size: 5, endpoint_range_index:  8, format: Format::Rgb,  weight_bits: 3, plane_count: 1, subset_count: 2, trans_flags_bits: 15 },
-    Mode { id:  3, code_size: 5, endpoint_range_index:  7, format: Format::Rgb,  weight_bits: 2, plane_count: 1, subset_count: 3, trans_flags_bits: 15 },
-    Mode { id:  4, code_size: 5, endpoint_range_index: 12, format: Format::Rgb,  weight_bits: 2, plane_count: 1, subset_count: 2, trans_flags_bits: 15 },
-    Mode { id:  5, code_size: 5, endpoint_range_index: 20, format: Format::Rgb,  weight_bits: 3, plane_count: 1, subset_count: 1, trans_flags_bits: 15 },
-    Mode { id:  6, code_size: 5, endpoint_range_index: 18, format: Format::Rgb,  weight_bits: 2, plane_count: 2, subset_count: 1, trans_flags_bits: 15 },
-    Mode { id:  7, code_size: 5, endpoint_range_index: 12, format: Format::Rgb,  weight_bits: 2, plane_count: 1, subset_count: 2, trans_flags_bits: 15 },
+    Mode { id:  0, code_size: 4, endpoint_range_index: 19, format: Format::Rgb,  weight_bits: 4, plane_count: PlaneCount::Is1, subset_count: SubsetCount::Is1, trans_flags_bits: 15 },
+    Mode { id:  1, code_size: 6, endpoint_range_index: 20, format: Format::Rgb,  weight_bits: 2, plane_count: PlaneCount::Is1, subset_count: SubsetCount::Is1, trans_flags_bits: 15 },
+    Mode { id:  2, code_size: 5, endpoint_range_index:  8, format: Format::Rgb,  weight_bits: 3, plane_count: PlaneCount::Is1, subset_count: SubsetCount::Is2, trans_flags_bits: 15 },
+    Mode { id:  3, code_size: 5, endpoint_range_index:  7, format: Format::Rgb,  weight_bits: 2, plane_count: PlaneCount::Is1, subset_count: SubsetCount::Is3, trans_flags_bits: 15 },
+    Mode { id:  4, code_size: 5, endpoint_range_index: 12, format: Format::Rgb,  weight_bits: 2, plane_count: PlaneCount::Is1, subset_count: SubsetCount::Is2, trans_flags_bits: 15 },
+    Mode { id:  5, code_size: 5, endpoint_range_index: 20, format: Format::Rgb,  weight_bits: 3, plane_count: PlaneCount::Is1, subset_count: SubsetCount::Is1, trans_flags_bits: 15 },
+    Mode { id:  6, code_size: 5, endpoint_range_index: 18, format: Format::Rgb,  weight_bits: 2, plane_count: PlaneCount::Is2, subset_count: SubsetCount::Is1, trans_flags_bits: 15 },
+    Mode { id:  7, code_size: 5, endpoint_range_index: 12, format: Format::Rgb,  weight_bits: 2, plane_count: PlaneCount::Is1, subset_count: SubsetCount::Is2, trans_flags_bits: 15 },
 
     // Void-Extent (RGBA)
-    Mode { id:  8, code_size: 5, endpoint_range_index:  0, format: Format::Rgba, weight_bits: 0, plane_count: 0, subset_count: 0, trans_flags_bits:  0 },
+    Mode { id:  8, code_size: 5, endpoint_range_index:  0, format: Format::Rgba, weight_bits: 0, plane_count: PlaneCount::Is1, subset_count: SubsetCount::Is1, trans_flags_bits:  0 },
 
     // RGBA
-    Mode { id:  9, code_size: 5, endpoint_range_index:  8, format: Format::Rgba, weight_bits: 2, plane_count: 1, subset_count: 2, trans_flags_bits: 23 },
-    Mode { id: 10, code_size: 3, endpoint_range_index: 13, format: Format::Rgba, weight_bits: 4, plane_count: 1, subset_count: 1, trans_flags_bits: 17 },
-    Mode { id: 11, code_size: 2, endpoint_range_index: 13, format: Format::Rgba, weight_bits: 2, plane_count: 2, subset_count: 1, trans_flags_bits: 17 },
-    Mode { id: 12, code_size: 3, endpoint_range_index: 19, format: Format::Rgba, weight_bits: 3, plane_count: 1, subset_count: 1, trans_flags_bits: 17 },
-    Mode { id: 13, code_size: 5, endpoint_range_index: 20, format: Format::Rgba, weight_bits: 1, plane_count: 2, subset_count: 1, trans_flags_bits: 23 },
-    Mode { id: 14, code_size: 5, endpoint_range_index: 20, format: Format::Rgba, weight_bits: 2, plane_count: 1, subset_count: 1, trans_flags_bits: 23 },
+    Mode { id:  9, code_size: 5, endpoint_range_index:  8, format: Format::Rgba, weight_bits: 2, plane_count: PlaneCount::Is1, subset_count: SubsetCount::Is2, trans_flags_bits: 23 },
+    Mode { id: 10, code_size: 3, endpoint_range_index: 13, format: Format::Rgba, weight_bits: 4, plane_count: PlaneCount::Is1, subset_count: SubsetCount::Is1, trans_flags_bits: 17 },
+    Mode { id: 11, code_size: 2, endpoint_range_index: 13, format: Format::Rgba, weight_bits: 2, plane_count: PlaneCount::Is2, subset_count: SubsetCount::Is1, trans_flags_bits: 17 },
+    Mode { id: 12, code_size: 3, endpoint_range_index: 19, format: Format::Rgba, weight_bits: 3, plane_count: PlaneCount::Is1, subset_count: SubsetCount::Is1, trans_flags_bits: 17 },
+    Mode { id: 13, code_size: 5, endpoint_range_index: 20, format: Format::Rgba, weight_bits: 1, plane_count: PlaneCount::Is2, subset_count: SubsetCount::Is1, trans_flags_bits: 23 },
+    Mode { id: 14, code_size: 5, endpoint_range_index: 20, format: Format::Rgba, weight_bits: 2, plane_count: PlaneCount::Is1, subset_count: SubsetCount::Is1, trans_flags_bits: 23 },
 
     // LA
-    Mode { id: 15, code_size: 7, endpoint_range_index: 20, format: Format::La,   weight_bits: 4, plane_count: 1, subset_count: 1, trans_flags_bits: 23 },
-    Mode { id: 16, code_size: 6, endpoint_range_index: 20, format: Format::La,   weight_bits: 2, plane_count: 1, subset_count: 2, trans_flags_bits: 23 },
-    Mode { id: 17, code_size: 6, endpoint_range_index: 20, format: Format::La,   weight_bits: 2, plane_count: 2, subset_count: 1, trans_flags_bits: 23 },
+    Mode { id: 15, code_size: 7, endpoint_range_index: 20, format: Format::La,   weight_bits: 4, plane_count: PlaneCount::Is1, subset_count: SubsetCount::Is1, trans_flags_bits: 23 },
+    Mode { id: 16, code_size: 6, endpoint_range_index: 20, format: Format::La,   weight_bits: 2, plane_count: PlaneCount::Is1, subset_count: SubsetCount::Is2, trans_flags_bits: 23 },
+    Mode { id: 17, code_size: 6, endpoint_range_index: 20, format: Format::La,   weight_bits: 2, plane_count: PlaneCount::Is2, subset_count: SubsetCount::Is1, trans_flags_bits: 23 },
 
     // RGB
-    Mode { id: 18, code_size: 4, endpoint_range_index: 11, format: Format::Rgb,  weight_bits: 5, plane_count: 1, subset_count: 1, trans_flags_bits: 15 },
+    Mode { id: 18, code_size: 4, endpoint_range_index: 11, format: Format::Rgb,  weight_bits: 5, plane_count: PlaneCount::Is1, subset_count: SubsetCount::Is1, trans_flags_bits: 15 },
 ];
 
 #[rustfmt::skip]
